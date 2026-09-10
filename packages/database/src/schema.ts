@@ -199,3 +199,40 @@ export const adminAuditLogs = pgTable(
   },
   (table) => [index('admin_audit_instance_created_idx').on(table.instanceId, table.createdAt)],
 );
+
+export const shoppingItems = pgTable(
+  'shopping_item',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    quantity: text('quantity'),
+    note: text('note'),
+    source: text('source').notNull().default('MANUAL'),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'restrict' }),
+    purchasedBy: uuid('purchased_by').references(() => instanceMembers.id, {
+      onDelete: 'set null',
+    }),
+    purchasedAt: timestamp('purchased_at', { withTimezone: true }),
+    clientMutationId: uuid('client_mutation_id').notNull(),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('shopping_item_instance_mutation_uq').on(
+      table.instanceId,
+      table.clientMutationId,
+    ),
+    index('shopping_item_instance_state_idx').on(
+      table.instanceId,
+      table.purchasedAt,
+      table.createdAt,
+    ),
+  ],
+);

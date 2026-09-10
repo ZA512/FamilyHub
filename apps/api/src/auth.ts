@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import type { AppConfig } from '@familyhub/config';
 import type { CurrentMember } from '@familyhub/contracts';
@@ -24,6 +24,10 @@ export function constantTimeEqual(left: string, right: string): boolean {
   return timingSafeEqual(leftDigest, rightDigest);
 }
 
+export function deriveCsrfToken(sessionToken: string, config: AppConfig): string {
+  return createHmac('sha256', config.SESSION_SECRET).update(sessionToken).digest('base64url');
+}
+
 function constantTimeDigestEqual(value: string, expectedDigest: string): boolean {
   const valueDigest = Buffer.from(digest(value), 'hex');
   const expected = Buffer.from(expectedDigest, 'hex');
@@ -36,7 +40,7 @@ export async function createSession(
   config: AppConfig,
 ): Promise<{ token: string; csrfToken: string; expiresAt: Date }> {
   const token = randomBytes(32).toString('base64url');
-  const csrfToken = randomBytes(32).toString('base64url');
+  const csrfToken = deriveCsrfToken(token, config);
   const expiresAt = new Date(Date.now() + config.SESSION_TTL_HOURS * 60 * 60 * 1_000);
 
   await database.query(

@@ -25,3 +25,48 @@ export type CurrentMember = {
   email: string;
   role: 'ADMIN' | 'MEMBER';
 };
+
+const optionalText = (maximum: number) =>
+  z
+    .string()
+    .trim()
+    .max(maximum)
+    .transform((value) => value || null)
+    .nullable()
+    .optional();
+
+export const shoppingItemCreateSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  quantity: optionalText(80),
+  note: optionalText(500),
+  clientMutationId: z.string().uuid(),
+});
+
+export const shoppingItemUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(160).optional(),
+    quantity: optionalText(80),
+    note: optionalText(500),
+    purchased: z.boolean().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, 'Au moins un champ doit être modifié.');
+
+export type ShoppingItemCreate = z.infer<typeof shoppingItemCreateSchema>;
+export type ShoppingItemUpdate = z.infer<typeof shoppingItemUpdateSchema>;
+
+export type ShoppingItem = {
+  id: string;
+  name: string;
+  quantity: string | null;
+  note: string | null;
+  source: string;
+  requestedBy: string;
+  requestedByName: string;
+  purchasedBy: string | null;
+  purchasedByName: string | null;
+  purchasedAt: string | null;
+  clientMutationId: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};

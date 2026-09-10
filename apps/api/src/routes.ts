@@ -10,9 +10,13 @@ import {
   constantTimeEqual,
   createSession,
   createSessionGuard,
+  deriveCsrfToken,
+  digest,
   requireCsrf,
+  SESSION_COOKIE,
   setSessionCookie,
 } from './auth.js';
+import { registerShoppingRoutes } from './shopping-routes.js';
 
 const passwordOptions = {
   algorithm: Algorithm.Argon2id,
@@ -215,6 +219,15 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
   app.get('/api/v1/me', { preHandler: requireSession }, async (request) => {
     const session = request.session;
     if (!session) return { member: null };
+    const sessionToken = request.cookies[SESSION_COOKIE];
+    const csrfToken = sessionToken ? deriveCsrfToken(sessionToken, config) : null;
+    if (csrfToken) {
+      await pool.query(
+        `UPDATE session SET csrf_hash = $1, last_seen_at = now()
+         WHERE id = $2 AND csrf_hash <> $1`,
+        [digest(csrfToken), session.sessionId],
+      );
+    }
     return {
       member: {
         id: session.id,
@@ -225,6 +238,7 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
         email: session.email,
         role: session.role,
       },
+      csrfToken,
     };
   });
 
@@ -284,4 +298,5 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
     },
   );
 
+  await registerShoppingRoutes(app, pool);
 }
