@@ -26,6 +26,36 @@ export type CurrentMember = {
   role: 'ADMIN' | 'MEMBER';
 };
 
+export const essentialModuleKeys = [
+  'home',
+  'members',
+  'notifications',
+  'search',
+  'settings',
+] as const;
+
+export const functionalModuleKeys = [
+  'chat',
+  'agenda',
+  'tasks',
+  'meals',
+  'shopping',
+  'bookmarks',
+  'pages',
+  'collections',
+  'polls',
+  'ideas',
+  'contacts',
+  'documents',
+] as const;
+
+export const moduleKeys = [...essentialModuleKeys, ...functionalModuleKeys] as const;
+export const moduleKeySchema = z.enum(moduleKeys);
+export const moduleUpdateSchema = z.object({ enabled: z.boolean() });
+
+export type ModuleKey = z.infer<typeof moduleKeySchema>;
+export type ModuleConfig = { key: ModuleKey; enabled: boolean };
+
 const optionalText = (maximum: number) =>
   z
     .string()

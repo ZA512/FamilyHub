@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+import type { ModuleConfig, ModuleKey } from '@familyhub/contracts';
+
 import {
   Bell,
   Bookmark,
@@ -56,6 +58,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { ShoppingView } from './shopping-view';
+import { SettingsView } from './settings-view';
 
 type ViewId =
   | 'home'
@@ -92,6 +95,67 @@ const mobileNavigation = [
   { id: 'more' as const, label: 'Plus', icon: CircleEllipsis },
 ];
 
+const quickCreateOptions = [
+  { view: 'chat' as const, label: 'Message', icon: MessageCircle },
+  { view: 'agenda' as const, label: 'Événement', icon: CalendarDays },
+  { view: 'tasks' as const, label: 'Tâche', icon: CheckSquare2 },
+  {
+    view: 'shopping' as const,
+    label: 'Article de courses',
+    icon: ShoppingBasket,
+  },
+  { view: 'meals' as const, label: 'Repas', icon: Utensils },
+  { view: 'bookmarks' as const, label: 'Bookmark', icon: Bookmark },
+];
+
+const attentionItems = [
+  {
+    view: 'chat' as const,
+    icon: MessageCircle,
+    color: 'bg-[#e7f5f2] text-[#087f72]',
+    title: 'Parents',
+    detail: '3 nouveaux messages',
+    time: 'Il y a 8 min',
+  },
+  {
+    view: 'shopping' as const,
+    icon: ShoppingBasket,
+    color: 'bg-[#fff3df] text-[#a55e10]',
+    title: 'Liste de courses',
+    detail: 'Ouvrir la liste partagée',
+    time: 'Maintenant',
+  },
+  {
+    view: 'tasks' as const,
+    icon: CheckSquare2,
+    color: 'bg-[#eef0ff] text-[#5651a8]',
+    title: 'Préparer les affaires de sport',
+    detail: 'Nouvelle tâche affectée',
+    time: 'Hier',
+  },
+];
+
+const recentActivityItems = [
+  {
+    module: 'bookmarks' as const,
+    initials: 'JG',
+    title: 'Jade a ajouté un bookmark',
+    detail: 'Idées week-end · il y a 1 h',
+  },
+  {
+    module: 'tasks' as const,
+    initials: 'L',
+    title: 'Léo a terminé une corvée',
+    detail: 'Vider le lave-vaisselle · il y a 2 h',
+  },
+  {
+    module: 'pages' as const,
+    initials: 'MG',
+    title: 'Vous avez modifié une page',
+    detail: 'Vacances en Bretagne · hier',
+  },
+];
+
 type DashboardPageProps = {
   firstName?: string;
   instanceName?: string;
@@ -114,6 +178,22 @@ export default function DashboardPage({
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [shoppingComposerOpen, setShoppingComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
+  const [modules, setModules] = useState<ModuleConfig[] | null>(null);
+  const [modulesError, setModulesError] = useState('');
+
+  function moduleEnabled(key: ModuleKey) {
+    return modules?.find((module) => module.key === key)?.enabled ?? true;
+  }
+
+  const canCreate = quickCreateOptions.some((option) =>
+    moduleEnabled(option.view),
+  );
+  const visibleAttentionItems = attentionItems.filter((item) =>
+    moduleEnabled(item.view),
+  );
+  const visibleActivityItems = recentActivityItems.filter((item) =>
+    moduleEnabled(item.module),
+  );
 
   function navigate(view: ViewId) {
     setActiveView(view);
@@ -124,6 +204,50 @@ export default function DashboardPage({
     navigate(view);
     if (view === 'shopping') setShoppingComposerOpen(true);
   }
+
+  async function toggleModule(key: ModuleKey, enabled: boolean) {
+    const response = await fetch(`/api/v1/modules/${key}`, {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        'x-csrf-token': csrfToken,
+      },
+      body: JSON.stringify({ enabled }),
+    });
+    if (!response.ok) throw new Error('Impossible de modifier ce module.');
+    const payload = (await response.json()) as { module: ModuleConfig };
+    setModules(
+      (current) =>
+        current?.map((module) =>
+          module.key === payload.module.key ? payload.module : module,
+        ) ?? [payload.module],
+    );
+  }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/v1/modules', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error(
+            'Impossible de charger la configuration des modules.',
+          );
+        return (await response.json()) as { modules: ModuleConfig[] };
+      })
+      .then((payload) => {
+        setModules(payload.modules);
+        setModulesError('');
+      })
+      .catch((reason: unknown) => {
+        if (controller.signal.aborted) return;
+        setModulesError(
+          reason instanceof Error
+            ? reason.message
+            : 'Configuration indisponible.',
+        );
+      });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const context = document.modelContext;
@@ -166,34 +290,21 @@ export default function DashboardPage({
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2">
-            {[
-              { view: 'chat' as const, label: 'Message', icon: MessageCircle },
-              {
-                view: 'agenda' as const,
-                label: 'Événement',
-                icon: CalendarDays,
-              },
-              { view: 'tasks' as const, label: 'Tâche', icon: CheckSquare2 },
-              {
-                view: 'shopping' as const,
-                label: 'Article de courses',
-                icon: ShoppingBasket,
-              },
-              { view: 'meals' as const, label: 'Repas', icon: Utensils },
-              { view: 'bookmarks' as const, label: 'Bookmark', icon: Bookmark },
-            ].map((item) => (
-              <button
-                key={item.label}
-                onClick={() => startCreation(item.view)}
-                className="flex min-h-20 flex-col items-start justify-between rounded-xl border bg-background p-3 text-left font-medium transition-colors hover:bg-muted"
-              >
-                <item.icon
-                  className="size-5 text-[#087f72]"
-                  aria-hidden="true"
-                />
-                <span>{item.label}</span>
-              </button>
-            ))}
+            {quickCreateOptions
+              .filter((item) => moduleEnabled(item.view))
+              .map((item) => (
+                <button
+                  key={item.label}
+                  onClick={() => startCreation(item.view)}
+                  className="flex min-h-20 flex-col items-start justify-between rounded-xl border bg-background p-3 text-left font-medium transition-colors hover:bg-muted"
+                >
+                  <item.icon
+                    className="size-5 text-[#087f72]"
+                    aria-hidden="true"
+                  />
+                  <span>{item.label}</span>
+                </button>
+              ))}
           </div>
         </DialogContent>
       </Dialog>
@@ -221,22 +332,24 @@ export default function DashboardPage({
               <SidebarGroupLabel>Essentiel</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {primaryNavigation.map((item) => (
-                    <SidebarMenuItem key={item.label}>
-                      <SidebarMenuButton
-                        isActive={activeView === item.id}
-                        tooltip={item.label}
-                        className="h-10 rounded-xl px-3"
-                        onClick={() => navigate(item.id)}
-                      >
-                        <item.icon aria-hidden="true" />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                      {item.badge ? (
-                        <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
-                      ) : null}
-                    </SidebarMenuItem>
-                  ))}
+                  {primaryNavigation
+                    .filter((item) => moduleEnabled(item.id))
+                    .map((item) => (
+                      <SidebarMenuItem key={item.label}>
+                        <SidebarMenuButton
+                          isActive={activeView === item.id}
+                          tooltip={item.label}
+                          className="h-10 rounded-xl px-3"
+                          onClick={() => navigate(item.id)}
+                        >
+                          <item.icon aria-hidden="true" />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                        {item.badge ? (
+                          <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
+                        ) : null}
+                      </SidebarMenuItem>
+                    ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -245,19 +358,21 @@ export default function DashboardPage({
               <SidebarGroupLabel>Notre espace</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {secondaryNavigation.map((item) => (
-                    <SidebarMenuItem key={item.label}>
-                      <SidebarMenuButton
-                        isActive={activeView === item.id}
-                        tooltip={item.label}
-                        className="h-10 rounded-xl px-3"
-                        onClick={() => navigate(item.id)}
-                      >
-                        <item.icon aria-hidden="true" />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+                  {secondaryNavigation
+                    .filter((item) => moduleEnabled(item.id))
+                    .map((item) => (
+                      <SidebarMenuItem key={item.label}>
+                        <SidebarMenuButton
+                          isActive={activeView === item.id}
+                          tooltip={item.label}
+                          className="h-10 rounded-xl px-3"
+                          onClick={() => navigate(item.id)}
+                        >
+                          <item.icon aria-hidden="true" />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -335,17 +450,26 @@ export default function DashboardPage({
               <Bell aria-hidden="true" />
               <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[#e49131] ring-2 ring-background" />
             </Button>
-            <Button
-              onClick={() => setQuickAddOpen(true)}
-              className="hidden rounded-xl bg-[#087f72] hover:bg-[#076d63] sm:inline-flex"
-            >
-              <Plus data-icon="inline-start" aria-hidden="true" />
-              Ajouter
-            </Button>
+            {canCreate ? (
+              <Button
+                onClick={() => setQuickAddOpen(true)}
+                className="hidden rounded-xl bg-[#087f72] hover:bg-[#076d63] sm:inline-flex"
+              >
+                <Plus data-icon="inline-start" aria-hidden="true" />
+                Ajouter
+              </Button>
+            ) : null}
           </header>
 
           <div className="mx-auto w-full max-w-[1180px] flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-10 md:pt-8">
-            {activeView === 'shopping' ? (
+            {activeView === 'settings' ? (
+              <SettingsView
+                role={role}
+                modules={modules}
+                loadError={modulesError}
+                onToggle={toggleModule}
+              />
+            ) : activeView === 'shopping' ? (
               <ShoppingView
                 csrfToken={csrfToken}
                 composerOpen={shoppingComposerOpen}
@@ -358,7 +482,7 @@ export default function DashboardPage({
                 <section className="mb-7 flex items-end justify-between gap-4">
                   <div>
                     <p className="mb-1 text-sm font-medium text-[#087f72]">
-                    {todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}
+                      {todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}
                     </p>
                     <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
                       Bonjour {firstName}
@@ -375,283 +499,267 @@ export default function DashboardPage({
 
                 <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,.85fr)]">
                   <div className="space-y-6">
-                    <section aria-labelledby="today-title">
-                      <div className="mb-3 flex items-center justify-between">
-                        <h2
-                          id="today-title"
-                          className="text-lg font-semibold tracking-tight"
-                        >
-                          Aujourd’hui
-                        </h2>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-muted-foreground"
-                          onClick={() => navigate('agenda')}
-                        >
-                          Voir l’agenda
-                          <ChevronRight
-                            data-icon="inline-end"
-                            aria-hidden="true"
-                          />
-                        </Button>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <Card className="relative border-0 bg-[#eef8f6] ring-[#087f72]/15">
-                          <span className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-[#087f72]" />
-                          <CardHeader className="pl-5">
-                            <CardDescription className="font-medium text-[#087f72]">
-                              18:30 · Agenda
-                            </CardDescription>
-                            <CardTitle className="text-base">
-                              Rendez-vous chez le dentiste
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="flex items-center gap-2 pl-5 text-sm text-muted-foreground">
-                            <span className="grid size-6 place-items-center rounded-full bg-white text-[10px] font-bold text-[#075e55]">
-                              J
-                            </span>
-                            Jade · Cabinet du Parc
-                          </CardContent>
-                        </Card>
-
-                        <Card className="relative border-0 bg-[#fff7e9] ring-[#e49131]/20">
-                          <span className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-[#e49131]" />
-                          <CardHeader className="pl-5">
-                            <CardDescription className="font-medium text-[#a55e10]">
-                              À faire · Tâche
-                            </CardDescription>
-                            <CardTitle className="text-base">
-                              Sortir les poubelles
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="flex items-center justify-between gap-3 pl-5">
-                            <span className="text-sm text-muted-foreground">
-                              Affectée à vous
-                            </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full bg-white"
-                          onClick={() => navigate('tasks')}
-                            >
-                              <Check
-                                data-icon="inline-start"
-                                aria-hidden="true"
-                              />
-                              Fait
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </section>
-
-                    <section aria-labelledby="attention-title">
-                      <div className="mb-3 flex items-center justify-between">
-                        <h2
-                          id="attention-title"
-                          className="text-lg font-semibold tracking-tight"
-                        >
-                          À voir
-                        </h2>
-                        <Badge
-                          variant="secondary"
-                          className="bg-[#e7f5f2] text-[#075e55]"
-                        >
-                          3 nouveautés
-                        </Badge>
-                      </div>
-                      <Card className="gap-0 py-0">
-                        {[
-                          {
-                            view: 'chat' as const,
-                            icon: MessageCircle,
-                            color: 'bg-[#e7f5f2] text-[#087f72]',
-                            title: 'Parents',
-                            detail: '3 nouveaux messages',
-                            time: 'Il y a 8 min',
-                          },
-                          {
-                            view: 'shopping' as const,
-                            icon: ShoppingBasket,
-                            color: 'bg-[#fff3df] text-[#a55e10]',
-                            title: 'Liste de courses',
-                            detail: 'Ouvrir la liste partagée',
-                            time: 'Maintenant',
-                          },
-                          {
-                            view: 'tasks' as const,
-                            icon: CheckSquare2,
-                            color: 'bg-[#eef0ff] text-[#5651a8]',
-                            title: 'Préparer les affaires de sport',
-                            detail: 'Nouvelle tâche affectée',
-                            time: 'Hier',
-                          },
-                        ].map((item, index) => (
-                          <button
-                            key={item.title}
-                            onClick={() => navigate(item.view)}
-                            className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/45 ${index ? 'border-t' : ''}`}
+                    {moduleEnabled('agenda') || moduleEnabled('tasks') ? (
+                      <section aria-labelledby="today-title">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h2
+                            id="today-title"
+                            className="text-lg font-semibold tracking-tight"
                           >
-                            <span
-                              className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.color}`}
+                            Aujourd’hui
+                          </h2>
+                          {moduleEnabled('agenda') ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-muted-foreground"
+                              onClick={() => navigate('agenda')}
                             >
-                              <item.icon
-                                className="size-4"
+                              Voir l’agenda
+                              <ChevronRight
+                                data-icon="inline-end"
                                 aria-hidden="true"
                               />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block font-medium">
-                                {item.title}
+                            </Button>
+                          ) : null}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {moduleEnabled('agenda') ? (
+                            <Card className="relative border-0 bg-[#eef8f6] ring-[#087f72]/15">
+                              <span className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-[#087f72]" />
+                              <CardHeader className="pl-5">
+                                <CardDescription className="font-medium text-[#087f72]">
+                                  18:30 · Agenda
+                                </CardDescription>
+                                <CardTitle className="text-base">
+                                  Rendez-vous chez le dentiste
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="flex items-center gap-2 pl-5 text-sm text-muted-foreground">
+                                <span className="grid size-6 place-items-center rounded-full bg-white text-[10px] font-bold text-[#075e55]">
+                                  J
+                                </span>
+                                Jade · Cabinet du Parc
+                              </CardContent>
+                            </Card>
+                          ) : null}
+
+                          {moduleEnabled('tasks') ? (
+                            <Card className="relative border-0 bg-[#fff7e9] ring-[#e49131]/20">
+                              <span className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-[#e49131]" />
+                              <CardHeader className="pl-5">
+                                <CardDescription className="font-medium text-[#a55e10]">
+                                  À faire · Tâche
+                                </CardDescription>
+                                <CardTitle className="text-base">
+                                  Sortir les poubelles
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="flex items-center justify-between gap-3 pl-5">
+                                <span className="text-sm text-muted-foreground">
+                                  Affectée à vous
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="rounded-full bg-white"
+                                  onClick={() => navigate('tasks')}
+                                >
+                                  <Check
+                                    data-icon="inline-start"
+                                    aria-hidden="true"
+                                  />
+                                  Fait
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          ) : null}
+                        </div>
+                      </section>
+                    ) : null}
+
+                    {visibleAttentionItems.length ? (
+                      <section aria-labelledby="attention-title">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h2
+                            id="attention-title"
+                            className="text-lg font-semibold tracking-tight"
+                          >
+                            À voir
+                          </h2>
+                          <Badge
+                            variant="secondary"
+                            className="bg-[#e7f5f2] text-[#075e55]"
+                          >
+                            {visibleAttentionItems.length} nouveauté
+                            {visibleAttentionItems.length > 1 ? 's' : ''}
+                          </Badge>
+                        </div>
+                        <Card className="gap-0 py-0">
+                          {visibleAttentionItems.map((item, index) => (
+                            <button
+                              key={item.title}
+                              onClick={() => navigate(item.view)}
+                              className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/45 ${index ? 'border-t' : ''}`}
+                            >
+                              <span
+                                className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.color}`}
+                              >
+                                <item.icon
+                                  className="size-4"
+                                  aria-hidden="true"
+                                />
                               </span>
-                              <span className="block truncate text-sm text-muted-foreground">
-                                {item.detail}
+                              <span className="min-w-0 flex-1">
+                                <span className="block font-medium">
+                                  {item.title}
+                                </span>
+                                <span className="block truncate text-sm text-muted-foreground">
+                                  {item.detail}
+                                </span>
                               </span>
-                            </span>
-                            <span className="hidden text-xs text-muted-foreground sm:block">
-                              {item.time}
-                            </span>
-                            <ChevronRight
-                              className="size-4 text-muted-foreground/60"
-                              aria-hidden="true"
-                            />
-                          </button>
-                        ))}
-                      </Card>
-                    </section>
+                              <span className="hidden text-xs text-muted-foreground sm:block">
+                                {item.time}
+                              </span>
+                              <ChevronRight
+                                className="size-4 text-muted-foreground/60"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          ))}
+                        </Card>
+                      </section>
+                    ) : null}
                   </div>
 
                   <aside className="space-y-6">
-                    <section aria-labelledby="meal-title">
-                      <div className="mb-3 flex items-center justify-between">
-                        <h2
-                          id="meal-title"
-                          className="text-lg font-semibold tracking-tight"
-                        >
-                          Ce soir
-                        </h2>
-                        <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Options du repas"
-                    onClick={() => navigate('meals')}
-                        >
-                          <MoreHorizontal aria-hidden="true" />
-                        </Button>
-                      </div>
-                      <Card className="border-0 bg-[#102b3f] text-white ring-0 shadow-[0_18px_45px_-28px_rgba(16,43,63,.8)]">
-                        <CardHeader>
-                          <CardDescription className="text-white/60">
-                            Dîner · 4 personnes
-                          </CardDescription>
-                          <CardTitle className="text-xl">
-                            Curry de légumes
-                          </CardTitle>
-                          <CardAction>
-                            <span className="grid size-10 place-items-center rounded-xl bg-white/10">
-                              <Utensils className="size-4" aria-hidden="true" />
-                            </span>
-                          </CardAction>
-                        </CardHeader>
-                        <CardContent>
-                          <div
-                            className="flex -space-x-1.5"
-                            aria-label="Préférences des membres"
+                    {moduleEnabled('meals') ? (
+                      <section aria-labelledby="meal-title">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h2
+                            id="meal-title"
+                            className="text-lg font-semibold tracking-tight"
                           >
-                            {['MG', 'JG', 'L', 'N'].map((initials, index) => (
-                              <span
-                                key={initials}
-                                className="grid size-8 place-items-center rounded-full border-2 border-[#102b3f] bg-[#d9f4ef] text-[10px] font-bold text-[#075e55]"
-                                style={{ zIndex: 4 - index }}
-                              >
-                                {initials}
+                            Ce soir
+                          </h2>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Options du repas"
+                            onClick={() => navigate('meals')}
+                          >
+                            <MoreHorizontal aria-hidden="true" />
+                          </Button>
+                        </div>
+                        <Card className="border-0 bg-[#102b3f] text-white ring-0 shadow-[0_18px_45px_-28px_rgba(16,43,63,.8)]">
+                          <CardHeader>
+                            <CardDescription className="text-white/60">
+                              Dîner · 4 personnes
+                            </CardDescription>
+                            <CardTitle className="text-xl">
+                              Curry de légumes
+                            </CardTitle>
+                            <CardAction>
+                              <span className="grid size-10 place-items-center rounded-xl bg-white/10">
+                                <Utensils
+                                  className="size-4"
+                                  aria-hidden="true"
+                                />
                               </span>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </section>
-
-                    <section aria-labelledby="activity-title">
-                      <h2
-                        id="activity-title"
-                        className="mb-3 text-lg font-semibold tracking-tight"
-                      >
-                        Activité récente
-                      </h2>
-                      <Card className="gap-0 py-1">
-                        {[
-                          [
-                            'JG',
-                            'Jade a ajouté un bookmark',
-                            'Idées week-end · il y a 1 h',
-                          ],
-                          [
-                            'L',
-                            'Léo a terminé une corvée',
-                            'Vider le lave-vaisselle · il y a 2 h',
-                          ],
-                          [
-                            'MG',
-                            'Vous avez modifié une page',
-                            'Vacances en Bretagne · hier',
-                          ],
-                        ].map(([initials, title, detail]) => (
-                          <div key={title} className="flex gap-3 px-4 py-3">
-                            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-bold text-foreground/70">
-                              {initials}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium leading-snug">
-                                {title}
-                              </p>
-                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                {detail}
-                              </p>
+                            </CardAction>
+                          </CardHeader>
+                          <CardContent>
+                            <div
+                              className="flex -space-x-1.5"
+                              aria-label="Préférences des membres"
+                            >
+                              {['MG', 'JG', 'L', 'N'].map((initials, index) => (
+                                <span
+                                  key={initials}
+                                  className="grid size-8 place-items-center rounded-full border-2 border-[#102b3f] bg-[#d9f4ef] text-[10px] font-bold text-[#075e55]"
+                                  style={{ zIndex: 4 - index }}
+                                >
+                                  {initials}
+                                </span>
+                              ))}
                             </div>
-                          </div>
-                        ))}
-                      </Card>
-                    </section>
+                          </CardContent>
+                        </Card>
+                      </section>
+                    ) : null}
+
+                    {visibleActivityItems.length ? (
+                      <section aria-labelledby="activity-title">
+                        <h2
+                          id="activity-title"
+                          className="mb-3 text-lg font-semibold tracking-tight"
+                        >
+                          Activité récente
+                        </h2>
+                        <Card className="gap-0 py-1">
+                          {visibleActivityItems.map((item) => (
+                            <div
+                              key={item.title}
+                              className="flex gap-3 px-4 py-3"
+                            >
+                              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-bold text-foreground/70">
+                                {item.initials}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium leading-snug">
+                                  {item.title}
+                                </p>
+                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                  {item.detail}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </Card>
+                      </section>
+                    ) : null}
                   </aside>
                 </div>
               </>
             )}
           </div>
 
-          <Button
-            size="icon-lg"
-            aria-label="Ajouter"
-            onClick={() => setQuickAddOpen(true)}
-            className="fixed bottom-20 right-4 z-30 size-12 rounded-2xl bg-[#087f72] shadow-lg hover:bg-[#076d63] sm:hidden"
-          >
-            <Plus className="size-5" aria-hidden="true" />
-          </Button>
+          {canCreate ? (
+            <Button
+              size="icon-lg"
+              aria-label="Ajouter"
+              onClick={() => setQuickAddOpen(true)}
+              className="fixed bottom-20 right-4 z-30 size-12 rounded-2xl bg-[#087f72] shadow-lg hover:bg-[#076d63] sm:hidden"
+            >
+              <Plus className="size-5" aria-hidden="true" />
+            </Button>
+          ) : null}
 
           <nav
             aria-label="Navigation principale"
             className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
           >
             <ul className="grid h-16 grid-cols-5 px-1">
-              {mobileNavigation.map((item) => (
-                <li key={item.label}>
-                  <button
-                    onClick={() =>
-                      item.id === 'more'
-                        ? setQuickAddOpen(true)
-                        : navigate(item.id)
-                    }
-                    className={`relative flex size-full flex-col items-center justify-center gap-1 text-xs ${item.id !== 'more' && activeView === item.id ? 'font-semibold text-[#087f72]' : 'text-muted-foreground'}`}
-                  >
-                    <item.icon className="size-5" aria-hidden="true" />
-                    <span>{item.label}</span>
-                    {item.badge ? (
-                      <span className="absolute left-[calc(50%+5px)] top-2.5 size-2 rounded-full bg-[#e49131] ring-2 ring-background" />
-                    ) : null}
-                  </button>
-                </li>
-              ))}
+              {mobileNavigation
+                .filter((item) => item.id === 'more' || moduleEnabled(item.id))
+                .map((item) => (
+                  <li key={item.label}>
+                    <button
+                      onClick={() =>
+                        item.id === 'more'
+                          ? setQuickAddOpen(true)
+                          : navigate(item.id)
+                      }
+                      className={`relative flex size-full flex-col items-center justify-center gap-1 text-xs ${item.id !== 'more' && activeView === item.id ? 'font-semibold text-[#087f72]' : 'text-muted-foreground'}`}
+                    >
+                      <item.icon className="size-5" aria-hidden="true" />
+                      <span>{item.label}</span>
+                      {item.badge ? (
+                        <span className="absolute left-[calc(50%+5px)] top-2.5 size-2 rounded-full bg-[#e49131] ring-2 ring-background" />
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
             </ul>
           </nav>
         </SidebarInset>
@@ -661,7 +769,7 @@ export default function DashboardPage({
 }
 
 const viewLabels: Record<
-  Exclude<ViewId, 'home' | 'shopping'>,
+  Exclude<ViewId, 'home' | 'shopping' | 'settings'>,
   { title: string; description: string }
 > = {
   chat: {
@@ -689,11 +797,6 @@ const viewLabels: Record<
     title: 'Membres',
     description: 'La gestion des membres sera bientôt disponible.',
   },
-  settings: {
-    title: 'Paramètres',
-    description:
-      'La gestion des modules sera branchée dans une prochaine étape.',
-  },
   notifications: {
     title: 'Notifications',
     description: 'Le centre de notifications sera bientôt disponible.',
@@ -707,7 +810,7 @@ const viewLabels: Record<
 function ComingSoonView({
   view,
 }: {
-  view: Exclude<ViewId, 'home' | 'shopping'>;
+  view: Exclude<ViewId, 'home' | 'shopping' | 'settings'>;
 }) {
   const content = viewLabels[view];
   return (

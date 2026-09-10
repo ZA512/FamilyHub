@@ -1,9 +1,16 @@
 import { Algorithm, hash, verify } from '@node-rs/argon2';
-import { loginRequestSchema, setupRequestSchema } from '@familyhub/contracts';
+import {
+  essentialModuleKeys,
+  functionalModuleKeys,
+  loginRequestSchema,
+  moduleKeySchema,
+  moduleUpdateSchema,
+  setupRequestSchema,
+  type ModuleConfig,
+} from '@familyhub/contracts';
 import type { AppConfig } from '@familyhub/config';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
-import { z } from 'zod';
 
 import {
   clearSessionCookie,
@@ -25,25 +32,6 @@ const passwordOptions = {
   parallelism: 1,
   outputLen: 32,
 };
-
-const functionalModules = [
-  'chat',
-  'agenda',
-  'tasks',
-  'meals',
-  'shopping',
-  'bookmarks',
-  'pages',
-  'collections',
-  'polls',
-  'ideas',
-  'contacts',
-  'documents',
-] as const;
-
-const essentialModules = ['home', 'members', 'notifications', 'search', 'settings'] as const;
-
-const moduleUpdateSchema = z.object({ enabled: z.boolean() });
 
 export async function registerRoutes(app: FastifyInstance, pool: Pool, config: AppConfig) {
   const requireSession = createSessionGuard(pool);
@@ -124,13 +112,13 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
         );
       }
 
-      for (const moduleKey of essentialModules) {
+      for (const moduleKey of essentialModuleKeys) {
         await client.query(
           'INSERT INTO module_config (instance_id, module_key, enabled) VALUES ($1, $2, true)',
           [instanceRow.id, moduleKey],
         );
       }
-      for (const moduleKey of functionalModules) {
+      for (const moduleKey of functionalModuleKeys) {
         await client.query(
           'INSERT INTO module_config (instance_id, module_key, enabled) VALUES ($1, $2, $3)',
           [instanceRow.id, moduleKey, !['contacts', 'documents'].includes(moduleKey)],
@@ -256,7 +244,11 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
        WHERE instance_id = $1 ORDER BY module_key`,
       [request.session?.instanceId],
     );
-    return { modules: result.rows };
+    return {
+      modules: result.rows.map(
+        (row): ModuleConfig => ({ key: moduleKeySchema.parse(row.module_key), enabled: row.enabled }),
+      ),
+    };
   });
 
   app.patch<{ Params: { key: string } }>(
@@ -267,20 +259,20 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
         return reply.code(403).send({ error: 'ADMIN_REQUIRED' });
       }
 
+      const moduleKey = moduleKeySchema.safeParse(request.params.key);
+      if (!moduleKey.success) return reply.code(404).send({ error: 'MODULE_NOT_FOUND' });
+
       const parsed = moduleUpdateSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
-      if ((essentialModules as readonly string[]).includes(request.params.key) && !parsed.data.enabled) {
+      if ((essentialModuleKeys as readonly string[]).includes(moduleKey.data) && !parsed.data.enabled) {
         return reply.code(409).send({ error: 'ESSENTIAL_MODULE' });
-      }
-      if (![...essentialModules, ...functionalModules].includes(request.params.key as never)) {
-        return reply.code(404).send({ error: 'MODULE_NOT_FOUND' });
       }
 
       const result = await pool.query<{ module_key: string; enabled: boolean }>(
         `UPDATE module_config SET enabled = $1, updated_at = now()
          WHERE instance_id = $2 AND module_key = $3
          RETURNING module_key, enabled`,
-        [parsed.data.enabled, request.session.instanceId, request.params.key],
+        [parsed.data.enabled, request.session.instanceId, moduleKey.data],
       );
 
       await pool.query(
@@ -290,11 +282,13 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
         [
           request.session.instanceId,
           request.session.id,
-          JSON.stringify({ moduleKey: request.params.key, enabled: parsed.data.enabled }),
+          JSON.stringify({ moduleKey: moduleKey.data, enabled: parsed.data.enabled }),
         ],
       );
 
-      return { module: result.rows[0] };
+      const row = result.rows[0];
+      if (!row) return reply.code(404).send({ error: 'MODULE_NOT_FOUND' });
+      return { module: { key: moduleKey.data, enabled: row.enabled } satisfies ModuleConfig };
     },
   );
 
