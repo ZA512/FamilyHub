@@ -25,7 +25,7 @@ services:
         max-file: "3"
 
   app:
-    image: ${FAMILYHUB_IMAGE:-ghcr.io/za512/familyhub}:${FAMILYHUB_VERSION:-0.1.0}
+    image: ${FAMILYHUB_IMAGE:-ghcr.io/za512/familyhub}:${FAMILYHUB_VERSION:-latest}
     pull_policy: always
     restart: unless-stopped
     init: true

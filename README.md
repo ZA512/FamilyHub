@@ -45,7 +45,8 @@ Consultez `docs/SELF_HOSTING.md` pour le contrat d'exploitation et
 
 ## Intégration continue et images
 
-Chaque push et pull request exécute les tests, le lint, le typage, le build de production et
-la construction Docker pour `linux/amd64` et `linux/arm64`. Un tag Git au format `vX.Y.Z`
-publie automatiquement les images `X.Y.Z`, `X.Y` et `latest` sur
-`ghcr.io/za512/familyhub`.
+Chaque push et pull request exécute les tests, le lint, le typage et le build de production.
+Chaque push publie aussi une image Docker `linux/amd64` + `linux/arm64` avec un tag de branche
+et un tag immuable `sha-…` ; `main` met également à jour `latest`. Les pull requests vérifient
+la construction Docker sans la publier. Un tag Git `vX.Y.Z` publie en plus les tags `X.Y.Z`
+et `X.Y` sur `ghcr.io/za512/familyhub`.
