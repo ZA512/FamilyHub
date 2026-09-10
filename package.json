@@ -15,7 +15,7 @@
     "dev:api": "node --env-file=.env --import tsx --watch apps/api/src/index.ts",
     "dev:web": "npm run dev -w @familyhub/web",
     "format": "npm run format -w @familyhub/web",
-    "lint": "npm run lint -w @familyhub/web && npm run check:types",
+    "lint": "npm run check:types && npm run lint -w @familyhub/web",
     "check:types": "tsc -b --pretty false && tsc --noEmit -p apps/web/tsconfig.json --pretty false",
     "test": "vitest run --exclude **/dist/**",
     "db:migrate": "node --env-file=.env --import tsx apps/api/src/migrate.ts"
