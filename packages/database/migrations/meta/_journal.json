@@ -15,6 +15,13 @@
       "when": 1789029000000,
       "tag": "0001_shopping_items",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789045200000,
+      "tag": "0002_invitations",
+      "breakpoints": true
     }
   ]
 }

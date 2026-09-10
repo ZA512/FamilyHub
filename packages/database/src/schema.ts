@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -95,6 +96,34 @@ export const groupMemberships = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.groupId, table.memberId] })],
+);
+
+export const invitations = pgTable(
+  'invite',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    role: memberRole('role').notNull().default('MEMBER'),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'restrict' }),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('invite_token_hash_uq').on(table.tokenHash),
+    uniqueIndex('invite_instance_email_active_uq')
+      .on(table.instanceId, table.email)
+      .where(sql`${table.consumedAt} IS NULL AND ${table.revokedAt} IS NULL`),
+    index('invite_instance_email_idx').on(table.instanceId, table.email),
+    index('invite_expiry_idx').on(table.expiresAt),
+  ],
 );
 
 export const moduleConfigs = pgTable(

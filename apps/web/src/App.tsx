@@ -7,6 +7,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+import type { CurrentMember, InvitationPreview } from '@familyhub/contracts';
+
 import DashboardPage from '../app/page';
 import { Button } from '../components/ui/button';
 import {
@@ -19,17 +21,7 @@ import {
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 
-type Member = {
-  id: string;
-  userId: string;
-  instanceId: string;
-  instanceName: string;
-  firstName: string;
-  email: string;
-  role: 'ADMIN' | 'MEMBER';
-};
-
-type View = 'loading' | 'setup' | 'login' | 'dashboard';
+type View = 'loading' | 'setup' | 'login' | 'invite' | 'dashboard';
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
   return (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -37,8 +29,12 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 
 export function App() {
   const [view, setView] = useState<View>('loading');
-  const [member, setMember] = useState<Member | null>(null);
+  const [member, setMember] = useState<CurrentMember | null>(null);
   const [csrfToken, setCsrfToken] = useState('');
+  const [inviteToken] = useState(
+    () => new URLSearchParams(window.location.search).get('invite') ?? '',
+  );
+  const [invitation, setInvitation] = useState<InvitationPreview | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -47,6 +43,27 @@ export function App() {
 
     async function bootstrap() {
       try {
+        if (inviteToken) {
+          const response = await fetch('/api/v1/invitations/inspect', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ token: inviteToken }),
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            window.history.replaceState({}, '', window.location.pathname);
+            setError('Ce lien d’invitation est invalide ou a expiré.');
+            setView('login');
+            return;
+          }
+          const payload = (await response.json()) as {
+            invitation: InvitationPreview;
+          };
+          setInvitation(payload.invitation);
+          setView('invite');
+          return;
+        }
+
         const setupResponse = await fetch('/api/v1/setup/status', {
           signal: controller.signal,
         });
@@ -63,7 +80,7 @@ export function App() {
         });
         if (meResponse.ok) {
           const payload = (await meResponse.json()) as {
-            member: Member;
+            member: CurrentMember;
             csrfToken: string;
           };
           setMember(payload.member);
@@ -85,7 +102,7 @@ export function App() {
 
     void bootstrap();
     return () => controller.abort();
-  }, []);
+  }, [inviteToken]);
 
   async function submitSetup(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,8 +124,10 @@ export function App() {
       });
       const payload = await readJson(response);
       if (!response.ok) throw new Error(setupError(payload.error));
-      setMember(payload.member as Member);
-      setCsrfToken(typeof payload.csrfToken === 'string' ? payload.csrfToken : '');
+      setMember(payload.member as CurrentMember);
+      setCsrfToken(
+        typeof payload.csrfToken === 'string' ? payload.csrfToken : '',
+      );
       setView('dashboard');
     } catch (reason) {
       setError(
@@ -138,12 +157,62 @@ export function App() {
       });
       const payload = await readJson(response);
       if (!response.ok) throw new Error('Email ou mot de passe incorrect.');
-      setMember(payload.member as Member);
-      setCsrfToken(typeof payload.csrfToken === 'string' ? payload.csrfToken : '');
+      setMember(payload.member as CurrentMember);
+      setCsrfToken(
+        typeof payload.csrfToken === 'string' ? payload.csrfToken : '',
+      );
       setView('dashboard');
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Connexion impossible.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitInvitation(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError('');
+    const data = new FormData(event.currentTarget);
+
+    if (data.get('password') !== data.get('passwordConfirmation')) {
+      setError('Les deux mots de passe ne correspondent pas.');
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/v1/invitations/accept', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          token: inviteToken,
+          firstName: data.get('firstName'),
+          lastName: data.get('lastName'),
+          password: data.get('password'),
+        }),
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        throw new Error(
+          response.status === 404
+            ? 'Ce lien d’invitation est invalide ou a expiré.'
+            : 'Impossible d’accepter cette invitation.',
+        );
+      }
+      setMember(payload.member as CurrentMember);
+      setCsrfToken(
+        typeof payload.csrfToken === 'string' ? payload.csrfToken : '',
+      );
+      window.history.replaceState({}, '', window.location.pathname);
+      setView('dashboard');
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'Impossible d’accepter cette invitation.',
       );
     } finally {
       setSubmitting(false);
@@ -180,23 +249,37 @@ export function App() {
             <span className="mb-2 grid size-10 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
               {view === 'setup' ? (
                 <KeyRound className="size-5" aria-hidden="true" />
+              ) : view === 'invite' ? (
+                <Sparkles className="size-5" aria-hidden="true" />
               ) : (
                 <LockKeyhole className="size-5" aria-hidden="true" />
               )}
             </span>
             <CardTitle className="text-2xl">
-              {view === 'setup' ? 'Créer votre foyer' : 'Bon retour parmi nous'}
+              {view === 'setup'
+                ? 'Créer votre foyer'
+                : view === 'invite'
+                  ? `Rejoindre ${invitation?.instanceName ?? 'le foyer'}`
+                  : 'Bon retour parmi nous'}
             </CardTitle>
             <CardDescription className="text-base">
               {view === 'setup'
                 ? 'Cette étape ne sera demandée qu’une seule fois.'
-                : 'Connectez-vous pour retrouver votre espace.'}
+                : view === 'invite'
+                  ? `Invitation envoyée à ${invitation?.email ?? 'votre adresse'}.`
+                  : 'Connectez-vous pour retrouver votre espace.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-6">
             <form
               className="space-y-4"
-              onSubmit={view === 'setup' ? submitSetup : submitLogin}
+              onSubmit={
+                view === 'setup'
+                  ? submitSetup
+                  : view === 'invite'
+                    ? submitInvitation
+                    : submitLogin
+              }
             >
               {view === 'setup' ? (
                 <>
@@ -215,23 +298,60 @@ export function App() {
                 </>
               ) : null}
 
-              <FormField
-                label="Email"
-                name="email"
-                type="email"
-                placeholder="vous@exemple.fr"
-                autoComplete="email"
-              />
-              <FormField
-                label="Mot de passe"
-                name="password"
-                type="password"
-                minLength={view === 'setup' ? 12 : 1}
-                hint={view === 'setup' ? '12 caractères minimum' : undefined}
-                autoComplete={
-                  view === 'setup' ? 'new-password' : 'current-password'
-                }
-              />
+              {view === 'invite' ? (
+                <>
+                  <FormField
+                    label="Prénom"
+                    name="firstName"
+                    placeholder="Jade"
+                    autoComplete="given-name"
+                  />
+                  <FormField
+                    label="Nom"
+                    name="lastName"
+                    placeholder="Martin"
+                    autoComplete="family-name"
+                    required={false}
+                  />
+                  <FormField
+                    label="Mot de passe"
+                    name="password"
+                    type="password"
+                    minLength={12}
+                    hint="12 caractères minimum"
+                    autoComplete="new-password"
+                  />
+                  <FormField
+                    label="Confirmer le mot de passe"
+                    name="passwordConfirmation"
+                    type="password"
+                    minLength={12}
+                    autoComplete="new-password"
+                  />
+                </>
+              ) : (
+                <>
+                  <FormField
+                    label="Email"
+                    name="email"
+                    type="email"
+                    placeholder="vous@exemple.fr"
+                    autoComplete="email"
+                  />
+                  <FormField
+                    label="Mot de passe"
+                    name="password"
+                    type="password"
+                    minLength={view === 'setup' ? 12 : 1}
+                    hint={
+                      view === 'setup' ? '12 caractères minimum' : undefined
+                    }
+                    autoComplete={
+                      view === 'setup' ? 'new-password' : 'current-password'
+                    }
+                  />
+                </>
+              )}
 
               {view === 'setup' ? (
                 <FormField
@@ -261,7 +381,11 @@ export function App() {
                 {submitting ? (
                   <LoaderCircle className="animate-spin" aria-hidden="true" />
                 ) : null}
-                {view === 'setup' ? 'Créer le foyer' : 'Se connecter'}
+                {view === 'setup'
+                  ? 'Créer le foyer'
+                  : view === 'invite'
+                    ? 'Rejoindre le foyer'
+                    : 'Se connecter'}
                 {!submitting ? (
                   <ArrowRight data-icon="inline-end" aria-hidden="true" />
                 ) : null}
@@ -281,8 +405,13 @@ export function App() {
 function FormField({
   label,
   hint,
+  required = true,
   ...inputProps
-}: React.ComponentProps<typeof Input> & { label: string; hint?: string }) {
+}: React.ComponentProps<typeof Input> & {
+  label: string;
+  hint?: string;
+  required?: boolean;
+}) {
   const name = String(inputProps.name);
   return (
     <div className="space-y-2">
@@ -294,7 +423,7 @@ function FormField({
       </div>
       <Input
         id={name}
-        required
+        required={required}
         className="h-11 rounded-xl bg-white"
         {...inputProps}
       />

@@ -1,4 +1,3 @@
-import { Algorithm, hash, verify } from '@node-rs/argon2';
 import {
   essentialModuleKeys,
   functionalModuleKeys,
@@ -24,22 +23,13 @@ import {
   setSessionCookie,
 } from './auth.js';
 import { registerMemberRoutes } from './member-routes.js';
+import { registerInvitationRoutes } from './invitation-routes.js';
+import { hashPassword, verifyPassword } from './password.js';
 import { registerShoppingRoutes } from './shopping-routes.js';
-
-const passwordOptions = {
-  algorithm: Algorithm.Argon2id,
-  memoryCost: 19_456,
-  timeCost: 2,
-  parallelism: 1,
-  outputLen: 32,
-};
 
 export async function registerRoutes(app: FastifyInstance, pool: Pool, config: AppConfig) {
   const requireSession = createSessionGuard(pool);
-  const dummyPasswordHash = await hash(
-    'familyhub-password-verification-placeholder',
-    passwordOptions,
-  );
+  const dummyPasswordHash = await hashPassword('familyhub-password-verification-placeholder');
 
   app.get('/api/v1/health/live', async () => ({ status: 'ok' }));
 
@@ -72,7 +62,7 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
         return reply.code(403).send({ error: 'SETUP_TOKEN_INVALID' });
       }
 
-      const passwordHash = await hash(parsed.data.password, passwordOptions);
+      const passwordHash = await hashPassword(parsed.data.password);
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -194,7 +184,7 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
       );
 
       const row = result.rows[0];
-      const passwordValid = await verify(
+      const passwordValid = await verifyPassword(
         row?.password_hash ?? dummyPasswordHash,
         parsed.data.password,
       );
@@ -327,6 +317,7 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
     },
   );
 
+  await registerInvitationRoutes(app, pool, config);
   await registerMemberRoutes(app, pool);
   await registerShoppingRoutes(app, pool);
 }

@@ -9,7 +9,11 @@ import {
   UsersRound,
 } from 'lucide-react';
 
-import type { FamilyGroup, FamilyMember } from '@familyhub/contracts';
+import type {
+  FamilyGroup,
+  FamilyMember,
+  PendingInvitation,
+} from '@familyhub/contracts';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { InvitationDialog } from './invitation-dialog';
 
 type MembersViewProps = {
   role: 'ADMIN' | 'MEMBER';
@@ -36,6 +41,7 @@ type MembersViewProps = {
 export function MembersView({ role, csrfToken }: MembersViewProps) {
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [groups, setGroups] = useState<FamilyGroup[]>([]);
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
@@ -48,19 +54,32 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
     Promise.all([
       fetch('/api/v1/members', { signal: controller.signal }),
       fetch('/api/v1/groups', { signal: controller.signal }),
+      role === 'ADMIN'
+        ? fetch('/api/v1/members/invitations', { signal: controller.signal })
+        : Promise.resolve(null),
     ])
-      .then(async ([membersResponse, groupsResponse]) => {
-        if (!membersResponse.ok || !groupsResponse.ok) {
+      .then(async ([membersResponse, groupsResponse, invitationsResponse]) => {
+        if (
+          !membersResponse.ok ||
+          !groupsResponse.ok ||
+          (invitationsResponse && !invitationsResponse.ok)
+        ) {
           throw new Error('Impossible de charger les membres et les groupes.');
         }
         return Promise.all([
           membersResponse.json() as Promise<{ members: FamilyMember[] }>,
           groupsResponse.json() as Promise<{ groups: FamilyGroup[] }>,
+          invitationsResponse
+            ? (invitationsResponse.json() as Promise<{
+                invitations: PendingInvitation[];
+              }>)
+            : Promise.resolve({ invitations: [] }),
         ]);
       })
-      .then(([membersPayload, groupsPayload]) => {
+      .then(([membersPayload, groupsPayload, invitationsPayload]) => {
         setMembers(membersPayload.members);
         setGroups(groupsPayload.groups);
+        setInvitations(invitationsPayload.invitations);
         setError('');
       })
       .catch((reason: unknown) => {
@@ -76,7 +95,14 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
       });
 
     return () => controller.abort();
-  }, []);
+  }, [role]);
+
+  function addInvitation(invitation: PendingInvitation) {
+    setInvitations((current) => [
+      invitation,
+      ...current.filter((candidate) => candidate.email !== invitation.email),
+    ]);
+  }
 
   function openNewGroup() {
     setError('');
@@ -271,13 +297,19 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
             </p>
           </div>
           {role === 'ADMIN' ? (
-            <Button
-              onClick={openNewGroup}
-              className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
-            >
-              <Plus aria-hidden="true" />
-              Nouveau groupe
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <InvitationDialog
+                csrfToken={csrfToken}
+                onCreated={addInvitation}
+              />
+              <Button
+                onClick={openNewGroup}
+                className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+              >
+                <Plus aria-hidden="true" />
+                Nouveau groupe
+              </Button>
+            </div>
           ) : null}
         </div>
 
@@ -317,6 +349,37 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
             </TabsList>
 
             <TabsContent value="members">
+              {role === 'ADMIN' && invitations.length ? (
+                <Card className="mb-4 gap-3 border-dashed bg-muted/20">
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      Invitations en attente
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {invitations.map((invitation) => (
+                      <div
+                        key={invitation.id}
+                        className="flex flex-wrap items-center gap-2 rounded-lg border bg-background px-3 py-2.5"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {invitation.email}
+                        </span>
+                        <Badge variant="outline">
+                          {invitation.role === 'ADMIN' ? 'Admin' : 'Membre'}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          expire le{' '}
+                          {new Intl.DateTimeFormat('fr-FR', {
+                            day: 'numeric',
+                            month: 'short',
+                          }).format(new Date(invitation.expiresAt))}
+                        </span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : null}
               <div className="grid gap-3 lg:grid-cols-2">
                 {members.map((member) => (
                   <MemberCard key={member.id} member={member} groups={groups} />

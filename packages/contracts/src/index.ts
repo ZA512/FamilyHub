@@ -110,6 +110,47 @@ export type FamilyGroup = {
   updatedAt: string;
 };
 
+export const invitationCreateSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email()
+    .max(254)
+    .transform((value) => value.toLowerCase()),
+  role: z.enum(['ADMIN', 'MEMBER']).default('MEMBER'),
+});
+
+export const invitationInspectSchema = z.object({
+  token: z.string().min(32).max(200),
+});
+
+export const invitationAcceptSchema = invitationInspectSchema.extend({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z
+    .string()
+    .trim()
+    .max(80)
+    .transform((value) => value || null)
+    .nullable()
+    .optional(),
+  password: z.string().min(12).max(200),
+});
+
+export type PendingInvitation = {
+  id: string;
+  email: string;
+  role: 'ADMIN' | 'MEMBER';
+  expiresAt: string;
+  createdAt: string;
+};
+
+export type InvitationPreview = {
+  instanceName: string;
+  email: string;
+  role: 'ADMIN' | 'MEMBER';
+  expiresAt: string;
+};
+
 const optionalText = (maximum: number) =>
   z
     .string()
