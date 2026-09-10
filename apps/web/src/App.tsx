@@ -219,6 +219,22 @@ export function App() {
     }
   }
 
+  async function logout() {
+    const response = await fetch('/api/v1/auth/logout', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-csrf-token': csrfToken,
+      },
+      body: '{}',
+    });
+    if (!response.ok) throw new Error('La déconnexion a échoué.');
+    setMember(null);
+    setCsrfToken('');
+    setError('');
+    setView('login');
+  }
+
   if (view === 'loading') return <LoadingScreen />;
   if (view === 'dashboard' && member) {
     return (
@@ -227,6 +243,7 @@ export function App() {
         instanceName={member.instanceName}
         role={member.role}
         csrfToken={csrfToken}
+        onLogout={logout}
       />
     );
   }

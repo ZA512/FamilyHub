@@ -162,6 +162,7 @@ type DashboardPageProps = {
   instanceName?: string;
   role: 'ADMIN' | 'MEMBER';
   csrfToken: string;
+  onLogout: () => Promise<void>;
 };
 
 export default function DashboardPage({
@@ -169,8 +170,10 @@ export default function DashboardPage({
   instanceName = 'Foyer Girard',
   role,
   csrfToken,
+  onLogout,
 }: DashboardPageProps) {
-  const initials = firstName.slice(0, 2).toUpperCase();
+  const [displayFirstName, setDisplayFirstName] = useState(firstName);
+  const initials = displayFirstName.slice(0, 2).toUpperCase();
   const todayLabel = new Intl.DateTimeFormat('fr-FR', {
     weekday: 'long',
     day: 'numeric',
@@ -403,7 +406,9 @@ export default function DashboardPage({
                     {initials}
                   </span>
                   <span className="flex min-w-0 flex-col leading-tight">
-                    <span className="truncate font-medium">{firstName}</span>
+                    <span className="truncate font-medium">
+                      {displayFirstName}
+                    </span>
                     <span className="truncate text-xs text-sidebar-foreground/55">
                       {role === 'ADMIN' ? 'Administrateur' : 'Membre'}
                     </span>
@@ -468,7 +473,10 @@ export default function DashboardPage({
                 role={role}
                 modules={modules}
                 loadError={modulesError}
+                csrfToken={csrfToken}
                 onToggle={toggleModule}
+                onFirstNameChange={setDisplayFirstName}
+                onLogout={onLogout}
               />
             ) : activeView === 'shopping' ? (
               <ShoppingView
@@ -488,7 +496,7 @@ export default function DashboardPage({
                       {todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}
                     </p>
                     <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
-                      Bonjour {firstName}
+                      Bonjour {displayFirstName}
                     </h1>
                     <p className="mt-1 text-base text-muted-foreground">
                       Voici ce qui compte aujourd’hui.

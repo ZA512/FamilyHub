@@ -26,6 +26,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
+import { ProfileSettings } from './profile-settings';
 
 const functionalModules = [
   {
@@ -106,14 +107,20 @@ type SettingsViewProps = {
   role: 'ADMIN' | 'MEMBER';
   modules: ModuleConfig[] | null;
   loadError: string;
+  csrfToken: string;
   onToggle: (key: ModuleKey, enabled: boolean) => Promise<void>;
+  onFirstNameChange: (firstName: string) => void;
+  onLogout: () => Promise<void>;
 };
 
 export function SettingsView({
   role,
   modules,
   loadError,
+  csrfToken,
   onToggle,
+  onFirstNameChange,
+  onLogout,
 }: SettingsViewProps) {
   const [busyKey, setBusyKey] = useState<ModuleKey | null>(null);
   const [error, setError] = useState('');
@@ -137,13 +144,24 @@ export function SettingsView({
   return (
     <section>
       <div className="mb-6">
-        <p className="mb-1 text-sm font-medium text-[#087f72]">
-          Configuration du foyer
-        </p>
+        <p className="mb-1 text-sm font-medium text-[#087f72]">Votre espace</p>
         <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
-          Modules
+          Paramètres
         </h1>
         <p className="mt-1 text-base text-muted-foreground">
+          Gérez votre profil et la configuration du foyer.
+        </p>
+      </div>
+
+      <ProfileSettings
+        csrfToken={csrfToken}
+        onFirstNameChange={onFirstNameChange}
+        onLogout={onLogout}
+      />
+
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold tracking-tight">Modules</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
           Les données d’un module désactivé restent conservées.
         </p>
       </div>

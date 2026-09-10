@@ -151,6 +151,52 @@ export type InvitationPreview = {
   expiresAt: string;
 };
 
+const nullableProfileText = (maximum: number) =>
+  z
+    .string()
+    .trim()
+    .max(maximum)
+    .transform((value) => value || null)
+    .nullable();
+
+function isIsoCalendarDate(value: string) {
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
+}
+
+export const profileUpdateSchema = z.object({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: nullableProfileText(80),
+  phone: nullableProfileText(40),
+  birthDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .refine((value) => value === null || isIsoCalendarDate(value)),
+  timezone: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .refine((value) => {
+      try {
+        new Intl.DateTimeFormat('fr-FR', { timeZone: value });
+        return true;
+      } catch {
+        return false;
+      }
+    }),
+});
+
+export type MemberProfile = z.infer<typeof profileUpdateSchema> & {
+  email: string;
+};
+
 const optionalText = (maximum: number) =>
   z
     .string()
