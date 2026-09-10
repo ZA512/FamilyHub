@@ -8,13 +8,10 @@ import {
   Bell,
   Bookmark,
   CalendarDays,
-  Check,
   CheckSquare2,
-  ChevronRight,
   CircleEllipsis,
   Home,
   MessageCircle,
-  MoreHorizontal,
   Plus,
   Search,
   Settings,
@@ -24,7 +21,6 @@ import {
   Utensils,
 } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -33,14 +29,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import {
   Sidebar,
   SidebarContent,
@@ -57,6 +45,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
+import { HomeView } from './home-view';
 import { ShoppingView } from './shopping-view';
 import { MembersView } from './members-view';
 import { NotificationsView } from './notifications-view';
@@ -111,54 +100,6 @@ const quickCreateOptions = [
   { view: 'bookmarks' as const, label: 'Bookmark', icon: Bookmark },
 ];
 
-const attentionItems = [
-  {
-    view: 'chat' as const,
-    icon: MessageCircle,
-    color: 'bg-[#e7f5f2] text-[#087f72]',
-    title: 'Parents',
-    detail: '3 nouveaux messages',
-    time: 'Il y a 8 min',
-  },
-  {
-    view: 'shopping' as const,
-    icon: ShoppingBasket,
-    color: 'bg-[#fff3df] text-[#a55e10]',
-    title: 'Liste de courses',
-    detail: 'Ouvrir la liste partagée',
-    time: 'Maintenant',
-  },
-  {
-    view: 'tasks' as const,
-    icon: CheckSquare2,
-    color: 'bg-[#eef0ff] text-[#5651a8]',
-    title: 'Préparer les affaires de sport',
-    detail: 'Nouvelle tâche affectée',
-    time: 'Hier',
-  },
-];
-
-const recentActivityItems = [
-  {
-    module: 'bookmarks' as const,
-    initials: 'JG',
-    title: 'Jade a ajouté un bookmark',
-    detail: 'Idées week-end · il y a 1 h',
-  },
-  {
-    module: 'tasks' as const,
-    initials: 'L',
-    title: 'Léo a terminé une corvée',
-    detail: 'Vider le lave-vaisselle · il y a 2 h',
-  },
-  {
-    module: 'pages' as const,
-    initials: 'MG',
-    title: 'Vous avez modifié une page',
-    detail: 'Vacances en Bretagne · hier',
-  },
-];
-
 type DashboardPageProps = {
   firstName?: string;
   instanceName?: string;
@@ -176,11 +117,6 @@ export default function DashboardPage({
 }: DashboardPageProps) {
   const [displayFirstName, setDisplayFirstName] = useState(firstName);
   const initials = displayFirstName.slice(0, 2).toUpperCase();
-  const todayLabel = new Intl.DateTimeFormat('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  }).format(new Date());
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [shoppingComposerOpen, setShoppingComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
@@ -195,13 +131,6 @@ export default function DashboardPage({
   const canCreate = quickCreateOptions.some((option) =>
     moduleEnabled(option.view),
   );
-  const visibleAttentionItems = attentionItems.filter((item) =>
-    moduleEnabled(item.view),
-  );
-  const visibleActivityItems = recentActivityItems.filter((item) =>
-    moduleEnabled(item.module),
-  );
-
   function navigate(view: ViewId) {
     setActiveView(view);
     setQuickAddOpen(false);
@@ -535,249 +464,11 @@ export default function DashboardPage({
             ) : activeView !== 'home' ? (
               <ComingSoonView view={activeView} />
             ) : (
-              <>
-                <section className="mb-7 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="mb-1 text-sm font-medium text-[#087f72]">
-                      {todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}
-                    </p>
-                    <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
-                      Bonjour {displayFirstName}
-                    </h1>
-                    <p className="mt-1 text-base text-muted-foreground">
-                      Voici ce qui compte aujourd’hui.
-                    </p>
-                  </div>
-                  <div className="hidden items-center gap-2 rounded-full border bg-card px-3 py-2 text-sm text-muted-foreground lg:flex">
-                    <span className="size-2 rounded-full bg-[#23a995]" />
-                    Tout est synchronisé
-                  </div>
-                </section>
-
-                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,.85fr)]">
-                  <div className="space-y-6">
-                    {moduleEnabled('agenda') || moduleEnabled('tasks') ? (
-                      <section aria-labelledby="today-title">
-                        <div className="mb-3 flex items-center justify-between">
-                          <h2
-                            id="today-title"
-                            className="text-lg font-semibold tracking-tight"
-                          >
-                            Aujourd’hui
-                          </h2>
-                          {moduleEnabled('agenda') ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-muted-foreground"
-                              onClick={() => navigate('agenda')}
-                            >
-                              Voir l’agenda
-                              <ChevronRight
-                                data-icon="inline-end"
-                                aria-hidden="true"
-                              />
-                            </Button>
-                          ) : null}
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          {moduleEnabled('agenda') ? (
-                            <Card className="relative border-0 bg-[#eef8f6] ring-[#087f72]/15">
-                              <span className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-[#087f72]" />
-                              <CardHeader className="pl-5">
-                                <CardDescription className="font-medium text-[#087f72]">
-                                  18:30 · Agenda
-                                </CardDescription>
-                                <CardTitle className="text-base">
-                                  Rendez-vous chez le dentiste
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent className="flex items-center gap-2 pl-5 text-sm text-muted-foreground">
-                                <span className="grid size-6 place-items-center rounded-full bg-white text-[10px] font-bold text-[#075e55]">
-                                  J
-                                </span>
-                                Jade · Cabinet du Parc
-                              </CardContent>
-                            </Card>
-                          ) : null}
-
-                          {moduleEnabled('tasks') ? (
-                            <Card className="relative border-0 bg-[#fff7e9] ring-[#e49131]/20">
-                              <span className="absolute inset-y-4 left-0 w-1 rounded-r-full bg-[#e49131]" />
-                              <CardHeader className="pl-5">
-                                <CardDescription className="font-medium text-[#a55e10]">
-                                  À faire · Tâche
-                                </CardDescription>
-                                <CardTitle className="text-base">
-                                  Sortir les poubelles
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent className="flex items-center justify-between gap-3 pl-5">
-                                <span className="text-sm text-muted-foreground">
-                                  Affectée à vous
-                                </span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="rounded-full bg-white"
-                                  onClick={() => navigate('tasks')}
-                                >
-                                  <Check
-                                    data-icon="inline-start"
-                                    aria-hidden="true"
-                                  />
-                                  Fait
-                                </Button>
-                              </CardContent>
-                            </Card>
-                          ) : null}
-                        </div>
-                      </section>
-                    ) : null}
-
-                    {visibleAttentionItems.length ? (
-                      <section aria-labelledby="attention-title">
-                        <div className="mb-3 flex items-center justify-between">
-                          <h2
-                            id="attention-title"
-                            className="text-lg font-semibold tracking-tight"
-                          >
-                            À voir
-                          </h2>
-                          <Badge
-                            variant="secondary"
-                            className="bg-[#e7f5f2] text-[#075e55]"
-                          >
-                            {visibleAttentionItems.length} nouveauté
-                            {visibleAttentionItems.length > 1 ? 's' : ''}
-                          </Badge>
-                        </div>
-                        <Card className="gap-0 py-0">
-                          {visibleAttentionItems.map((item, index) => (
-                            <button
-                              key={item.title}
-                              onClick={() => navigate(item.view)}
-                              className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/45 ${index ? 'border-t' : ''}`}
-                            >
-                              <span
-                                className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.color}`}
-                              >
-                                <item.icon
-                                  className="size-4"
-                                  aria-hidden="true"
-                                />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block font-medium">
-                                  {item.title}
-                                </span>
-                                <span className="block truncate text-sm text-muted-foreground">
-                                  {item.detail}
-                                </span>
-                              </span>
-                              <span className="hidden text-xs text-muted-foreground sm:block">
-                                {item.time}
-                              </span>
-                              <ChevronRight
-                                className="size-4 text-muted-foreground/60"
-                                aria-hidden="true"
-                              />
-                            </button>
-                          ))}
-                        </Card>
-                      </section>
-                    ) : null}
-                  </div>
-
-                  <aside className="space-y-6">
-                    {moduleEnabled('meals') ? (
-                      <section aria-labelledby="meal-title">
-                        <div className="mb-3 flex items-center justify-between">
-                          <h2
-                            id="meal-title"
-                            className="text-lg font-semibold tracking-tight"
-                          >
-                            Ce soir
-                          </h2>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Options du repas"
-                            onClick={() => navigate('meals')}
-                          >
-                            <MoreHorizontal aria-hidden="true" />
-                          </Button>
-                        </div>
-                        <Card className="border-0 bg-[#102b3f] text-white ring-0 shadow-[0_18px_45px_-28px_rgba(16,43,63,.8)]">
-                          <CardHeader>
-                            <CardDescription className="text-white/60">
-                              Dîner · 4 personnes
-                            </CardDescription>
-                            <CardTitle className="text-xl">
-                              Curry de légumes
-                            </CardTitle>
-                            <CardAction>
-                              <span className="grid size-10 place-items-center rounded-xl bg-white/10">
-                                <Utensils
-                                  className="size-4"
-                                  aria-hidden="true"
-                                />
-                              </span>
-                            </CardAction>
-                          </CardHeader>
-                          <CardContent>
-                            <div
-                              className="flex -space-x-1.5"
-                              aria-label="Préférences des membres"
-                            >
-                              {['MG', 'JG', 'L', 'N'].map((initials, index) => (
-                                <span
-                                  key={initials}
-                                  className="grid size-8 place-items-center rounded-full border-2 border-[#102b3f] bg-[#d9f4ef] text-[10px] font-bold text-[#075e55]"
-                                  style={{ zIndex: 4 - index }}
-                                >
-                                  {initials}
-                                </span>
-                              ))}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </section>
-                    ) : null}
-
-                    {visibleActivityItems.length ? (
-                      <section aria-labelledby="activity-title">
-                        <h2
-                          id="activity-title"
-                          className="mb-3 text-lg font-semibold tracking-tight"
-                        >
-                          Activité récente
-                        </h2>
-                        <Card className="gap-0 py-1">
-                          {visibleActivityItems.map((item) => (
-                            <div
-                              key={item.title}
-                              className="flex gap-3 px-4 py-3"
-                            >
-                              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-bold text-foreground/70">
-                                {item.initials}
-                              </span>
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium leading-snug">
-                                  {item.title}
-                                </p>
-                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                  {item.detail}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </Card>
-                      </section>
-                    ) : null}
-                  </aside>
-                </div>
-              </>
+              <HomeView
+                firstName={displayFirstName}
+                onNavigate={navigate}
+                onUnreadCountChange={setUnreadNotificationCount}
+              />
             )}
           </div>
 

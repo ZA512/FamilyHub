@@ -225,6 +225,29 @@ export type SearchResult = {
   updatedAt: string;
 };
 
+export type HomeAttention = {
+  id: 'notifications' | 'shopping';
+  count: number;
+  title: string;
+  detail: string;
+  view: 'notifications' | 'shopping';
+};
+
+export type HomeActivity = {
+  id: string;
+  type: 'shopping.added' | 'shopping.purchased';
+  actorName: string;
+  subject: string;
+  occurredAt: string;
+  view: 'shopping';
+};
+
+export type HomeSummary = {
+  attention: HomeAttention[];
+  activity: HomeActivity[];
+  unreadNotificationCount: number;
+};
+
 const optionalText = (maximum: number) =>
   z
     .string()
