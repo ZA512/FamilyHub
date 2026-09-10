@@ -229,6 +229,38 @@ export const adminAuditLogs = pgTable(
   (table) => [index('admin_audit_instance_created_idx').on(table.instanceId, table.createdAt)],
 );
 
+export const notifications = pgTable(
+  'notification',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    recipientMemberId: uuid('recipient_member_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+    actorMemberId: uuid('actor_member_id').references(() => instanceMembers.id, {
+      onDelete: 'set null',
+    }),
+    type: text('type').notNull(),
+    moduleKey: text('module_key'),
+    title: text('title').notNull(),
+    body: text('body'),
+    resourceType: text('resource_type'),
+    resourceId: uuid('resource_id'),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('notification_recipient_state_idx').on(
+      table.recipientMemberId,
+      table.readAt,
+      table.createdAt,
+    ),
+    index('notification_instance_created_idx').on(table.instanceId, table.createdAt),
+  ],
+);
+
 export const shoppingItems = pgTable(
   'shopping_item',
   {
@@ -254,10 +286,7 @@ export const shoppingItems = pgTable(
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex('shopping_item_instance_mutation_uq').on(
-      table.instanceId,
-      table.clientMutationId,
-    ),
+    uniqueIndex('shopping_item_instance_mutation_uq').on(table.instanceId, table.clientMutationId),
     index('shopping_item_instance_state_idx').on(
       table.instanceId,
       table.purchasedAt,

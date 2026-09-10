@@ -92,30 +92,69 @@ export async function registerShoppingRoutes(app: FastifyInstance, pool: Pool) {
         return reply.code(400).send({ error: 'INVALID_REQUEST', details: parsed.error.flatten() });
       }
 
-      const inserted = await pool.query<{ id: string }>(
-        `INSERT INTO shopping_item
-           (instance_id, name, quantity, note, requested_by, client_mutation_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (instance_id, client_mutation_id)
-         DO UPDATE SET client_mutation_id = EXCLUDED.client_mutation_id
-         RETURNING id`,
-        [
-          request.session?.instanceId,
-          parsed.data.name,
-          parsed.data.quantity ?? null,
-          parsed.data.note ?? null,
-          request.session?.id,
-          parsed.data.clientMutationId,
-        ],
-      );
-      const result = await pool.query<ShoppingRow>(
-        `${selectShoppingItem}
-         WHERE i.id = $1 AND i.instance_id = $2 AND i.deleted_at IS NULL`,
-        [inserted.rows[0]?.id, request.session?.instanceId],
-      );
-      const row = result.rows[0];
-      if (!row) throw new Error('Shopping item creation returned no row.');
-      return reply.code(201).send({ item: serializeShoppingItem(row) });
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const inserted = await client.query<{ id: string }>(
+          `INSERT INTO shopping_item
+             (instance_id, name, quantity, note, requested_by, client_mutation_id)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (instance_id, client_mutation_id) DO NOTHING
+           RETURNING id`,
+          [
+            request.session?.instanceId,
+            parsed.data.name,
+            parsed.data.quantity ?? null,
+            parsed.data.note ?? null,
+            request.session?.id,
+            parsed.data.clientMutationId,
+          ],
+        );
+        const createdId = inserted.rows[0]?.id;
+        const itemId =
+          createdId ??
+          (
+            await client.query<{ id: string }>(
+              `SELECT id FROM shopping_item
+               WHERE instance_id = $1 AND client_mutation_id = $2 AND deleted_at IS NULL`,
+              [request.session?.instanceId, parsed.data.clientMutationId],
+            )
+          ).rows[0]?.id;
+        if (!itemId) throw new Error('Shopping item creation returned no row.');
+
+        if (createdId) {
+          await client.query(
+            `INSERT INTO notification
+               (instance_id, recipient_member_id, actor_member_id, type, module_key,
+                title, body, resource_type, resource_id)
+             SELECT $1, m.id, $2, 'SHOPPING_REQUEST_ADDED', 'shopping',
+                    'Nouvelle demande de courses', $3, 'shopping_item', $4
+             FROM instance_member m
+             WHERE m.instance_id = $1 AND m.status = 'ACTIVE' AND m.id <> $2`,
+            [
+              request.session?.instanceId,
+              request.session?.id,
+              `${request.session?.firstName} demande : ${parsed.data.name}`,
+              itemId,
+            ],
+          );
+        }
+
+        const result = await client.query<ShoppingRow>(
+          `${selectShoppingItem}
+           WHERE i.id = $1 AND i.instance_id = $2 AND i.deleted_at IS NULL`,
+          [itemId, request.session?.instanceId],
+        );
+        const row = result.rows[0];
+        if (!row) throw new Error('Shopping item creation returned no row.');
+        await client.query('COMMIT');
+        return reply.code(201).send({ item: serializeShoppingItem(row) });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     },
   );
 

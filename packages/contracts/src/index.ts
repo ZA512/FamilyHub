@@ -197,6 +197,21 @@ export type MemberProfile = z.infer<typeof profileUpdateSchema> & {
   email: string;
 };
 
+export const notificationReadSchema = z.object({ read: z.boolean() });
+
+export type FamilyNotification = {
+  id: string;
+  type: string;
+  moduleKey: ModuleKey | null;
+  title: string;
+  body: string | null;
+  actorName: string | null;
+  resourceType: string | null;
+  resourceId: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
 const optionalText = (maximum: number) =>
   z
     .string()

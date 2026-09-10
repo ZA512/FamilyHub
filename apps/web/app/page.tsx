@@ -59,6 +59,7 @@ import {
 } from '@/components/ui/sidebar';
 import { ShoppingView } from './shopping-view';
 import { MembersView } from './members-view';
+import { NotificationsView } from './notifications-view';
 import { SettingsView } from './settings-view';
 
 type ViewId =
@@ -184,6 +185,7 @@ export default function DashboardPage({
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   function moduleEnabled(key: ModuleKey) {
     return modules?.find((module) => module.key === key)?.enabled ?? true;
@@ -250,6 +252,20 @@ export default function DashboardPage({
             : 'Configuration indisponible.',
         );
       });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/v1/notifications', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as { unreadCount: number };
+      })
+      .then((payload) => {
+        if (payload) setUnreadNotificationCount(payload.unreadCount);
+      })
+      .catch(() => undefined);
     return () => controller.abort();
   }, []);
 
@@ -449,12 +465,22 @@ export default function DashboardPage({
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Notifications"
+              aria-label={
+                unreadNotificationCount
+                  ? `Notifications, ${unreadNotificationCount} non lue${unreadNotificationCount > 1 ? 's' : ''}`
+                  : 'Notifications'
+              }
               className="relative rounded-xl"
               onClick={() => navigate('notifications')}
             >
               <Bell aria-hidden="true" />
-              <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[#e49131] ring-2 ring-background" />
+              {unreadNotificationCount ? (
+                <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-[#e49131] px-1 text-[11px] font-bold text-white ring-2 ring-background">
+                  {unreadNotificationCount > 99
+                    ? '99+'
+                    : unreadNotificationCount}
+                </span>
+              ) : null}
             </Button>
             {canCreate ? (
               <Button
@@ -486,6 +512,11 @@ export default function DashboardPage({
               />
             ) : activeView === 'members' ? (
               <MembersView role={role} csrfToken={csrfToken} />
+            ) : activeView === 'notifications' ? (
+              <NotificationsView
+                csrfToken={csrfToken}
+                onUnreadCountChange={setUnreadNotificationCount}
+              />
             ) : activeView !== 'home' ? (
               <ComingSoonView view={activeView} />
             ) : (
@@ -780,7 +811,10 @@ export default function DashboardPage({
 }
 
 const viewLabels: Record<
-  Exclude<ViewId, 'home' | 'shopping' | 'members' | 'settings'>,
+  Exclude<
+    ViewId,
+    'home' | 'shopping' | 'members' | 'settings' | 'notifications'
+  >,
   { title: string; description: string }
 > = {
   chat: {
@@ -804,10 +838,6 @@ const viewLabels: Record<
     title: 'Bookmarks',
     description: 'Le partage de liens sera bientôt disponible.',
   },
-  notifications: {
-    title: 'Notifications',
-    description: 'Le centre de notifications sera bientôt disponible.',
-  },
   search: {
     title: 'Recherche',
     description: 'La recherche globale sera bientôt disponible.',
@@ -817,7 +847,10 @@ const viewLabels: Record<
 function ComingSoonView({
   view,
 }: {
-  view: Exclude<ViewId, 'home' | 'shopping' | 'members' | 'settings'>;
+  view: Exclude<
+    ViewId,
+    'home' | 'shopping' | 'members' | 'settings' | 'notifications'
+  >;
 }) {
   const content = viewLabels[view];
   return (
