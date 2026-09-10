@@ -3,13 +3,23 @@ import { z } from 'zod';
 export const setupRequestSchema = z.object({
   instanceName: z.string().trim().min(2).max(80),
   firstName: z.string().trim().min(1).max(80),
-  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  email: z
+    .string()
+    .trim()
+    .email()
+    .max(254)
+    .transform((value) => value.toLowerCase()),
   password: z.string().min(12).max(200),
   setupToken: z.string().min(1),
 });
 
 export const loginRequestSchema = z.object({
-  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  email: z
+    .string()
+    .trim()
+    .email()
+    .max(254)
+    .transform((value) => value.toLowerCase()),
   password: z.string().min(1).max(200),
 });
 
@@ -55,6 +65,50 @@ export const moduleUpdateSchema = z.object({ enabled: z.boolean() });
 
 export type ModuleKey = z.infer<typeof moduleKeySchema>;
 export type ModuleConfig = { key: ModuleKey; enabled: boolean };
+
+const groupFields = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z
+    .string()
+    .trim()
+    .max(240)
+    .transform((value) => value || null)
+    .nullable()
+    .optional(),
+});
+
+export const groupCreateSchema = groupFields;
+
+export const groupUpdateSchema = groupFields
+  .partial()
+  .refine(
+    (value) => value.name !== undefined || value.description !== undefined,
+    'Au moins un champ doit être modifié.',
+  );
+
+export type GroupCreate = z.infer<typeof groupCreateSchema>;
+export type GroupUpdate = z.infer<typeof groupUpdateSchema>;
+
+export type FamilyMember = {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  email: string;
+  role: 'ADMIN' | 'MEMBER';
+  status: 'ACTIVE' | 'INACTIVE';
+  joinedAt: string;
+  groupIds: string[];
+};
+
+export type FamilyGroup = {
+  id: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  memberIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
 
 const optionalText = (maximum: number) =>
   z

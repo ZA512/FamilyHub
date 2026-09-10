@@ -58,6 +58,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { ShoppingView } from './shopping-view';
+import { MembersView } from './members-view';
 import { SettingsView } from './settings-view';
 
 type ViewId =
@@ -475,6 +476,8 @@ export default function DashboardPage({
                 composerOpen={shoppingComposerOpen}
                 onComposerOpenChange={setShoppingComposerOpen}
               />
+            ) : activeView === 'members' ? (
+              <MembersView role={role} csrfToken={csrfToken} />
             ) : activeView !== 'home' ? (
               <ComingSoonView view={activeView} />
             ) : (
@@ -769,7 +772,7 @@ export default function DashboardPage({
 }
 
 const viewLabels: Record<
-  Exclude<ViewId, 'home' | 'shopping' | 'settings'>,
+  Exclude<ViewId, 'home' | 'shopping' | 'members' | 'settings'>,
   { title: string; description: string }
 > = {
   chat: {
@@ -793,10 +796,6 @@ const viewLabels: Record<
     title: 'Bookmarks',
     description: 'Le partage de liens sera bientôt disponible.',
   },
-  members: {
-    title: 'Membres',
-    description: 'La gestion des membres sera bientôt disponible.',
-  },
   notifications: {
     title: 'Notifications',
     description: 'Le centre de notifications sera bientôt disponible.',
@@ -810,7 +809,7 @@ const viewLabels: Record<
 function ComingSoonView({
   view,
 }: {
-  view: Exclude<ViewId, 'home' | 'shopping' | 'settings'>;
+  view: Exclude<ViewId, 'home' | 'shopping' | 'members' | 'settings'>;
 }) {
   const content = viewLabels[view];
   return (
