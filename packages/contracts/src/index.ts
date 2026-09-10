@@ -212,6 +212,19 @@ export type FamilyNotification = {
   createdAt: string;
 };
 
+export const searchQuerySchema = z.object({
+  q: z.string().trim().min(2).max(100),
+});
+
+export type SearchResult = {
+  id: string;
+  type: 'member' | 'shopping';
+  title: string;
+  description: string | null;
+  view: 'members' | 'shopping';
+  updatedAt: string;
+};
+
 const optionalText = (maximum: number) =>
   z
     .string()

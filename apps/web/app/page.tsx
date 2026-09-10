@@ -60,6 +60,7 @@ import {
 import { ShoppingView } from './shopping-view';
 import { MembersView } from './members-view';
 import { NotificationsView } from './notifications-view';
+import { SearchView } from './search-view';
 import { SettingsView } from './settings-view';
 
 type ViewId =
@@ -299,6 +300,18 @@ export default function DashboardPage({
     return () => lifecycle.abort();
   }, []);
 
+  useEffect(() => {
+    function openSearch(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setActiveView('search');
+        setQuickAddOpen(false);
+      }
+    }
+    window.addEventListener('keydown', openSearch);
+    return () => window.removeEventListener('keydown', openSearch);
+  }, []);
+
   return (
     <>
       <Dialog open={quickAddOpen} onOpenChange={setQuickAddOpen}>
@@ -517,6 +530,8 @@ export default function DashboardPage({
                 csrfToken={csrfToken}
                 onUnreadCountChange={setUnreadNotificationCount}
               />
+            ) : activeView === 'search' ? (
+              <SearchView onNavigate={navigate} />
             ) : activeView !== 'home' ? (
               <ComingSoonView view={activeView} />
             ) : (
@@ -813,7 +828,7 @@ export default function DashboardPage({
 const viewLabels: Record<
   Exclude<
     ViewId,
-    'home' | 'shopping' | 'members' | 'settings' | 'notifications'
+    'home' | 'shopping' | 'members' | 'settings' | 'notifications' | 'search'
   >,
   { title: string; description: string }
 > = {
@@ -838,10 +853,6 @@ const viewLabels: Record<
     title: 'Bookmarks',
     description: 'Le partage de liens sera bientôt disponible.',
   },
-  search: {
-    title: 'Recherche',
-    description: 'La recherche globale sera bientôt disponible.',
-  },
 };
 
 function ComingSoonView({
@@ -849,7 +860,7 @@ function ComingSoonView({
 }: {
   view: Exclude<
     ViewId,
-    'home' | 'shopping' | 'members' | 'settings' | 'notifications'
+    'home' | 'shopping' | 'members' | 'settings' | 'notifications' | 'search'
   >;
 }) {
   const content = viewLabels[view];
