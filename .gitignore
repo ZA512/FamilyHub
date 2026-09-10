@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vinext/
+.wrangler/
+.env
+.env.*
+!.env.example
+coverage/
+*.tsbuildinfo
+data/
+backups/
+*.log
+.DS_Store
+Thumbs.db

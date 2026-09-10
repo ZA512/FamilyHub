@@ -1,0 +1,201 @@
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+
+export const memberRole = pgEnum('member_role', ['ADMIN', 'MEMBER']);
+export const memberStatus = pgEnum('member_status', ['ACTIVE', 'INACTIVE']);
+export const visibility = pgEnum('visibility', [
+  'PRIVATE',
+  'ALL_MEMBERS',
+  'GROUPS',
+  'SELECTED_USERS',
+]);
+
+export const instances = pgTable('instance', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  locale: text('locale').notNull().default('fr'),
+  timezone: text('timezone').notNull().default('Europe/Paris'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const users = pgTable(
+  'app_user',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: text('email').notNull(),
+    passwordHash: text('password_hash').notNull(),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name'),
+    phone: text('phone'),
+    birthDate: text('birth_date'),
+    timezone: text('timezone').notNull().default('Europe/Paris'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('app_user_email_uq').on(table.email)],
+);
+
+export const instanceMembers = pgTable(
+  'instance_member',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: memberRole('role').notNull().default('MEMBER'),
+    status: memberStatus('status').notNull().default('ACTIVE'),
+    joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('instance_member_instance_user_uq').on(table.instanceId, table.userId),
+    index('instance_member_instance_idx').on(table.instanceId),
+  ],
+);
+
+export const groups = pgTable(
+  'member_group',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    isSystem: boolean('is_system').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('member_group_instance_name_uq').on(table.instanceId, table.name)],
+);
+
+export const groupMemberships = pgTable(
+  'group_membership',
+  {
+    groupId: uuid('group_id')
+      .notNull()
+      .references(() => groups.id, { onDelete: 'cascade' }),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.groupId, table.memberId] })],
+);
+
+export const moduleConfigs = pgTable(
+  'module_config',
+  {
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    moduleKey: text('module_key').notNull(),
+    enabled: boolean('enabled').notNull(),
+    settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.instanceId, table.moduleKey] })],
+);
+
+export const sessions = pgTable(
+  'session',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    csrfHash: text('csrf_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('session_token_hash_uq').on(table.tokenHash),
+    index('session_member_idx').on(table.memberId),
+    index('session_expiry_idx').on(table.expiresAt),
+  ],
+);
+
+export const resources = pgTable(
+  'resource',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    resourceType: text('resource_type').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'restrict' }),
+    visibility: visibility('visibility').notNull().default('PRIVATE'),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('resource_instance_type_idx').on(table.instanceId, table.resourceType),
+    index('resource_creator_idx').on(table.createdBy),
+  ],
+);
+
+export const resourceAclGroups = pgTable(
+  'resource_acl_group',
+  {
+    resourceId: uuid('resource_id')
+      .notNull()
+      .references(() => resources.id, { onDelete: 'cascade' }),
+    groupId: uuid('group_id')
+      .notNull()
+      .references(() => groups.id, { onDelete: 'cascade' }),
+  },
+  (table) => [primaryKey({ columns: [table.resourceId, table.groupId] })],
+);
+
+export const resourceAclUsers = pgTable(
+  'resource_acl_user',
+  {
+    resourceId: uuid('resource_id')
+      .notNull()
+      .references(() => resources.id, { onDelete: 'cascade' }),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+  },
+  (table) => [primaryKey({ columns: [table.resourceId, table.memberId] })],
+);
+
+export const adminAuditLogs = pgTable(
+  'admin_audit_log',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    actorMemberId: uuid('actor_member_id').references(() => instanceMembers.id, {
+      onDelete: 'set null',
+    }),
+    action: text('action').notNull(),
+    targetType: text('target_type').notNull(),
+    targetId: uuid('target_id'),
+    details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('admin_audit_instance_created_idx').on(table.instanceId, table.createdAt)],
+);

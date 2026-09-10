@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+**/node_modules
+**/dist
+**/.vinext
+**/.wrangler
+.env
+.env.*
+!.env.example
+coverage
+backups
+data
+*.log

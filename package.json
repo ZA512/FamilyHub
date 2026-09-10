@@ -1,0 +1,28 @@
+{
+  "name": "familyhub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @familyhub/config && npm run build -w @familyhub/database && npm run build -w @familyhub/domain && npm run build -w @familyhub/contracts && npm run build -w @familyhub/api && npm run build -w @familyhub/web",
+    "dev:api": "node --env-file=.env --import tsx --watch apps/api/src/index.ts",
+    "dev:web": "npm run dev -w @familyhub/web",
+    "format": "npm run format -w @familyhub/web",
+    "lint": "npm run lint -w @familyhub/web && npm run check:types",
+    "check:types": "tsc -b --pretty false && tsc --noEmit -p apps/web/tsconfig.json --pretty false",
+    "test": "vitest run --exclude **/dist/**",
+    "db:migrate": "node --env-file=.env --import tsx apps/api/src/migrate.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  }
+}
