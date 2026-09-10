@@ -45,6 +45,10 @@
     "vite": "8.2.2"
   },
   "optionalDependencies": {
+    "@oxlint/binding-linux-arm64-gnu": "1.76.0",
+    "@oxlint/binding-linux-arm64-musl": "1.76.0",
+    "@oxlint/binding-linux-x64-gnu": "1.76.0",
+    "@oxlint/binding-linux-x64-musl": "1.76.0",
     "@tailwindcss/oxide-linux-arm64-musl": "4.2.1",
     "@tailwindcss/oxide-linux-x64-musl": "4.2.1"
   },
