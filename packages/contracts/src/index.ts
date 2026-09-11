@@ -218,10 +218,10 @@ export const searchQuerySchema = z.object({
 
 export type SearchResult = {
   id: string;
-  type: 'member' | 'shopping' | 'task';
+  type: 'member' | 'shopping' | 'task' | 'agenda';
   title: string;
   description: string | null;
-  view: 'members' | 'shopping' | 'tasks';
+  view: 'members' | 'shopping' | 'tasks' | 'agenda';
   updatedAt: string;
 };
 
@@ -402,4 +402,95 @@ export type ShoppingItem = {
   version: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export const agendaEventTypeSchema = z.enum([
+  'EVENT',
+  'APPOINTMENT',
+  'BIRTHDAY',
+  'REMINDER',
+]);
+export const agendaRecurrenceSchema = z.enum(['NONE', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']);
+export const agendaResponseSchema = z.enum(['YES', 'NO', 'MAYBE', 'PENDING']);
+
+export const agendaRangeSchema = z
+  .object({
+    start: z.string().datetime({ offset: true }),
+    end: z.string().datetime({ offset: true }),
+  })
+  .refine((value) => {
+    const start = new Date(value.start).getTime();
+    const end = new Date(value.end).getTime();
+    return end > start && end - start <= 370 * 24 * 60 * 60 * 1000;
+  });
+
+const agendaEventFields = z
+  .object({
+    title: z.string().trim().min(1).max(160),
+    description: optionalText(2000),
+    eventType: agendaEventTypeSchema.default('EVENT'),
+    startAt: z.string().datetime({ offset: true }),
+    endAt: z.string().datetime({ offset: true }),
+    allDay: z.boolean().default(false),
+    location: optionalText(240),
+    participantIds: z.array(z.string().uuid()).max(100).default([]),
+    recurrence: agendaRecurrenceSchema.default('NONE'),
+    recurrenceInterval: z.number().int().min(1).max(365).default(1),
+    recurrenceUntil: z.string().datetime({ offset: true }).nullable().optional(),
+    reminderMinutes: z.number().int().min(0).max(525600).nullable().optional(),
+    visibility: taskVisibilitySchema.default('ALL_MEMBERS'),
+  })
+  .superRefine((value, context) => {
+    if (new Date(value.endAt).getTime() <= new Date(value.startAt).getTime()) {
+      context.addIssue({ code: 'custom', message: 'La fin doit suivre le début.' });
+    }
+    if (
+      value.recurrenceUntil &&
+      new Date(value.recurrenceUntil).getTime() < new Date(value.startAt).getTime()
+    ) {
+      context.addIssue({ code: 'custom', message: 'La récurrence doit finir après le début.' });
+    }
+    if (value.recurrence === 'NONE' && value.recurrenceUntil) {
+      context.addIssue({ code: 'custom', message: 'Une fin de récurrence nécessite une répétition.' });
+    }
+  });
+
+export const agendaEventCreateSchema = agendaEventFields.and(
+  z.object({ clientMutationId: z.string().uuid() }),
+);
+export const agendaEventUpdateSchema = agendaEventFields;
+export const agendaResponseUpdateSchema = z.object({ response: agendaResponseSchema });
+
+export type AgendaEventType = z.infer<typeof agendaEventTypeSchema>;
+export type AgendaRecurrence = z.infer<typeof agendaRecurrenceSchema>;
+export type AgendaResponse = z.infer<typeof agendaResponseSchema>;
+
+export type AgendaParticipant = {
+  memberId: string;
+  memberName: string;
+  response: AgendaResponse;
+};
+
+export type AgendaEntry = {
+  id: string;
+  resourceId: string;
+  sourceType: 'event' | 'task';
+  title: string;
+  description: string | null;
+  startAt: string;
+  endAt: string | null;
+  seriesStartAt: string;
+  seriesEndAt: string | null;
+  allDay: boolean;
+  location: string | null;
+  eventType: AgendaEventType | 'TASK';
+  visibility: 'PRIVATE' | 'ALL_MEMBERS';
+  createdBy: string;
+  createdByName: string;
+  editable: boolean;
+  recurrence: AgendaRecurrence;
+  recurrenceInterval: number;
+  recurrenceUntil: string | null;
+  reminderMinutes: number | null;
+  participants: AgendaParticipant[];
 };

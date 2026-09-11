@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import type { ModuleConfig, ModuleKey } from '@familyhub/contracts';
 
@@ -11,6 +11,7 @@ import {
   CheckSquare2,
   CircleEllipsis,
   Home,
+  LoaderCircle,
   MessageCircle,
   Plus,
   Search,
@@ -52,6 +53,10 @@ import { NotificationsView } from './notifications-view';
 import { SearchView } from './search-view';
 import { SettingsView } from './settings-view';
 import { TasksView } from './tasks-view';
+
+const AgendaView = lazy(() =>
+  import('./agenda-view').then((module) => ({ default: module.AgendaView })),
+);
 
 type ViewId =
   | 'home'
@@ -147,6 +152,7 @@ export default function DashboardPage({
   const initials = displayFirstName.slice(0, 2).toUpperCase();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [shoppingComposerOpen, setShoppingComposerOpen] = useState(false);
+  const [agendaComposerOpen, setAgendaComposerOpen] = useState(false);
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
@@ -168,6 +174,7 @@ export default function DashboardPage({
   function startCreation(view: ViewId) {
     navigate(view);
     if (view === 'shopping') setShoppingComposerOpen(true);
+    if (view === 'agenda') setAgendaComposerOpen(true);
     if (view === 'tasks') setTaskComposerOpen(true);
   }
 
@@ -482,6 +489,23 @@ export default function DashboardPage({
                 composerOpen={shoppingComposerOpen}
                 onComposerOpenChange={setShoppingComposerOpen}
               />
+            ) : activeView === 'agenda' ? (
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground">
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                    Chargement de l’agenda…
+                  </div>
+                }
+              >
+                <AgendaView
+                  currentMemberId={memberId}
+                  csrfToken={csrfToken}
+                  composerOpen={agendaComposerOpen}
+                  onComposerOpenChange={setAgendaComposerOpen}
+                  onOpenTasks={() => navigate('tasks')}
+                />
+              </Suspense>
             ) : activeView === 'tasks' ? (
               <TasksView
                 currentMemberId={memberId}
@@ -559,6 +583,7 @@ const viewLabels: Record<
     ViewId,
     | 'home'
     | 'tasks'
+    | 'agenda'
     | 'shopping'
     | 'members'
     | 'settings'
@@ -571,10 +596,6 @@ const viewLabels: Record<
     title: 'Chat',
     description:
       'La messagerie familiale arrive dans la prochaine tranche fonctionnelle.',
-  },
-  agenda: {
-    title: 'Agenda',
-    description: 'Les événements partagés seront bientôt reliés à cette vue.',
   },
   meals: {
     title: 'Repas',
@@ -593,6 +614,7 @@ function ComingSoonView({
     ViewId,
     | 'home'
     | 'tasks'
+    | 'agenda'
     | 'shopping'
     | 'members'
     | 'settings'

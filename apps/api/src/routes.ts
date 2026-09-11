@@ -25,6 +25,7 @@ import {
 import { registerMemberRoutes } from './member-routes.js';
 import { registerInvitationRoutes } from './invitation-routes.js';
 import { registerHomeRoutes } from './home-routes.js';
+import { registerAgendaRoutes } from './agenda-routes.js';
 import { registerNotificationRoutes } from './notification-routes.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { registerProfileRoutes } from './profile-routes.js';
@@ -322,6 +323,7 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
     },
   );
 
+  await registerAgendaRoutes(app, pool);
   await registerHomeRoutes(app, pool);
   await registerInvitationRoutes(app, pool, config);
   await registerMemberRoutes(app, pool);

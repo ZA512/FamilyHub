@@ -78,6 +78,33 @@ export async function registerSearchRoutes(app: FastifyInstance, pool: Pool) {
                  WHERE rag.resource_id = r.id AND gm.member_id = $3
                )
              )
+
+           UNION ALL
+
+           SELECT e.id, 'agenda'::text AS type, e.title,
+                  concat_ws(' · ', NULLIF(e.location, ''), NULLIF(e.description, '')) AS description,
+                  'agenda'::text AS view, e.updated_at AS "updatedAt", 3 AS type_order
+           FROM calendar_event e
+           JOIN resource r ON r.id = e.id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND concat_ws(' ', e.title, e.location, e.description) ILIKE $2
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'agenda' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $3
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $3
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $3
+               )
+             )
          ) matches
          ORDER BY type_order, "updatedAt" DESC
          LIMIT 30`,

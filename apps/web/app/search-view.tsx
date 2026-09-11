@@ -4,6 +4,7 @@ import {
   LoaderCircle,
   Search,
   CheckSquare2,
+  CalendarDays,
   ShoppingBasket,
   Users,
   X,
@@ -18,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type SearchViewProps = {
-  onNavigate: (view: 'members' | 'shopping' | 'tasks') => void;
+  onNavigate: (view: 'members' | 'shopping' | 'tasks' | 'agenda') => void;
 };
 
 export function SearchView({ onNavigate }: SearchViewProps) {
@@ -147,6 +148,8 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                     <Users className="size-4" aria-hidden="true" />
                   ) : result.type === 'task' ? (
                     <CheckSquare2 className="size-4" aria-hidden="true" />
+                  ) : result.type === 'agenda' ? (
+                    <CalendarDays className="size-4" aria-hidden="true" />
                   ) : (
                     <ShoppingBasket className="size-4" aria-hidden="true" />
                   )}
@@ -159,6 +162,8 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                         ? 'Membre'
                         : result.type === 'task'
                           ? 'Tâche'
+                          : result.type === 'agenda'
+                            ? 'Agenda'
                           : 'Courses'}
                     </Badge>
                   </span>

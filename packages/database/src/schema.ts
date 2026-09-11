@@ -363,3 +363,66 @@ export const taskCompletions = pgTable(
     index('task_completion_task_date_idx').on(table.taskId, table.completedAt),
   ],
 );
+
+export const calendarEvents = pgTable(
+  'calendar_event',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .references(() => resources.id, { onDelete: 'cascade' }),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    eventType: text('event_type').notNull().default('EVENT'),
+    startAt: timestamp('start_at', { withTimezone: true }).notNull(),
+    endAt: timestamp('end_at', { withTimezone: true }).notNull(),
+    allDay: boolean('all_day').notNull().default(false),
+    location: text('location'),
+    recurrence: text('recurrence').notNull().default('NONE'),
+    recurrenceInterval: integer('recurrence_interval').notNull().default(1),
+    recurrenceUntil: timestamp('recurrence_until', { withTimezone: true }),
+    recurrenceTimezone: text('recurrence_timezone').notNull().default('Europe/Paris'),
+    reminderMinutes: integer('reminder_minutes'),
+    clientMutationId: uuid('client_mutation_id').notNull(),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('calendar_event_instance_mutation_uq').on(
+      table.instanceId,
+      table.clientMutationId,
+    ),
+    index('calendar_event_instance_range_idx').on(
+      table.instanceId,
+      table.startAt,
+      table.endAt,
+    ),
+    index('calendar_event_instance_recurrence_idx').on(
+      table.instanceId,
+      table.recurrence,
+      table.recurrenceUntil,
+    ),
+  ],
+);
+
+export const calendarEventParticipants = pgTable(
+  'calendar_event_participant',
+  {
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => calendarEvents.id, { onDelete: 'cascade' }),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+    response: text('response').notNull().default('PENDING'),
+    respondedAt: timestamp('responded_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.eventId, table.memberId] }),
+    index('calendar_event_participant_member_idx').on(table.memberId, table.response),
+  ],
+);
