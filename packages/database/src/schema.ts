@@ -539,3 +539,95 @@ export const mealPlanEntries = pgTable(
     index('meal_plan_instance_date_idx').on(table.instanceId, table.date, table.slot),
   ],
 );
+
+export const conversations = pgTable(
+  'conversation',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    title: text('title'),
+    directKey: text('direct_key'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'restrict' }),
+    clientMutationId: uuid('client_mutation_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('conversation_instance_mutation_uq').on(
+      table.instanceId,
+      table.clientMutationId,
+    ),
+    uniqueIndex('conversation_direct_key_uq')
+      .on(table.instanceId, table.directKey)
+      .where(sql`${table.directKey} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+    index('conversation_instance_updated_idx').on(table.instanceId, table.updatedAt),
+  ],
+);
+
+export const conversationMembers = pgTable(
+  'conversation_member',
+  {
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+    joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
+    lastReadAt: timestamp('last_read_at', { withTimezone: true }),
+    muted: boolean('muted').notNull().default(false),
+  },
+  (table) => [
+    primaryKey({ columns: [table.conversationId, table.memberId] }),
+    index('conversation_member_member_idx').on(table.memberId, table.conversationId),
+  ],
+);
+
+export const messages = pgTable(
+  'message',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'restrict' }),
+    body: text('body').notNull(),
+    replyToId: uuid('reply_to_id'),
+    clientMutationId: uuid('client_mutation_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('message_conversation_mutation_uq').on(
+      table.conversationId,
+      table.clientMutationId,
+    ),
+    index('message_conversation_created_idx').on(
+      table.conversationId,
+      table.createdAt,
+      table.id,
+    ),
+  ],
+);
+
+export const messageReactions = pgTable(
+  'message_reaction',
+  {
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+    emoji: text('emoji').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.messageId, table.memberId, table.emoji] })],
+);

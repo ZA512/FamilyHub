@@ -6,6 +6,7 @@ import {
   ChefHat,
   ChevronRight,
   LoaderCircle,
+  MessageCircle,
   ShoppingBasket,
   Sparkles,
 } from 'lucide-react';
@@ -21,7 +22,9 @@ import { Card, CardContent } from '@/components/ui/card';
 
 type HomeViewProps = {
   firstName: string;
-  onNavigate: (view: 'notifications' | 'shopping' | 'tasks' | 'meals') => void;
+  onNavigate: (
+    view: 'notifications' | 'shopping' | 'tasks' | 'meals' | 'chat',
+  ) => void;
   onUnreadCountChange: (count: number) => void;
 };
 
@@ -136,12 +139,14 @@ function AttentionSection({
               className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/45 ${index ? 'border-t' : ''}`}
             >
               <span
-                className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.id === 'notifications' ? 'bg-[#eef0ff] text-[#5651a8]' : item.id === 'tasks' ? 'bg-[#e7f5f2] text-[#087f72]' : 'bg-[#fff3df] text-[#a55e10]'}`}
+                className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.id === 'notifications' ? 'bg-[#eef0ff] text-[#5651a8]' : item.id === 'tasks' || item.id === 'chat' ? 'bg-[#e7f5f2] text-[#087f72]' : 'bg-[#fff3df] text-[#a55e10]'}`}
               >
                 {item.id === 'notifications' ? (
                   <Bell className="size-4" aria-hidden="true" />
                 ) : item.id === 'tasks' ? (
                   <CheckSquare2 className="size-4" aria-hidden="true" />
+                ) : item.id === 'chat' ? (
+                  <MessageCircle className="size-4" aria-hidden="true" />
                 ) : item.id === 'meals' ? (
                   <ChefHat className="size-4" aria-hidden="true" />
                 ) : (

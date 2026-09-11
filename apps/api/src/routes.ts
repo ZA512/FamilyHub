@@ -33,6 +33,7 @@ import { registerProfileRoutes } from './profile-routes.js';
 import { registerSearchRoutes } from './search-routes.js';
 import { registerShoppingRoutes } from './shopping-routes.js';
 import { registerTaskRoutes } from './task-routes.js';
+import { registerChatRoutes } from './chat-routes.js';
 
 export async function registerRoutes(app: FastifyInstance, pool: Pool, config: AppConfig) {
   const requireSession = createSessionGuard(pool);
@@ -334,4 +335,5 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
   await registerSearchRoutes(app, pool);
   await registerShoppingRoutes(app, pool);
   await registerTaskRoutes(app, pool);
+  await registerChatRoutes(app, pool);
 }

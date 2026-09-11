@@ -226,11 +226,11 @@ export type SearchResult = {
 };
 
 export type HomeAttention = {
-  id: 'notifications' | 'shopping' | 'tasks' | 'meals';
+  id: 'notifications' | 'shopping' | 'tasks' | 'meals' | 'chat';
   count: number;
   title: string;
   detail: string;
-  view: 'notifications' | 'shopping' | 'tasks' | 'meals';
+  view: 'notifications' | 'shopping' | 'tasks' | 'meals' | 'chat';
 };
 
 export type HomeActivity = {
@@ -638,3 +638,73 @@ export type MealPlanEntry = {
   createdAt: string;
   updatedAt: string;
 };
+
+export const conversationTypeSchema = z.enum(['DIRECT', 'GROUP', 'TOPIC']);
+export const chatReactionSchema = z.enum(['👍', '❤️', '😂', '😮', '😢', '👏']);
+
+export const conversationCreateSchema = z.object({
+  type: conversationTypeSchema,
+  title: optionalText(120),
+  participantIds: z.array(z.string().uuid()).min(1).max(100),
+  clientMutationId: z.string().uuid(),
+});
+
+export const chatMessageCreateSchema = z.object({
+  body: z.string().trim().min(1).max(4000),
+  replyToId: z.string().uuid().nullable().optional(),
+  clientMutationId: z.string().uuid(),
+});
+
+export const chatMessagesQuerySchema = z.object({
+  before: z.string().datetime({ offset: true }).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+export const chatReactionUpdateSchema = z.object({ emoji: chatReactionSchema });
+
+export type ConversationType = z.infer<typeof conversationTypeSchema>;
+export type ChatReaction = z.infer<typeof chatReactionSchema>;
+
+export type ConversationParticipant = {
+  memberId: string;
+  memberName: string;
+};
+
+export type ConversationSummary = {
+  id: string;
+  type: ConversationType;
+  title: string;
+  displayTitle: string;
+  createdBy: string;
+  participants: ConversationParticipant[];
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  createdAt: string;
+};
+
+export type ChatMessageReaction = {
+  emoji: ChatReaction;
+  count: number;
+  memberIds: string[];
+};
+
+export type ChatMessage = {
+  id: string;
+  conversationId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  replyTo: {
+    id: string;
+    authorName: string;
+    body: string;
+  } | null;
+  reactions: ChatMessageReaction[];
+  createdAt: string;
+};
+
+export type ChatRealtimeEvent =
+  | { type: 'chat.message'; conversationId: string; message: ChatMessage }
+  | { type: 'chat.reaction'; conversationId: string; message: ChatMessage }
+  | { type: 'chat.conversation'; conversation: ConversationSummary };

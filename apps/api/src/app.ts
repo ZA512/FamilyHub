@@ -6,6 +6,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
+import websocket from '@fastify/websocket';
 import type { AppConfig } from '@familyhub/config';
 import { createPool } from '@familyhub/database';
 import Fastify from 'fastify';
@@ -26,6 +27,9 @@ export async function buildApp(config: AppConfig) {
   await app.register(cookie, { secret: config.SESSION_SECRET });
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(rateLimit, { global: true, max: 200, timeWindow: '1 minute' });
+  await app.register(websocket, {
+    options: { maxPayload: 65_536, perMessageDeflate: false },
+  });
 
   if (config.NODE_ENV === 'development') {
     await app.register(cors, { origin: config.FAMILYHUB_ORIGIN, credentials: true });

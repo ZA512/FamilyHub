@@ -12,11 +12,28 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
   app.get('/api/v1/home', { preHandler: requireSession }, async (request) => {
     await reopenAvailableTasks(pool, request.session!.instanceId);
-    const [unreadResult, shoppingResult, taskResult, mealResult, activityResult] = await Promise.all([
+    const [unreadResult, chatResult, shoppingResult, taskResult, mealResult, activityResult] = await Promise.all([
       pool.query<{ count: number }>(
         `SELECT count(*)::int AS count
          FROM notification
          WHERE instance_id = $1 AND recipient_member_id = $2 AND read_at IS NULL`,
+        [request.session?.instanceId, request.session?.id],
+      ),
+      pool.query<{ count: number }>(
+        `SELECT count(DISTINCT cm.conversation_id)::int AS count
+         FROM conversation_member cm
+         JOIN conversation c ON c.id = cm.conversation_id
+         WHERE cm.member_id = $2 AND c.instance_id = $1 AND c.deleted_at IS NULL
+           AND EXISTS (
+             SELECT 1 FROM message m
+             WHERE m.conversation_id = c.id AND m.author_id <> $2
+               AND m.created_at > COALESCE(cm.last_read_at, cm.joined_at)
+           )
+           AND EXISTS (
+             SELECT 1 FROM module_config mc
+             WHERE mc.instance_id = c.instance_id
+               AND mc.module_key = 'chat' AND mc.enabled = true
+           )`,
         [request.session?.instanceId, request.session?.id],
       ),
       pool.query<{ count: number }>(
@@ -202,10 +219,21 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
     ]);
 
     const unreadNotificationCount = unreadResult.rows[0]?.count ?? 0;
+    const unreadConversationCount = chatResult.rows[0]?.count ?? 0;
     const pendingShoppingCount = shoppingResult.rows[0]?.count ?? 0;
     const activeTaskCount = taskResult.rows[0]?.count ?? 0;
     const todayMealCount = mealResult.rows[0]?.count ?? 0;
     const attention: HomeAttention[] = [];
+
+    if (unreadConversationCount) {
+      attention.push({
+        id: 'chat',
+        count: unreadConversationCount,
+        title: 'Messages',
+        detail: `${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} avec de nouveaux messages`,
+        view: 'chat',
+      });
+    }
 
     if (unreadNotificationCount) {
       attention.push({

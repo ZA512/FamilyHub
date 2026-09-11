@@ -60,6 +60,9 @@ const AgendaView = lazy(() =>
 const MealsView = lazy(() =>
   import('./meals-view').then((module) => ({ default: module.MealsView })),
 );
+const ChatView = lazy(() =>
+  import('./chat-view').then((module) => ({ default: module.ChatView })),
+);
 
 type ViewId =
   | 'home'
@@ -158,6 +161,7 @@ export default function DashboardPage({
   const [agendaComposerOpen, setAgendaComposerOpen] = useState(false);
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
   const [mealComposerOpen, setMealComposerOpen] = useState(false);
+  const [chatComposerOpen, setChatComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
@@ -181,6 +185,7 @@ export default function DashboardPage({
     if (view === 'agenda') setAgendaComposerOpen(true);
     if (view === 'tasks') setTaskComposerOpen(true);
     if (view === 'meals') setMealComposerOpen(true);
+    if (view === 'chat') setChatComposerOpen(true);
   }
 
   async function toggleModule(key: ModuleKey, enabled: boolean) {
@@ -536,6 +541,22 @@ export default function DashboardPage({
                   onComposerOpenChange={setMealComposerOpen}
                 />
               </Suspense>
+            ) : activeView === 'chat' ? (
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground">
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                    Chargement des messages…
+                  </div>
+                }
+              >
+                <ChatView
+                  currentMemberId={memberId}
+                  csrfToken={csrfToken}
+                  composerOpen={chatComposerOpen}
+                  onComposerOpenChange={setChatComposerOpen}
+                />
+              </Suspense>
             ) : activeView === 'members' ? (
               <MembersView role={role} csrfToken={csrfToken} />
             ) : activeView === 'notifications' ? (
@@ -606,6 +627,7 @@ const viewLabels: Record<
     | 'home'
     | 'tasks'
     | 'agenda'
+    | 'chat'
     | 'meals'
     | 'shopping'
     | 'members'
@@ -615,11 +637,6 @@ const viewLabels: Record<
   >,
   { title: string; description: string }
 > = {
-  chat: {
-    title: 'Chat',
-    description:
-      'La messagerie familiale arrive dans la prochaine tranche fonctionnelle.',
-  },
   bookmarks: {
     title: 'Bookmarks',
     description: 'Le partage de liens sera bientôt disponible.',
@@ -634,6 +651,7 @@ function ComingSoonView({
     | 'home'
     | 'tasks'
     | 'agenda'
+    | 'chat'
     | 'meals'
     | 'shopping'
     | 'members'

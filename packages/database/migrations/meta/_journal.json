@@ -50,6 +50,13 @@
       "when": 1789205400000,
       "tag": "0006_meals",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789210800000,
+      "tag": "0007_chat",
+      "breakpoints": true
     }
   ]
 }
