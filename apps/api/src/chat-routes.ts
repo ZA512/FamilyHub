@@ -95,16 +95,17 @@ async function loadConversations(
             last_message.preview AS "lastMessage", last_message.created_at AS "lastMessageAt",
             (SELECT count(*)::int FROM message unread
              WHERE unread.conversation_id = c.id AND unread.author_id <> $2
+               AND unread.deleted_at IS NULL
                AND unread.created_at > COALESCE(mine.last_read_at, mine.joined_at)) AS "unreadCount",
             c.created_at AS "createdAt"
      FROM conversation c
      JOIN conversation_member mine ON mine.conversation_id = c.id AND mine.member_id = $2
      LEFT JOIN LATERAL (
-       SELECT COALESCE(
+       SELECT CASE WHEN lm.deleted_at IS NOT NULL THEN 'Message supprimé' ELSE COALESCE(
                 NULLIF(lm.body, ''),
                 concat('📎 ', (SELECT count(*) FROM message_attachment WHERE message_id = lm.id),
                        ' pièce(s) jointe(s)')
-              ) AS preview,
+              ) END AS preview,
               lm.created_at
        FROM message lm
        WHERE lm.conversation_id = c.id ORDER BY lm.created_at DESC, lm.id DESC LIMIT 1
@@ -136,14 +137,17 @@ async function loadMessage(
     reactions: ChatMessage['reactions'];
     attachments: ChatMessage['attachments'];
     createdAt: Date;
+    deletedAt: Date | null;
   }>(
     `SELECT m.id, m.conversation_id AS "conversationId", m.author_id AS "authorId",
-            author.first_name AS "authorName", m.body,
+            author.first_name AS "authorName",
+            CASE WHEN m.deleted_at IS NULL THEN m.body ELSE '' END AS body,
             CASE WHEN parent.id IS NULL THEN NULL ELSE jsonb_build_object(
               'id', parent.id, 'authorName', parent_author.first_name,
-              'body', COALESCE(NULLIF(parent.body, ''), 'Pièce jointe')
+              'body', CASE WHEN parent.deleted_at IS NOT NULL THEN 'Message supprimé'
+                           ELSE COALESCE(NULLIF(parent.body, ''), 'Pièce jointe') END
             ) END AS "replyTo",
-            COALESCE((
+            CASE WHEN m.deleted_at IS NULL THEN COALESCE((
               SELECT jsonb_agg(reaction_group ORDER BY reaction_group->>'emoji')
               FROM (
                 SELECT jsonb_build_object(
@@ -152,8 +156,8 @@ async function loadMessage(
                 ) AS reaction_group
                 FROM message_reaction mr WHERE mr.message_id = m.id GROUP BY mr.emoji
               ) grouped
-            ), '[]'::jsonb) AS reactions,
-            COALESCE((
+            ), '[]'::jsonb) ELSE '[]'::jsonb END AS reactions,
+            CASE WHEN m.deleted_at IS NULL THEN COALESCE((
               SELECT jsonb_agg(jsonb_build_object(
                 'id', a.id,
                 'filename', a.original_filename,
@@ -166,8 +170,8 @@ async function loadMessage(
               FROM message_attachment ma
               JOIN attachment a ON a.id = ma.attachment_id
               WHERE ma.message_id = m.id AND a.status = 'READY'
-            ), '[]'::jsonb) AS attachments,
-            m.created_at AS "createdAt"
+            ), '[]'::jsonb) ELSE '[]'::jsonb END AS attachments,
+            m.created_at AS "createdAt", m.deleted_at AS "deletedAt"
      FROM message m
      JOIN instance_member author_member ON author_member.id = m.author_id
      JOIN app_user author ON author.id = author_member.user_id
@@ -178,7 +182,13 @@ async function loadMessage(
     [conversationId, messageId],
   );
   const row = result.rows[0];
-  return row ? { ...row, createdAt: row.createdAt.toISOString() } : null;
+  return row
+    ? {
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+        deletedAt: row.deletedAt?.toISOString() ?? null,
+      }
+    : null;
 }
 
 async function isMember(
@@ -350,10 +360,10 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
       }
       const rows = await pool.query<{ id: string }>(
         `SELECT id FROM message WHERE conversation_id = $1
-         ${query.data.before ? 'AND created_at < $3' : ''}
+         ${query.data.before ? 'AND (created_at, id) < ($3::timestamptz, $4::uuid)' : ''}
          ORDER BY created_at DESC, id DESC LIMIT $2`,
         query.data.before
-          ? [id.data, query.data.limit, query.data.before]
+          ? [id.data, query.data.limit, query.data.before, query.data.beforeId]
           : [id.data, query.data.limit],
       );
       const messages = await Promise.all(
@@ -433,14 +443,15 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
             `INSERT INTO notification
                (instance_id, recipient_member_id, actor_member_id, type, module_key,
                 title, body, resource_type, resource_id)
-             SELECT $1, cm.member_id, $2, 'CHAT_MESSAGE', 'chat', $3, $4, 'conversation', $5
+             SELECT $1, cm.member_id, $2, 'CHAT_MESSAGE', 'chat', $3, $4, 'message', $5
              FROM conversation_member cm
-             WHERE cm.conversation_id = $5 AND cm.member_id <> $2 AND cm.muted = false`,
+             WHERE cm.conversation_id = $6 AND cm.member_id <> $2 AND cm.muted = false`,
             [
               session.instanceId,
               session.id,
               `Message de ${session.firstName}`,
               parsed.data.body.slice(0, 180) || 'Pièce jointe',
+              messageId,
               id.data,
             ],
           );
@@ -470,7 +481,7 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
       const found = await pool.query<{ conversationId: string }>(
         `SELECT m.conversation_id AS "conversationId" FROM message m
          JOIN conversation_member cm ON cm.conversation_id = m.conversation_id
-         WHERE m.id = $1 AND cm.member_id = $2`,
+         WHERE m.id = $1 AND m.deleted_at IS NULL AND cm.member_id = $2`,
         [id.data, request.session!.id],
       );
       const conversationId = found.rows[0]?.conversationId;
@@ -488,6 +499,68 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
       const message = await loadMessage(pool, conversationId, id.data);
       if (!message) return reply.code(404).send({ error: 'MESSAGE_NOT_FOUND' });
       publish(await participantIds(pool, conversationId), { type: 'chat.reaction', conversationId, message });
+      return message;
+    },
+  );
+
+  app.delete(
+    '/api/v1/messages/:id',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      if (!(await requireChatModule(request, reply, pool))) return;
+      const id = idSchema.safeParse((request.params as { id?: string }).id);
+      if (!id.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
+      const session = request.session!;
+      const found = await pool.query<{
+        conversationId: string;
+        authorId: string;
+        deletedAt: Date | null;
+      }>(
+        `SELECT m.conversation_id AS "conversationId", m.author_id AS "authorId",
+                m.deleted_at AS "deletedAt"
+         FROM message m
+         JOIN conversation c ON c.id = m.conversation_id AND c.deleted_at IS NULL
+         JOIN conversation_member cm ON cm.conversation_id = m.conversation_id
+         WHERE m.id = $1 AND cm.member_id = $2`,
+        [id.data, session.id],
+      );
+      const existing = found.rows[0];
+      if (!existing) return reply.code(404).send({ error: 'MESSAGE_NOT_FOUND' });
+      if (existing.authorId !== session.id) {
+        return reply.code(403).send({ error: 'MESSAGE_NOT_OWNED' });
+      }
+      if (!existing.deletedAt) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(
+            `UPDATE message SET deleted_at = now(), deleted_by = $2
+             WHERE id = $1 AND deleted_at IS NULL`,
+            [id.data, session.id],
+          );
+          await client.query(
+            `UPDATE notification SET body = 'Message supprimé'
+             WHERE resource_type = 'message' AND resource_id = $1`,
+            [id.data],
+          );
+          await client.query('UPDATE conversation SET updated_at = now() WHERE id = $1', [
+            existing.conversationId,
+          ]);
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
+      }
+      const message = await loadMessage(pool, existing.conversationId, id.data);
+      if (!message) return reply.code(404).send({ error: 'MESSAGE_NOT_FOUND' });
+      publish(await participantIds(pool, existing.conversationId), {
+        type: 'chat.message.deleted',
+        conversationId: existing.conversationId,
+        message,
+      });
       return message;
     },
   );

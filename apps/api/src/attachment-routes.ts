@@ -242,7 +242,8 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
          JOIN message_attachment ma ON ma.attachment_id = a.id
          JOIN message m ON m.id = ma.message_id
          JOIN conversation_member cm ON cm.conversation_id = m.conversation_id
-         WHERE a.id = $1 AND a.instance_id = $2 AND a.status = 'READY' AND cm.member_id = $3`,
+         WHERE a.id = $1 AND a.instance_id = $2 AND a.status = 'READY'
+           AND m.deleted_at IS NULL AND cm.member_id = $3`,
         [id.data, request.session!.instanceId, request.session!.id],
       );
       const attachment = result.rows[0];

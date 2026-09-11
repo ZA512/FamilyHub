@@ -10,12 +10,14 @@ import {
   ArrowLeft,
   CornerUpLeft,
   Download,
+  ExternalLink,
   FileText,
   LoaderCircle,
   MessageCircle,
   Paperclip,
   Plus,
   Send,
+  Trash2,
   Users,
   X,
 } from 'lucide-react';
@@ -30,6 +32,16 @@ import type {
 } from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Attachment,
   AttachmentAction,
@@ -75,6 +87,8 @@ export function ChatView({
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [error, setError] = useState('');
   const [body, setBody] = useState('');
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -82,8 +96,14 @@ export function ChatView({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [maxUploadBytes, setMaxUploadBytes] = useState(25 * 1024 * 1024);
   const [uploadingLabel, setUploadingLabel] = useState('');
+  const [messageToDelete, setMessageToDelete] = useState<ChatMessage | null>(
+    null,
+  );
+  const [deleting, setDeleting] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const historyControllerRef = useRef<AbortController | null>(null);
 
   const selected = conversations.find((item) => item.id === selectedId) ?? null;
 
@@ -156,7 +176,7 @@ export function ChatView({
       return;
     }
     const controller = new AbortController();
-    fetch(`/api/v1/conversations/${selectedId}/messages`, {
+    fetch(`/api/v1/conversations/${selectedId}/messages?limit=50`, {
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -166,10 +186,14 @@ export function ChatView({
       })
       .then((payload) => {
         setMessages(payload);
+        setHasOlderMessages(payload.length === 50);
         setConversations((current) =>
           current.map((item) =>
             item.id === selectedId ? { ...item, unreadCount: 0 } : item,
           ),
+        );
+        requestAnimationFrame(() =>
+          bottomRef.current?.scrollIntoView({ behavior: 'auto' }),
         );
         return fetch(`/api/v1/conversations/${selectedId}/read`, {
           method: 'PATCH',
@@ -216,10 +240,13 @@ export function ChatView({
               [
                 ...current.filter((item) => item.id !== payload.message.id),
                 payload.message,
-              ].sort((left, right) =>
-                left.createdAt.localeCompare(right.createdAt),
-              ),
+              ].sort(compareMessages),
             );
+            if (payload.type === 'chat.message') {
+              requestAnimationFrame(() =>
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth' }),
+              );
+            }
             void fetch(`/api/v1/conversations/${payload.conversationId}/read`, {
               method: 'PATCH',
               headers: { 'x-csrf-token': csrfToken },
@@ -241,10 +268,6 @@ export function ChatView({
       socket?.close();
     };
   }, [csrfToken, loadConversations, selectedId]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   async function sendMessage(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -322,6 +345,9 @@ export function ChatView({
         ...current.filter((item) => item.id !== message.id),
         message,
       ]);
+      requestAnimationFrame(() =>
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' }),
+      );
       setBody('');
       setReplyTo(null);
       setSelectedFiles([]);
@@ -372,6 +398,94 @@ export function ChatView({
     );
   }
 
+  async function loadOlderMessages() {
+    if (!selectedId || historyLoading || !hasOlderMessages) return;
+    const oldest = messages[0];
+    const scroller = messageListRef.current;
+    if (!oldest || !scroller) return;
+    setHistoryLoading(true);
+    setError('');
+    const previousHeight = scroller.scrollHeight;
+    historyControllerRef.current?.abort();
+    const controller = new AbortController();
+    historyControllerRef.current = controller;
+    try {
+      const params = new URLSearchParams({
+        limit: '50',
+        before: oldest.createdAt,
+        beforeId: oldest.id,
+      });
+      const response = await fetch(
+        `/api/v1/conversations/${selectedId}/messages?${params}`,
+        { signal: controller.signal },
+      );
+      if (!response.ok)
+        throw new Error('Impossible de charger les messages précédents.');
+      const payload = (await response.json()) as ChatMessage[];
+      setMessages((current) => [
+        ...payload.filter(
+          (message) => !current.some((item) => item.id === message.id),
+        ),
+        ...current,
+      ]);
+      setHasOlderMessages(payload.length === 50);
+      requestAnimationFrame(() => {
+        if (messageListRef.current) {
+          messageListRef.current.scrollTop +=
+            messageListRef.current.scrollHeight - previousHeight;
+        }
+      });
+    } catch (reason) {
+      if (!controller.signal.aborted) {
+        setError(
+          reason instanceof Error ? reason.message : 'Historique indisponible.',
+        );
+      }
+    } finally {
+      if (historyControllerRef.current === controller) {
+        historyControllerRef.current = null;
+        setHistoryLoading(false);
+      }
+    }
+  }
+
+  async function deleteMessage() {
+    if (!messageToDelete || deleting) return;
+    setDeleting(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/v1/messages/${messageToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'x-csrf-token': csrfToken },
+      });
+      if (!response.ok) throw new Error('Le message n’a pas pu être supprimé.');
+      const message = (await response.json()) as ChatMessage;
+      setMessages((current) =>
+        current.map((item) => (item.id === message.id ? message : item)),
+      );
+      setReplyTo((current) => (current?.id === message.id ? null : current));
+      setMessageToDelete(null);
+      void loadConversations();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : 'Suppression impossible.',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function selectConversation(conversationId: string | null) {
+    historyControllerRef.current?.abort();
+    historyControllerRef.current = null;
+    setMessagesLoading(Boolean(conversationId));
+    setHistoryLoading(false);
+    setMessages([]);
+    setHasOlderMessages(false);
+    setError('');
+    setSelectedId(conversationId);
+  }
+
   return (
     <>
       <ConversationDialog
@@ -385,9 +499,41 @@ export function ChatView({
             conversation,
             ...current.filter((item) => item.id !== conversation.id),
           ]);
-          setSelectedId(conversation.id);
+          selectConversation(conversation.id);
         }}
       />
+
+      <AlertDialog
+        open={Boolean(messageToDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setMessageToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer ce message ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Son contenu et ses pièces jointes ne seront plus accessibles. Une
+              mention « Message supprimé » restera dans la conversation.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={() => void deleteMessage()}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {deleting ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Trash2 aria-hidden="true" />
+              )}
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <section>
         <div className="mb-5 flex items-end justify-between gap-3">
@@ -432,7 +578,7 @@ export function ChatView({
                     <button
                       type="button"
                       key={conversation.id}
-                      onClick={() => setSelectedId(conversation.id)}
+                      onClick={() => selectConversation(conversation.id)}
                       className={`flex w-full gap-3 border-b p-4 text-left transition-colors hover:bg-muted/45 ${selectedId === conversation.id ? 'bg-[#e7f5f2]/65' : ''}`}
                     >
                       <span className="grid size-10 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold">
@@ -478,7 +624,7 @@ export function ChatView({
                       size="icon"
                       className="md:hidden"
                       aria-label="Retour aux conversations"
-                      onClick={() => setSelectedId(null)}
+                      onClick={() => selectConversation(null)}
                     >
                       <ArrowLeft aria-hidden="true" />
                     </Button>
@@ -494,6 +640,7 @@ export function ChatView({
                     </div>
                   </header>
                   <div
+                    ref={messageListRef}
                     className="min-h-0 flex-1 overflow-y-auto bg-muted/15 p-4"
                     aria-live="polite"
                   >
@@ -503,18 +650,40 @@ export function ChatView({
                         Chargement…
                       </div>
                     ) : messages.length ? (
-                      messages.map((message) => (
-                        <MessageBubble
-                          key={message.id}
-                          message={message}
-                          mine={message.authorId === currentMemberId}
-                          currentMemberId={currentMemberId}
-                          onReply={() => setReplyTo(message)}
-                          onReaction={(emoji) =>
-                            void toggleReaction(message.id, emoji)
-                          }
-                        />
-                      ))
+                      <>
+                        {hasOlderMessages ? (
+                          <div className="mb-4 text-center">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={historyLoading}
+                              onClick={() => void loadOlderMessages()}
+                            >
+                              {historyLoading ? (
+                                <LoaderCircle
+                                  className="animate-spin"
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              Charger les messages précédents
+                            </Button>
+                          </div>
+                        ) : null}
+                        {messages.map((message) => (
+                          <MessageBubble
+                            key={message.id}
+                            message={message}
+                            mine={message.authorId === currentMemberId}
+                            currentMemberId={currentMemberId}
+                            onReply={() => setReplyTo(message)}
+                            onDelete={() => setMessageToDelete(message)}
+                            onReaction={(emoji) =>
+                              void toggleReaction(message.id, emoji)
+                            }
+                          />
+                        ))}
+                      </>
                     ) : (
                       <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">
                         <div>
@@ -659,14 +828,17 @@ function MessageBubble({
   mine,
   currentMemberId,
   onReply,
+  onDelete,
   onReaction,
 }: {
   message: ChatMessage;
   mine: boolean;
   currentMemberId: string;
   onReply: () => void;
+  onDelete: () => void;
   onReaction: (emoji: ChatReaction) => void;
 }) {
+  const deleted = Boolean(message.deletedAt);
   return (
     <article
       className={`group mb-3 flex ${mine ? 'justify-end' : 'justify-start'}`}
@@ -680,7 +852,7 @@ function MessageBubble({
         <div
           className={`rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${mine ? 'rounded-br-md bg-[#087f72] text-white' : 'rounded-bl-md border bg-background'}`}
         >
-          {message.replyTo ? (
+          {message.replyTo && !deleted ? (
             <div
               className={`mb-2 rounded-lg border-l-2 px-2 py-1 text-xs ${mine ? 'border-white/60 bg-white/10' : 'bg-muted'}`}
             >
@@ -690,10 +862,12 @@ function MessageBubble({
               </span>
             </div>
           ) : null}
-          {message.attachments.length ? (
+          {message.attachments.length && !deleted ? (
             <MessageAttachments attachments={message.attachments} />
           ) : null}
-          {message.body ? (
+          {deleted ? (
+            <p className="italic opacity-75">Message supprimé</p>
+          ) : message.body ? (
             <MessageText body={message.body} mine={mine} />
           ) : null}
           <time
@@ -705,47 +879,59 @@ function MessageBubble({
             }).format(new Date(message.createdAt))}
           </time>
         </div>
-        <div
-          className={`mt-1 flex flex-wrap items-center gap-1 ${mine ? 'justify-end' : ''}`}
-        >
-          {message.reactions.map((reaction) => (
+        {!deleted ? (
+          <div
+            className={`mt-1 flex flex-wrap items-center gap-1 ${mine ? 'justify-end' : ''}`}
+          >
+            {message.reactions.map((reaction) => (
+              <button
+                type="button"
+                key={reaction.emoji}
+                onClick={() => onReaction(reaction.emoji)}
+                className={`rounded-full border px-2 py-0.5 text-xs ${reaction.memberIds.includes(currentMemberId) ? 'border-[#087f72] bg-[#e7f5f2]' : 'bg-background'}`}
+                aria-label={`${reaction.emoji}, ${reaction.count} réaction${reaction.count > 1 ? 's' : ''}`}
+              >
+                {reaction.emoji} {reaction.count}
+              </button>
+            ))}
             <button
               type="button"
-              key={reaction.emoji}
-              onClick={() => onReaction(reaction.emoji)}
-              className={`rounded-full border px-2 py-0.5 text-xs ${reaction.memberIds.includes(currentMemberId) ? 'border-[#087f72] bg-[#e7f5f2]' : 'bg-background'}`}
-              aria-label={`${reaction.emoji}, ${reaction.count} réaction${reaction.count > 1 ? 's' : ''}`}
+              onClick={onReply}
+              className="rounded-full p-1 text-muted-foreground opacity-70 transition-opacity hover:bg-muted group-hover:opacity-100"
+              aria-label="Répondre"
             >
-              {reaction.emoji} {reaction.count}
+              <CornerUpLeft className="size-3.5" />
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={onReply}
-            className="rounded-full p-1 text-muted-foreground opacity-70 transition-opacity hover:bg-muted group-hover:opacity-100"
-            aria-label="Répondre"
-          >
-            <CornerUpLeft className="size-3.5" />
-          </button>
-          <details className="relative">
-            <summary className="cursor-pointer list-none rounded-full px-1 text-xs text-muted-foreground">
-              ＋
-            </summary>
-            <div className="absolute bottom-6 right-0 z-10 flex rounded-full border bg-background p-1 shadow-lg">
-              {reactions.map((emoji) => (
-                <button
-                  type="button"
-                  key={emoji}
-                  onClick={() => onReaction(emoji)}
-                  className="rounded-full p-1 hover:bg-muted"
-                  aria-label={`Réagir avec ${emoji}`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          </details>
-        </div>
+            {mine ? (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="rounded-full p-1 text-muted-foreground opacity-70 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                aria-label="Supprimer le message"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            ) : null}
+            <details className="relative">
+              <summary className="cursor-pointer list-none rounded-full px-1 text-xs text-muted-foreground">
+                ＋
+              </summary>
+              <div className="absolute bottom-6 right-0 z-10 flex rounded-full border bg-background p-1 shadow-lg">
+                {reactions.map((emoji) => (
+                  <button
+                    type="button"
+                    key={emoji}
+                    onClick={() => onReaction(emoji)}
+                    className="rounded-full p-1 hover:bg-muted"
+                    aria-label={`Réagir avec ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </details>
+          </div>
+        ) : null}
       </div>
     </article>
   );
@@ -811,24 +997,73 @@ function MessageAttachments({
 
 function MessageText({ body, mine }: { body: string; mine: boolean }) {
   const parts = body.split(/(https?:\/\/[^\s]+)/g);
+  const previewUrl = firstHttpUrl(body);
   return (
-    <p className="whitespace-pre-wrap break-words">
-      {parts.map((part, index) =>
-        /^https?:\/\//.test(part) ? (
-          <a
-            key={`${part}-${index}`}
-            href={part}
-            target="_blank"
-            rel="noreferrer"
-            className={`underline underline-offset-2 ${mine ? 'text-white' : 'text-[#087f72]'}`}
-          >
-            {part}
-          </a>
-        ) : (
-          part
-        ),
-      )}
-    </p>
+    <>
+      <p className="whitespace-pre-wrap break-words">
+        {parts.map((part, index) =>
+          /^https?:\/\//.test(part) ? (
+            <a
+              key={`${part}-${index}`}
+              href={part}
+              target="_blank"
+              rel="noreferrer"
+              className={`underline underline-offset-2 ${mine ? 'text-white' : 'text-[#087f72]'}`}
+            >
+              {part}
+            </a>
+          ) : (
+            part
+          ),
+        )}
+      </p>
+      {previewUrl ? <SafeLinkPreview url={previewUrl} mine={mine} /> : null}
+    </>
+  );
+}
+
+function SafeLinkPreview({ url, mine }: { url: URL; mine: boolean }) {
+  const path = `${url.pathname}${url.search}`;
+  return (
+    <a
+      href={url.href}
+      target="_blank"
+      rel="noreferrer"
+      className={`mt-2 flex items-center gap-2 rounded-xl border px-3 py-2 no-underline ${mine ? 'border-white/30 bg-white/10 text-white' : 'bg-muted/60 text-foreground'}`}
+      aria-label={`Ouvrir le lien vers ${url.hostname}`}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-semibold">
+          {url.hostname.replace(/^www\./, '')}
+        </span>
+        <span className="block truncate text-[11px] opacity-70">
+          {path === '/' ? 'Lien partagé' : path}
+        </span>
+      </span>
+      <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
+    </a>
+  );
+}
+
+function firstHttpUrl(body: string): URL | null {
+  const candidate = body
+    .match(/https?:\/\/[^\s]+/i)?.[0]
+    ?.replace(/[),.!?]+$/, '');
+  if (!candidate) return null;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function compareMessages(left: ChatMessage, right: ChatMessage): number {
+  return (
+    left.createdAt.localeCompare(right.createdAt) ||
+    left.id.localeCompare(right.id)
   );
 }
 

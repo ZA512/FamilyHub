@@ -44,6 +44,17 @@ describe('chat contracts', () => {
   it('limits history pages and reaction values', () => {
     expect(chatMessagesQuerySchema.parse({ limit: '25' }).limit).toBe(25);
     expect(chatMessagesQuerySchema.safeParse({ limit: 101 }).success).toBe(false);
+    expect(
+      chatMessagesQuerySchema.safeParse({
+        before: '2026-09-11T12:00:00.000Z',
+        beforeId: 'f41fb9af-c16d-468f-9881-8b35683cf1f0',
+      }).success,
+    ).toBe(true);
+    expect(
+      chatMessagesQuerySchema.safeParse({
+        before: '2026-09-11T12:00:00.000Z',
+      }).success,
+    ).toBe(false);
     expect(chatReactionUpdateSchema.safeParse({ emoji: '❤️' }).success).toBe(true);
     expect(chatReactionUpdateSchema.safeParse({ emoji: '<script>' }).success).toBe(false);
   });

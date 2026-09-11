@@ -665,10 +665,15 @@ export const uploadInitSchema = z.object({
   clientMutationId: z.string().uuid(),
 });
 
-export const chatMessagesQuerySchema = z.object({
-  before: z.string().datetime({ offset: true }).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-});
+export const chatMessagesQuerySchema = z
+  .object({
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .refine((value) => Boolean(value.before) === Boolean(value.beforeId), {
+    message: 'before et beforeId doivent être fournis ensemble.',
+  });
 
 export const chatReactionUpdateSchema = z.object({ emoji: chatReactionSchema });
 
@@ -723,9 +728,11 @@ export type ChatMessage = {
   attachments: ChatAttachment[];
   reactions: ChatMessageReaction[];
   createdAt: string;
+  deletedAt: string | null;
 };
 
 export type ChatRealtimeEvent =
   | { type: 'chat.message'; conversationId: string; message: ChatMessage }
   | { type: 'chat.reaction'; conversationId: string; message: ChatMessage }
+  | { type: 'chat.message.deleted'; conversationId: string; message: ChatMessage }
   | { type: 'chat.conversation'; conversation: ConversationSummary };
