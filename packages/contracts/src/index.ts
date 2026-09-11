@@ -218,10 +218,18 @@ export const searchQuerySchema = z.object({
 
 export type SearchResult = {
   id: string;
-  type: 'member' | 'shopping' | 'task' | 'agenda' | 'meal' | 'bookmark' | 'page';
+  type: 'member' | 'shopping' | 'task' | 'agenda' | 'meal' | 'bookmark' | 'page' | 'collection';
   title: string;
   description: string | null;
-  view: 'members' | 'shopping' | 'tasks' | 'agenda' | 'meals' | 'bookmarks' | 'pages';
+  view:
+    | 'members'
+    | 'shopping'
+    | 'tasks'
+    | 'agenda'
+    | 'meals'
+    | 'bookmarks'
+    | 'pages'
+    | 'collections';
   updatedAt: string;
 };
 
@@ -243,11 +251,12 @@ export type HomeActivity = {
     | 'meal.created'
     | 'meal.planned'
     | 'bookmark.shared'
-    | 'page.updated';
+    | 'page.updated'
+    | 'collection.item.added';
   actorName: string;
   subject: string;
   occurredAt: string;
-  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks' | 'pages';
+  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks' | 'pages' | 'collections';
 };
 
 export type HomeSummary = {
@@ -1046,4 +1055,183 @@ export type PageRevision = {
   editedByName: string;
   createdAt: string;
   current: boolean;
+};
+
+export const collectionTypeSchema = z.enum([
+  'BOOKS',
+  'MOVIES',
+  'SERIES',
+  'CREATORS',
+  'MUSIC',
+  'RESTAURANTS',
+  'GAMES',
+  'PLACES',
+  'GIFTS',
+  'OTHER',
+]);
+
+export const collectionVisibilitySchema = bookmarkVisibilitySchema;
+
+const safeOptionalUrl = z
+  .string()
+  .trim()
+  .max(2048)
+  .transform((value) => value || null)
+  .nullable()
+  .refine((value) => {
+    if (value === null) return true;
+    try {
+      return ['http:', 'https:'].includes(new URL(value).protocol);
+    } catch {
+      return false;
+    }
+  }, 'L’URL doit commencer par http:// ou https://.')
+  .optional();
+
+const collectionAudienceFields = {
+  visibility: collectionVisibilitySchema.default('PRIVATE'),
+  groupIds: z.array(z.string().uuid()).max(50).default([]),
+  memberIds: z.array(z.string().uuid()).max(100).default([]),
+};
+
+const collectionFieldsSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    description: optionalText(1000),
+    type: collectionTypeSchema,
+    imageUrl: safeOptionalUrl,
+    tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+    ...collectionAudienceFields,
+  })
+  .superRefine((value, context) => {
+    if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['groupIds'],
+        message: 'Sélectionnez au moins un groupe.',
+      });
+    }
+    if (value.visibility === 'SELECTED_USERS' && value.memberIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['memberIds'],
+        message: 'Sélectionnez au moins un membre.',
+      });
+    }
+  });
+
+export const collectionCreateSchema = collectionFieldsSchema.and(
+  z.object({ clientMutationId: z.string().uuid() }),
+);
+
+export const collectionUpdateSchema = collectionFieldsSchema.and(
+  z.object({ version: z.number().int().positive() }),
+);
+
+export const collectionsQuerySchema = z
+  .object({
+    scope: z.enum(['mine', 'shared', 'all']).default('all'),
+    q: z.string().trim().max(100).optional(),
+    tag: z.string().trim().max(40).optional(),
+    type: collectionTypeSchema.optional(),
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .refine((value) => Boolean(value.before) === Boolean(value.beforeId), {
+    message: 'before et beforeId doivent être fournis ensemble.',
+  });
+
+export const collectionItemMetadataSchema = z
+  .record(z.string().trim().min(1).max(40), z.string().trim().max(300))
+  .refine((value) => Object.keys(value).length <= 20, {
+    message: 'Un élément ne peut pas dépasser 20 métadonnées.',
+  });
+
+const collectionItemFieldsSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  subtitle: optionalText(240),
+  description: optionalText(2000),
+  url: safeOptionalUrl,
+  imageUrl: safeOptionalUrl,
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+  metadata: collectionItemMetadataSchema.default({}),
+});
+
+export const collectionItemCreateSchema = collectionItemFieldsSchema.and(
+  z.object({ clientMutationId: z.string().uuid() }),
+);
+
+export const collectionItemUpdateSchema = collectionItemFieldsSchema.and(
+  z.object({ version: z.number().int().positive() }),
+);
+
+export const collectionPreferenceSchema = z.object({
+  value: z.number().int().min(-1).max(1),
+});
+
+export const collectionCommentCreateSchema = z.object({
+  body: z.string().trim().min(1).max(1000),
+  clientMutationId: z.string().uuid(),
+});
+
+export type CollectionType = z.infer<typeof collectionTypeSchema>;
+export type CollectionVisibility = z.infer<typeof collectionVisibilitySchema>;
+
+export type FamilyCollectionSummary = {
+  id: string;
+  name: string;
+  description: string | null;
+  type: CollectionType;
+  imageUrl: string | null;
+  tags: string[];
+  visibility: CollectionVisibility;
+  itemCount: number;
+  createdBy: string;
+  createdByName: string;
+  editable: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FamilyCollection = FamilyCollectionSummary & {
+  groupIds: string[];
+  memberIds: string[];
+};
+
+export type CollectionItemComment = {
+  id: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  editable: boolean;
+  createdAt: string;
+};
+
+export type CollectionPreferenceSummary = {
+  negative: number;
+  neutral: number;
+  positive: number;
+};
+
+export type FamilyCollectionItem = {
+  id: string;
+  collectionId: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  url: string | null;
+  imageUrl: string | null;
+  tags: string[];
+  metadata: Record<string, string>;
+  addedBy: string;
+  addedByName: string;
+  editable: boolean;
+  preference: -1 | 0 | 1 | null;
+  preferences: CollectionPreferenceSummary;
+  comments: CollectionItemComment[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
 };

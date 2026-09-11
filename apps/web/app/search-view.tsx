@@ -4,6 +4,7 @@ import {
   ChevronRight,
   ChefHat,
   LoaderCircle,
+  LibraryBig,
   NotebookText,
   Search,
   CheckSquare2,
@@ -30,7 +31,8 @@ type SearchViewProps = {
       | 'agenda'
       | 'meals'
       | 'bookmarks'
-      | 'pages',
+      | 'pages'
+      | 'collections',
   ) => void;
 };
 
@@ -168,6 +170,8 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                     <Bookmark className="size-4" aria-hidden="true" />
                   ) : result.type === 'page' ? (
                     <NotebookText className="size-4" aria-hidden="true" />
+                  ) : result.type === 'collection' ? (
+                    <LibraryBig className="size-4" aria-hidden="true" />
                   ) : (
                     <ShoppingBasket className="size-4" aria-hidden="true" />
                   )}
@@ -188,7 +192,9 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                                 ? 'Bookmark'
                                 : result.type === 'page'
                                   ? 'Page'
-                                  : 'Courses'}
+                                  : result.type === 'collection'
+                                    ? 'Collection'
+                                    : 'Courses'}
                     </Badge>
                   </span>
                   {result.description ? (

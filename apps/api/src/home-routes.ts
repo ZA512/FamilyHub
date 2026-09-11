@@ -271,6 +271,37 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
                  WHERE rag.resource_id = r.id AND gm.member_id = $2
                )
              )
+
+           UNION ALL
+
+           SELECT concat('collection.item.added:', item.id) AS id,
+                  'collection.item.added'::text AS type, author.first_name AS "actorName",
+                  concat(item.title, ' · ', c.name) AS subject,
+                  item.created_at AS "occurredAt", 'collections'::text AS view
+           FROM collection_item item
+           JOIN collection c ON c.id = item.collection_id
+           JOIN resource r ON r.id = c.id
+           JOIN instance_member author_member ON author_member.id = item.added_by
+           JOIN app_user author ON author.id = author_member.user_id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND item.deleted_at IS NULL AND r.visibility <> 'PRIVATE'
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'collections' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $2
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $2
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $2
+               )
+             )
          ) events
          ORDER BY "occurredAt" DESC
          LIMIT 12`,

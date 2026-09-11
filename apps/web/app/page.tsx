@@ -11,6 +11,7 @@ import {
   CheckSquare2,
   CircleEllipsis,
   Home,
+  LibraryBig,
   LoaderCircle,
   MessageCircle,
   NotebookText,
@@ -72,6 +73,11 @@ const BookmarksView = lazy(() =>
 const PagesView = lazy(() =>
   import('./pages-view').then((module) => ({ default: module.PagesView })),
 );
+const CollectionsView = lazy(() =>
+  import('./collections-view').then((module) => ({
+    default: module.CollectionsView,
+  })),
+);
 
 type ViewId =
   | 'home'
@@ -82,6 +88,7 @@ type ViewId =
   | 'shopping'
   | 'bookmarks'
   | 'pages'
+  | 'collections'
   | 'members'
   | 'settings'
   | 'notifications'
@@ -109,6 +116,7 @@ const secondaryNavigation = [
   { id: 'shopping' as const, label: 'Courses', icon: ShoppingBasket },
   { id: 'bookmarks' as const, label: 'Bookmarks', icon: Bookmark },
   { id: 'pages' as const, label: 'Pages', icon: NotebookText },
+  { id: 'collections' as const, label: 'Collections', icon: LibraryBig },
   { id: 'members' as const, label: 'Membres', icon: Users },
 ];
 
@@ -147,6 +155,7 @@ const quickCreateOptions = [
   { view: 'meals' as const, label: 'Repas', icon: Utensils },
   { view: 'bookmarks' as const, label: 'Bookmark', icon: Bookmark },
   { view: 'pages' as const, label: 'Page', icon: NotebookText },
+  { view: 'collections' as const, label: 'Collection', icon: LibraryBig },
 ];
 
 type DashboardPageProps = {
@@ -176,6 +185,7 @@ export default function DashboardPage({
   const [chatComposerOpen, setChatComposerOpen] = useState(false);
   const [bookmarkComposerOpen, setBookmarkComposerOpen] = useState(false);
   const [pageComposerOpen, setPageComposerOpen] = useState(false);
+  const [collectionComposerOpen, setCollectionComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
@@ -202,6 +212,7 @@ export default function DashboardPage({
     if (view === 'chat') setChatComposerOpen(true);
     if (view === 'bookmarks') setBookmarkComposerOpen(true);
     if (view === 'pages') setPageComposerOpen(true);
+    if (view === 'collections') setCollectionComposerOpen(true);
   }
 
   async function toggleModule(key: ModuleKey, enabled: boolean) {
@@ -603,6 +614,22 @@ export default function DashboardPage({
                   csrfToken={csrfToken}
                   composerOpen={pageComposerOpen}
                   onComposerOpenChange={setPageComposerOpen}
+                />
+              </Suspense>
+            ) : activeView === 'collections' ? (
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground">
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                    Chargement des collections…
+                  </div>
+                }
+              >
+                <CollectionsView
+                  currentMemberId={memberId}
+                  csrfToken={csrfToken}
+                  composerOpen={collectionComposerOpen}
+                  onComposerOpenChange={setCollectionComposerOpen}
                 />
               </Suspense>
             ) : activeView === 'members' ? (

@@ -37,6 +37,7 @@ import { registerChatRoutes } from './chat-routes.js';
 import { registerAttachmentRoutes } from './attachment-routes.js';
 import { registerBookmarkRoutes } from './bookmark-routes.js';
 import { registerPageRoutes } from './page-routes.js';
+import { registerCollectionRoutes } from './collection-routes.js';
 
 export async function registerRoutes(app: FastifyInstance, pool: Pool, config: AppConfig) {
   const requireSession = createSessionGuard(pool);
@@ -342,4 +343,5 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
   await registerAttachmentRoutes(app, pool);
   await registerBookmarkRoutes(app, pool);
   await registerPageRoutes(app, pool);
+  await registerCollectionRoutes(app, pool);
 }

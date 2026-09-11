@@ -6,6 +6,7 @@ import {
   Check,
   CheckCheck,
   LoaderCircle,
+  LibraryBig,
   ShoppingBasket,
 } from 'lucide-react';
 
@@ -230,6 +231,8 @@ function NotificationRow({
           <Bookmark className="size-4" aria-hidden="true" />
         ) : notification.moduleKey === 'pages' ? (
           <NotebookText className="size-4" aria-hidden="true" />
+        ) : notification.moduleKey === 'collections' ? (
+          <LibraryBig className="size-4" aria-hidden="true" />
         ) : (
           <Bell className="size-4" aria-hidden="true" />
         )}
