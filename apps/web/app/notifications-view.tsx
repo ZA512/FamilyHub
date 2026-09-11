@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Bell,
   Bookmark,
+  NotebookText,
   Check,
   CheckCheck,
   LoaderCircle,
@@ -227,6 +228,8 @@ function NotificationRow({
           <ShoppingBasket className="size-4" aria-hidden="true" />
         ) : notification.moduleKey === 'bookmarks' ? (
           <Bookmark className="size-4" aria-hidden="true" />
+        ) : notification.moduleKey === 'pages' ? (
+          <NotebookText className="size-4" aria-hidden="true" />
         ) : (
           <Bell className="size-4" aria-hidden="true" />
         )}

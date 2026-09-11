@@ -12,15 +12,16 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
   app.get('/api/v1/home', { preHandler: requireSession }, async (request) => {
     await reopenAvailableTasks(pool, request.session!.instanceId);
-    const [unreadResult, chatResult, shoppingResult, taskResult, mealResult, activityResult] = await Promise.all([
-      pool.query<{ count: number }>(
-        `SELECT count(*)::int AS count
+    const [unreadResult, chatResult, shoppingResult, taskResult, mealResult, activityResult] =
+      await Promise.all([
+        pool.query<{ count: number }>(
+          `SELECT count(*)::int AS count
          FROM notification
          WHERE instance_id = $1 AND recipient_member_id = $2 AND read_at IS NULL`,
-        [request.session?.instanceId, request.session?.id],
-      ),
-      pool.query<{ count: number }>(
-        `SELECT count(DISTINCT cm.conversation_id)::int AS count
+          [request.session?.instanceId, request.session?.id],
+        ),
+        pool.query<{ count: number }>(
+          `SELECT count(DISTINCT cm.conversation_id)::int AS count
          FROM conversation_member cm
          JOIN conversation c ON c.id = cm.conversation_id
          WHERE cm.member_id = $2 AND c.instance_id = $1 AND c.deleted_at IS NULL
@@ -35,10 +36,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              WHERE mc.instance_id = c.instance_id
                AND mc.module_key = 'chat' AND mc.enabled = true
            )`,
-        [request.session?.instanceId, request.session?.id],
-      ),
-      pool.query<{ count: number }>(
-        `SELECT count(*)::int AS count
+          [request.session?.instanceId, request.session?.id],
+        ),
+        pool.query<{ count: number }>(
+          `SELECT count(*)::int AS count
          FROM shopping_item i
          WHERE i.instance_id = $1 AND i.deleted_at IS NULL AND i.purchased_at IS NULL
            AND EXISTS (
@@ -46,10 +47,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              WHERE mc.instance_id = i.instance_id
                AND mc.module_key = 'shopping' AND mc.enabled = true
            )`,
-        [request.session?.instanceId],
-      ),
-      pool.query<{ count: number }>(
-        `SELECT count(*)::int AS count
+          [request.session?.instanceId],
+        ),
+        pool.query<{ count: number }>(
+          `SELECT count(*)::int AS count
          FROM family_task t
          JOIN resource r ON r.id = t.id
          WHERE r.instance_id = $1 AND r.deleted_at IS NULL
@@ -72,10 +73,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              WHERE mc.instance_id = r.instance_id
                AND mc.module_key = 'tasks' AND mc.enabled = true
            )`,
-        [request.session?.instanceId, request.session?.id],
-      ),
-      pool.query<{ count: number }>(
-        `SELECT count(*)::int AS count
+          [request.session?.instanceId, request.session?.id],
+        ),
+        pool.query<{ count: number }>(
+          `SELECT count(*)::int AS count
          FROM meal_plan_entry pe
          JOIN meal m ON m.id = pe.meal_id
          JOIN resource r ON r.id = m.id
@@ -89,10 +90,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              WHERE mc.instance_id = pe.instance_id
                AND mc.module_key = 'meals' AND mc.enabled = true
            )`,
-        [request.session?.instanceId, request.session?.id],
-      ),
-      pool.query<ActivityRow>(
-        `SELECT * FROM (
+          [request.session?.instanceId, request.session?.id],
+        ),
+        pool.query<ActivityRow>(
+          `SELECT * FROM (
            SELECT concat('shopping.added:', i.id) AS id,
                   'shopping.added'::text AS type, requester.first_name AS "actorName",
                   i.name AS subject, i.created_at AS "occurredAt", 'shopping'::text AS view
@@ -240,12 +241,42 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
                  WHERE rag.resource_id = r.id AND gm.member_id = $2
                )
              )
+
+           UNION ALL
+
+           SELECT concat('page.updated:', p.id) AS id,
+                  'page.updated'::text AS type, editor.first_name AS "actorName",
+                  p.title AS subject, p.updated_at AS "occurredAt", 'pages'::text AS view
+           FROM page p
+           JOIN resource r ON r.id = p.id
+           JOIN page_revision latest_revision
+             ON latest_revision.page_id = p.id AND latest_revision.revision_number = p.version
+           JOIN instance_member editor_member ON editor_member.id = latest_revision.edited_by
+           JOIN app_user editor ON editor.id = editor_member.user_id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL AND r.visibility <> 'PRIVATE'
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'pages' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $2
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $2
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $2
+               )
+             )
          ) events
          ORDER BY "occurredAt" DESC
          LIMIT 12`,
-        [request.session?.instanceId, request.session?.id],
-      ),
-    ]);
+          [request.session?.instanceId, request.session?.id],
+        ),
+      ]);
 
     const unreadNotificationCount = unreadResult.rows[0]?.count ?? 0;
     const unreadConversationCount = chatResult.rows[0]?.count ?? 0;

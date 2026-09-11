@@ -49,7 +49,14 @@
 }
 
 body {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
 }
 
 .familyhub-calendar {
@@ -179,4 +186,121 @@ body {
   html {
     @apply font-sans;
   }
+}
+
+.family-page-content .tiptap {
+  color: var(--foreground);
+  font-size: 1rem;
+  line-height: 1.75;
+  min-height: 12rem;
+  overflow-wrap: anywhere;
+}
+
+.family-page-editor .tiptap {
+  min-height: 18rem;
+  padding: 1.25rem;
+}
+
+.family-page-editor .tiptap:focus {
+  outline: none;
+}
+
+.family-page-content .tiptap > * + * {
+  margin-top: 0.85rem;
+}
+
+.family-page-content .tiptap h1,
+.family-page-content .tiptap h2,
+.family-page-content .tiptap h3 {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  margin-top: 1.5rem;
+}
+
+.family-page-content .tiptap h1 {
+  font-size: 1.75rem;
+}
+
+.family-page-content .tiptap h2 {
+  font-size: 1.4rem;
+}
+
+.family-page-content .tiptap h3 {
+  font-size: 1.15rem;
+}
+
+.family-page-content .tiptap ul:not([data-type='taskList']) {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+
+.family-page-content .tiptap ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+
+.family-page-content .tiptap ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.family-page-content .tiptap ul[data-type='taskList'] li {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.65rem;
+}
+
+.family-page-content .tiptap ul[data-type='taskList'] li > label {
+  padding-top: 0.2rem;
+}
+
+.family-page-content .tiptap ul[data-type='taskList'] li > div {
+  flex: 1;
+}
+
+.family-page-content .tiptap blockquote {
+  border-left: 3px solid #087f72;
+  color: var(--muted-foreground);
+  padding-left: 1rem;
+}
+
+.family-page-content .tiptap a {
+  color: #087f72;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.family-page-content .tiptap img {
+  border-radius: 0.75rem;
+  height: auto;
+  max-height: 32rem;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.family-page-content .tiptap .tableWrapper {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.family-page-content .tiptap table {
+  border-collapse: collapse;
+  min-width: 28rem;
+  width: 100%;
+}
+
+.family-page-content .tiptap th,
+.family-page-content .tiptap td {
+  border: 1px solid var(--border);
+  min-width: 6rem;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.family-page-content .tiptap th {
+  background: var(--muted);
+  font-weight: 650;
 }

@@ -13,6 +13,7 @@ import {
   Home,
   LoaderCircle,
   MessageCircle,
+  NotebookText,
   Plus,
   Search,
   Settings,
@@ -68,6 +69,9 @@ const BookmarksView = lazy(() =>
     default: module.BookmarksView,
   })),
 );
+const PagesView = lazy(() =>
+  import('./pages-view').then((module) => ({ default: module.PagesView })),
+);
 
 type ViewId =
   | 'home'
@@ -77,6 +81,7 @@ type ViewId =
   | 'meals'
   | 'shopping'
   | 'bookmarks'
+  | 'pages'
   | 'members'
   | 'settings'
   | 'notifications'
@@ -103,6 +108,7 @@ const secondaryNavigation = [
   { id: 'meals' as const, label: 'Repas', icon: Utensils },
   { id: 'shopping' as const, label: 'Courses', icon: ShoppingBasket },
   { id: 'bookmarks' as const, label: 'Bookmarks', icon: Bookmark },
+  { id: 'pages' as const, label: 'Pages', icon: NotebookText },
   { id: 'members' as const, label: 'Membres', icon: Users },
 ];
 
@@ -140,6 +146,7 @@ const quickCreateOptions = [
   },
   { view: 'meals' as const, label: 'Repas', icon: Utensils },
   { view: 'bookmarks' as const, label: 'Bookmark', icon: Bookmark },
+  { view: 'pages' as const, label: 'Page', icon: NotebookText },
 ];
 
 type DashboardPageProps = {
@@ -168,6 +175,7 @@ export default function DashboardPage({
   const [mealComposerOpen, setMealComposerOpen] = useState(false);
   const [chatComposerOpen, setChatComposerOpen] = useState(false);
   const [bookmarkComposerOpen, setBookmarkComposerOpen] = useState(false);
+  const [pageComposerOpen, setPageComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
@@ -193,6 +201,7 @@ export default function DashboardPage({
     if (view === 'meals') setMealComposerOpen(true);
     if (view === 'chat') setChatComposerOpen(true);
     if (view === 'bookmarks') setBookmarkComposerOpen(true);
+    if (view === 'pages') setPageComposerOpen(true);
   }
 
   async function toggleModule(key: ModuleKey, enabled: boolean) {
@@ -580,6 +589,22 @@ export default function DashboardPage({
                   onComposerOpenChange={setBookmarkComposerOpen}
                 />
               </Suspense>
+            ) : activeView === 'pages' ? (
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground">
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                    Chargement des pages…
+                  </div>
+                }
+              >
+                <PagesView
+                  currentMemberId={memberId}
+                  csrfToken={csrfToken}
+                  composerOpen={pageComposerOpen}
+                  onComposerOpenChange={setPageComposerOpen}
+                />
+              </Suspense>
             ) : activeView === 'members' ? (
               <MembersView role={role} csrfToken={csrfToken} />
             ) : activeView === 'notifications' ? (
@@ -589,8 +614,6 @@ export default function DashboardPage({
               />
             ) : activeView === 'search' ? (
               <SearchView onNavigate={navigate} />
-            ) : activeView !== 'home' ? (
-              <ComingSoonView view={activeView} />
             ) : (
               <HomeView
                 firstName={displayFirstName}
@@ -641,60 +664,5 @@ export default function DashboardPage({
         </SidebarInset>
       </SidebarProvider>
     </>
-  );
-}
-
-const viewLabels: Record<
-  Exclude<
-    ViewId,
-    | 'home'
-    | 'tasks'
-    | 'agenda'
-    | 'chat'
-    | 'meals'
-    | 'shopping'
-    | 'members'
-    | 'settings'
-    | 'notifications'
-    | 'search'
-  >,
-  { title: string; description: string }
-> = {
-  bookmarks: {
-    title: 'Bookmarks',
-    description: 'Le partage de liens sera bientôt disponible.',
-  },
-};
-
-function ComingSoonView({
-  view,
-}: {
-  view: Exclude<
-    ViewId,
-    | 'home'
-    | 'tasks'
-    | 'agenda'
-    | 'chat'
-    | 'meals'
-    | 'shopping'
-    | 'members'
-    | 'settings'
-    | 'notifications'
-    | 'search'
-  >;
-}) {
-  const content = viewLabels[view];
-  return (
-    <section className="grid min-h-[55vh] place-items-center text-center">
-      <div className="max-w-md">
-        <span className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
-          <Sparkles aria-hidden="true" />
-        </span>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {content.title}
-        </h1>
-        <p className="mt-2 text-muted-foreground">{content.description}</p>
-      </div>
-    </section>
   );
 }

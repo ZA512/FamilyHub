@@ -16,7 +16,13 @@ import listPlugin from '@fullcalendar/react/list';
 import frLocale from '@fullcalendar/react/locales/fr';
 import timeGridPlugin from '@fullcalendar/react/timegrid';
 import formaTheme from '@fullcalendar/react/themes/forma';
-import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type SyntheticEvent,
+} from 'react';
 import {
   CalendarDays,
   CheckSquare2,
@@ -68,6 +74,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+
+const FamilyCalendar = FullCalendar as unknown as ComponentType<
+  Record<string, unknown>
+>;
 
 type AgendaViewProps = {
   currentMemberId: string;
@@ -323,7 +333,7 @@ export function AgendaView({
               />
             </span>
           ) : null}
-          <FullCalendar
+          <FamilyCalendar
             ref={calendarRef}
             plugins={[
               formaTheme,

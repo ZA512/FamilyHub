@@ -29,7 +29,8 @@ type HomeViewProps = {
       | 'tasks'
       | 'meals'
       | 'chat'
-      | 'bookmarks',
+      | 'bookmarks'
+      | 'pages',
   ) => void;
   onUnreadCountChange: (count: number) => void;
 };
@@ -233,7 +234,9 @@ function ActivitySection({
                             ? 'a planifié'
                             : item.type === 'bookmark.shared'
                               ? 'a partagé un bookmark'
-                              : 'a ajouté un plat'}
+                              : item.type === 'page.updated'
+                                ? 'a mis à jour une page'
+                                : 'a ajouté un plat'}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                   {item.subject} · {formatRelativeDate(item.occurredAt)}

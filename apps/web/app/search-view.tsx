@@ -4,6 +4,7 @@ import {
   ChevronRight,
   ChefHat,
   LoaderCircle,
+  NotebookText,
   Search,
   CheckSquare2,
   CalendarDays,
@@ -22,7 +23,14 @@ import { Label } from '@/components/ui/label';
 
 type SearchViewProps = {
   onNavigate: (
-    view: 'members' | 'shopping' | 'tasks' | 'agenda' | 'meals' | 'bookmarks',
+    view:
+      | 'members'
+      | 'shopping'
+      | 'tasks'
+      | 'agenda'
+      | 'meals'
+      | 'bookmarks'
+      | 'pages',
   ) => void;
 };
 
@@ -158,6 +166,8 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                     <ChefHat className="size-4" aria-hidden="true" />
                   ) : result.type === 'bookmark' ? (
                     <Bookmark className="size-4" aria-hidden="true" />
+                  ) : result.type === 'page' ? (
+                    <NotebookText className="size-4" aria-hidden="true" />
                   ) : (
                     <ShoppingBasket className="size-4" aria-hidden="true" />
                   )}
@@ -176,7 +186,9 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                               ? 'Repas'
                               : result.type === 'bookmark'
                                 ? 'Bookmark'
-                                : 'Courses'}
+                                : result.type === 'page'
+                                  ? 'Page'
+                                  : 'Courses'}
                     </Badge>
                   </span>
                   {result.description ? (

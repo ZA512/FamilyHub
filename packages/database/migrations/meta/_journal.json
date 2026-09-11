@@ -78,6 +78,13 @@
       "when": 1789227000000,
       "tag": "0010_bookmarks",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789232400000,
+      "tag": "0011_pages",
+      "breakpoints": true
     }
   ]
 }

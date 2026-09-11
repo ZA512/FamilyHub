@@ -218,10 +218,10 @@ export const searchQuerySchema = z.object({
 
 export type SearchResult = {
   id: string;
-  type: 'member' | 'shopping' | 'task' | 'agenda' | 'meal' | 'bookmark';
+  type: 'member' | 'shopping' | 'task' | 'agenda' | 'meal' | 'bookmark' | 'page';
   title: string;
   description: string | null;
-  view: 'members' | 'shopping' | 'tasks' | 'agenda' | 'meals' | 'bookmarks';
+  view: 'members' | 'shopping' | 'tasks' | 'agenda' | 'meals' | 'bookmarks' | 'pages';
   updatedAt: string;
 };
 
@@ -242,11 +242,12 @@ export type HomeActivity = {
     | 'task.completed'
     | 'meal.created'
     | 'meal.planned'
-    | 'bookmark.shared';
+    | 'bookmark.shared'
+    | 'page.updated';
   actorName: string;
   subject: string;
   occurredAt: string;
-  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks';
+  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks' | 'pages';
 };
 
 export type HomeSummary = {
@@ -411,12 +412,7 @@ export type ShoppingItem = {
   updatedAt: string;
 };
 
-export const agendaEventTypeSchema = z.enum([
-  'EVENT',
-  'APPOINTMENT',
-  'BIRTHDAY',
-  'REMINDER',
-]);
+export const agendaEventTypeSchema = z.enum(['EVENT', 'APPOINTMENT', 'BIRTHDAY', 'REMINDER']);
 export const agendaRecurrenceSchema = z.enum(['NONE', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']);
 export const agendaResponseSchema = z.enum(['YES', 'NO', 'MAYBE', 'PENDING']);
 
@@ -458,7 +454,10 @@ const agendaEventFields = z
       context.addIssue({ code: 'custom', message: 'La récurrence doit finir après le début.' });
     }
     if (value.recurrence === 'NONE' && value.recurrenceUntil) {
-      context.addIssue({ code: 'custom', message: 'Une fin de récurrence nécessite une répétition.' });
+      context.addIssue({
+        code: 'custom',
+        message: 'Une fin de récurrence nécessite une répétition.',
+      });
     }
   });
 
@@ -650,14 +649,16 @@ export const conversationCreateSchema = z.object({
   clientMutationId: z.string().uuid(),
 });
 
-export const chatMessageCreateSchema = z.object({
-  body: z.string().trim().max(4000).default(''),
-  replyToId: z.string().uuid().nullable().optional(),
-  attachmentIds: z.array(z.string().uuid()).max(8).default([]),
-  clientMutationId: z.string().uuid(),
-}).refine((value) => value.body.length > 0 || value.attachmentIds.length > 0, {
-  message: 'Un message ou une pièce jointe est requis.',
-});
+export const chatMessageCreateSchema = z
+  .object({
+    body: z.string().trim().max(4000).default(''),
+    replyToId: z.string().uuid().nullable().optional(),
+    attachmentIds: z.array(z.string().uuid()).max(8).default([]),
+    clientMutationId: z.string().uuid(),
+  })
+  .refine((value) => value.body.length > 0 || value.attachmentIds.length > 0, {
+    message: 'Un message ou une pièce jointe est requis.',
+  });
 
 export const uploadInitSchema = z.object({
   filename: z.string().trim().min(1).max(255),
@@ -825,4 +826,224 @@ export type FamilyBookmark = {
   version: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type PageContentMark = {
+  type: 'bold' | 'italic' | 'link';
+  attrs?: Record<string, unknown>;
+};
+
+export type PageContentNode = {
+  type:
+    | 'doc'
+    | 'paragraph'
+    | 'heading'
+    | 'text'
+    | 'hardBreak'
+    | 'horizontalRule'
+    | 'bulletList'
+    | 'orderedList'
+    | 'listItem'
+    | 'taskList'
+    | 'taskItem'
+    | 'blockquote'
+    | 'image'
+    | 'table'
+    | 'tableRow'
+    | 'tableHeader'
+    | 'tableCell';
+  attrs?: Record<string, unknown>;
+  content?: PageContentNode[];
+  marks?: PageContentMark[];
+  text?: string;
+};
+
+export type PageDocument = PageContentNode & { type: 'doc' };
+
+export const emptyPageContent: PageDocument = {
+  type: 'doc',
+  content: [{ type: 'paragraph' }],
+};
+
+function safePageUrl(value: unknown, internal = false): boolean {
+  if (typeof value !== 'string' || value.length > 2048) return false;
+  if (internal && /^familyhub:\/\/page\/[0-9a-f-]{36}$/i.test(value)) return true;
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isPageContentMark(value: unknown): value is PageContentMark {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const mark = value as Record<string, unknown>;
+  if (mark.type === 'bold' || mark.type === 'italic') return true;
+  if (mark.type !== 'link' || !mark.attrs || typeof mark.attrs !== 'object') return false;
+  return safePageUrl((mark.attrs as Record<string, unknown>).href, true);
+}
+
+function isPageContentNode(
+  value: unknown,
+  depth: number,
+  counter: { value: number },
+): value is PageContentNode {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 30) return false;
+  counter.value += 1;
+  if (counter.value > 5_000) return false;
+  const node = value as Record<string, unknown>;
+  const types = new Set([
+    'doc',
+    'paragraph',
+    'heading',
+    'text',
+    'hardBreak',
+    'horizontalRule',
+    'bulletList',
+    'orderedList',
+    'listItem',
+    'taskList',
+    'taskItem',
+    'blockquote',
+    'image',
+    'table',
+    'tableRow',
+    'tableHeader',
+    'tableCell',
+  ]);
+  if (typeof node.type !== 'string' || !types.has(node.type)) return false;
+  if (
+    node.attrs !== undefined &&
+    (!node.attrs || typeof node.attrs !== 'object' || Array.isArray(node.attrs))
+  ) {
+    return false;
+  }
+  if (node.text !== undefined && (typeof node.text !== 'string' || node.text.length > 100_000)) {
+    return false;
+  }
+  if (node.type === 'text' && typeof node.text !== 'string') return false;
+  if (node.type === 'heading') {
+    const level = (node.attrs as Record<string, unknown> | undefined)?.level;
+    if (level !== 1 && level !== 2 && level !== 3) return false;
+  }
+  if (node.type === 'taskItem') {
+    const checked = (node.attrs as Record<string, unknown> | undefined)?.checked;
+    if (typeof checked !== 'boolean') return false;
+  }
+  if (node.type === 'image') {
+    const attrs = node.attrs as Record<string, unknown> | undefined;
+    if (!attrs || !safePageUrl(attrs.src)) return false;
+    if (attrs.alt !== undefined && (typeof attrs.alt !== 'string' || attrs.alt.length > 500)) {
+      return false;
+    }
+  }
+  if (node.marks !== undefined) {
+    if (!Array.isArray(node.marks) || !node.marks.every(isPageContentMark)) return false;
+  }
+  if (node.content !== undefined) {
+    if (!Array.isArray(node.content)) return false;
+    if (!node.content.every((child) => isPageContentNode(child, depth + 1, counter))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export const pageContentSchema = z
+  .custom<PageDocument>((value) => {
+    const counter = { value: 0 };
+    return isPageContentNode(value, 0, counter) && value.type === 'doc';
+  }, 'Le contenu de la page est invalide.')
+  .refine((value) => JSON.stringify(value).length <= 500_000, {
+    message: 'Le contenu de la page est trop volumineux.',
+  });
+
+export const pageVisibilitySchema = bookmarkVisibilitySchema;
+
+const pageFieldsSchema = z
+  .object({
+    title: z.string().trim().min(1).max(160),
+    content: pageContentSchema,
+    folder: optionalText(80),
+    tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+    visibility: pageVisibilitySchema.default('PRIVATE'),
+    groupIds: z.array(z.string().uuid()).max(50).default([]),
+    memberIds: z.array(z.string().uuid()).max(100).default([]),
+    linkedPageIds: z.array(z.string().uuid()).max(100).default([]),
+  })
+  .superRefine((value, context) => {
+    if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['groupIds'],
+        message: 'Sélectionnez au moins un groupe.',
+      });
+    }
+    if (value.visibility === 'SELECTED_USERS' && value.memberIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['memberIds'],
+        message: 'Sélectionnez au moins un membre.',
+      });
+    }
+  });
+
+export const pageCreateSchema = pageFieldsSchema.and(
+  z.object({ clientMutationId: z.string().uuid() }),
+);
+
+export const pageUpdateSchema = pageFieldsSchema.and(
+  z.object({ version: z.number().int().positive() }),
+);
+
+export const pagesQuerySchema = z
+  .object({
+    scope: z.enum(['mine', 'shared', 'all']).default('all'),
+    q: z.string().trim().max(100).optional(),
+    tag: z.string().trim().max(40).optional(),
+    folder: z.string().trim().max(80).optional(),
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .refine((value) => Boolean(value.before) === Boolean(value.beforeId), {
+    message: 'before et beforeId doivent être fournis ensemble.',
+  });
+
+export const pageRestoreSchema = z.object({
+  revisionId: z.string().uuid(),
+  version: z.number().int().positive(),
+});
+
+export type PageVisibility = z.infer<typeof pageVisibilitySchema>;
+
+export type FamilyPageSummary = {
+  id: string;
+  title: string;
+  excerpt: string | null;
+  folder: string | null;
+  tags: string[];
+  visibility: PageVisibility;
+  createdBy: string;
+  createdByName: string;
+  editable: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FamilyPage = FamilyPageSummary & {
+  content: PageDocument;
+  groupIds: string[];
+  memberIds: string[];
+  linkedPageIds: string[];
+};
+
+export type PageRevision = {
+  id: string;
+  revisionNumber: number;
+  editedBy: string;
+  editedByName: string;
+  createdAt: string;
+  current: boolean;
 };

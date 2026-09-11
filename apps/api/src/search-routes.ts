@@ -152,6 +152,36 @@ export async function registerSearchRoutes(app: FastifyInstance, pool: Pool) {
                  WHERE rag.resource_id = r.id AND gm.member_id = $3
                )
              )
+
+           UNION ALL
+
+           SELECT p.id, 'page'::text AS type, p.title,
+                  concat_ws(' · ', NULLIF(p.folder, ''), NULLIF(left(p.content_text, 180), '')) AS description,
+                  'pages'::text AS view, p.updated_at AS "updatedAt", 6 AS type_order
+           FROM page p
+           JOIN resource r ON r.id = p.id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND concat_ws(' ', p.title, p.content_text, p.folder, (
+               SELECT string_agg(t.name, ' ') FROM resource_tag rt
+               JOIN tag t ON t.id = rt.tag_id WHERE rt.resource_id = p.id
+             )) ILIKE $2
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'pages' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $3
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $3
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $3
+               )
+             )
          ) matches
          ORDER BY type_order, "updatedAt" DESC
          LIMIT 30`,
