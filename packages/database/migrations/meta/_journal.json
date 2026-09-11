@@ -71,6 +71,13 @@
       "when": 1789221600000,
       "tag": "0009_chat_history",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789227000000,
+      "tag": "0010_bookmarks",
+      "breakpoints": true
     }
   ]
 }

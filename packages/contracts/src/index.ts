@@ -218,10 +218,10 @@ export const searchQuerySchema = z.object({
 
 export type SearchResult = {
   id: string;
-  type: 'member' | 'shopping' | 'task' | 'agenda' | 'meal';
+  type: 'member' | 'shopping' | 'task' | 'agenda' | 'meal' | 'bookmark';
   title: string;
   description: string | null;
-  view: 'members' | 'shopping' | 'tasks' | 'agenda' | 'meals';
+  view: 'members' | 'shopping' | 'tasks' | 'agenda' | 'meals' | 'bookmarks';
   updatedAt: string;
 };
 
@@ -241,11 +241,12 @@ export type HomeActivity = {
     | 'task.created'
     | 'task.completed'
     | 'meal.created'
-    | 'meal.planned';
+    | 'meal.planned'
+    | 'bookmark.shared';
   actorName: string;
   subject: string;
   occurredAt: string;
-  view: 'shopping' | 'tasks' | 'meals';
+  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks';
 };
 
 export type HomeSummary = {
@@ -736,3 +737,92 @@ export type ChatRealtimeEvent =
   | { type: 'chat.reaction'; conversationId: string; message: ChatMessage }
   | { type: 'chat.message.deleted'; conversationId: string; message: ChatMessage }
   | { type: 'chat.conversation'; conversation: ConversationSummary };
+
+export const bookmarkVisibilitySchema = z.enum([
+  'PRIVATE',
+  'ALL_MEMBERS',
+  'GROUPS',
+  'SELECTED_USERS',
+]);
+
+const bookmarkFieldsSchema = z
+  .object({
+    url: z
+      .string()
+      .trim()
+      .url()
+      .max(2048)
+      .refine((value) => ['http:', 'https:'].includes(new URL(value).protocol), {
+        message: 'Seuls les liens HTTP et HTTPS sont acceptés.',
+      }),
+    title: optionalText(200),
+    description: optionalText(1000),
+    personalComment: optionalText(1000),
+    tags: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
+    visibility: bookmarkVisibilitySchema.default('PRIVATE'),
+    groupIds: z.array(z.string().uuid()).max(50).default([]),
+    memberIds: z.array(z.string().uuid()).max(100).default([]),
+  })
+  .superRefine((value, context) => {
+    if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['groupIds'],
+        message: 'Sélectionnez au moins un groupe.',
+      });
+    }
+    if (value.visibility === 'SELECTED_USERS' && value.memberIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['memberIds'],
+        message: 'Sélectionnez au moins un membre.',
+      });
+    }
+  });
+
+export const bookmarkCreateSchema = bookmarkFieldsSchema.and(
+  z.object({ clientMutationId: z.string().uuid() }),
+);
+
+export const bookmarkUpdateSchema = bookmarkFieldsSchema.and(
+  z.object({ version: z.number().int().positive() }),
+);
+
+export const bookmarksQuerySchema = z
+  .object({
+    scope: z.enum(['mine', 'recommended', 'favorites', 'all']).default('all'),
+    q: z.string().trim().max(100).optional(),
+    tag: z.string().trim().max(40).optional(),
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .refine((value) => Boolean(value.before) === Boolean(value.beforeId), {
+    message: 'before et beforeId doivent être fournis ensemble.',
+  });
+
+export type BookmarkVisibility = z.infer<typeof bookmarkVisibilitySchema>;
+
+export type FamilyBookmark = {
+  id: string;
+  url: string;
+  hostname: string;
+  title: string;
+  description: string | null;
+  personalComment: string | null;
+  faviconUrl: string | null;
+  imageUrl: string | null;
+  tags: string[];
+  visibility: BookmarkVisibility;
+  groupIds: string[];
+  memberIds: string[];
+  createdBy: string;
+  createdByName: string;
+  favorite: boolean;
+  usefulCount: number;
+  usefulByMe: boolean;
+  editable: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};

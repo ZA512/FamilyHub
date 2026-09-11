@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Bell,
+  Bookmark,
   Check,
   CheckCheck,
   LoaderCircle,
@@ -224,6 +225,8 @@ function NotificationRow({
       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
         {notification.moduleKey === 'shopping' ? (
           <ShoppingBasket className="size-4" aria-hidden="true" />
+        ) : notification.moduleKey === 'bookmarks' ? (
+          <Bookmark className="size-4" aria-hidden="true" />
         ) : (
           <Bell className="size-4" aria-hidden="true" />
         )}

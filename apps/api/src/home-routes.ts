@@ -27,6 +27,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
            AND EXISTS (
              SELECT 1 FROM message m
              WHERE m.conversation_id = c.id AND m.author_id <> $2
+               AND m.deleted_at IS NULL
                AND m.created_at > COALESCE(cm.last_read_at, cm.joined_at)
            )
            AND EXISTS (
@@ -211,6 +212,34 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
                  AND mc.module_key = 'meals' AND mc.enabled = true
              )
              AND (r.visibility = 'ALL_MEMBERS' OR r.created_by = $2)
+
+           UNION ALL
+
+           SELECT concat('bookmark.shared:', b.id) AS id,
+                  'bookmark.shared'::text AS type, creator.first_name AS "actorName",
+                  b.title AS subject, b.created_at AS "occurredAt", 'bookmarks'::text AS view
+           FROM bookmark b
+           JOIN resource r ON r.id = b.id
+           JOIN instance_member creator_member ON creator_member.id = r.created_by
+           JOIN app_user creator ON creator.id = creator_member.user_id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL AND r.visibility <> 'PRIVATE'
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'bookmarks' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $2
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $2
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $2
+               )
+             )
          ) events
          ORDER BY "occurredAt" DESC
          LIMIT 12`,

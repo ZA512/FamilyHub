@@ -63,6 +63,11 @@ const MealsView = lazy(() =>
 const ChatView = lazy(() =>
   import('./chat-view').then((module) => ({ default: module.ChatView })),
 );
+const BookmarksView = lazy(() =>
+  import('./bookmarks-view').then((module) => ({
+    default: module.BookmarksView,
+  })),
+);
 
 type ViewId =
   | 'home'
@@ -162,6 +167,7 @@ export default function DashboardPage({
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
   const [mealComposerOpen, setMealComposerOpen] = useState(false);
   const [chatComposerOpen, setChatComposerOpen] = useState(false);
+  const [bookmarkComposerOpen, setBookmarkComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
@@ -186,6 +192,7 @@ export default function DashboardPage({
     if (view === 'tasks') setTaskComposerOpen(true);
     if (view === 'meals') setMealComposerOpen(true);
     if (view === 'chat') setChatComposerOpen(true);
+    if (view === 'bookmarks') setBookmarkComposerOpen(true);
   }
 
   async function toggleModule(key: ModuleKey, enabled: boolean) {
@@ -555,6 +562,22 @@ export default function DashboardPage({
                   csrfToken={csrfToken}
                   composerOpen={chatComposerOpen}
                   onComposerOpenChange={setChatComposerOpen}
+                />
+              </Suspense>
+            ) : activeView === 'bookmarks' ? (
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground">
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                    Chargement des bookmarks…
+                  </div>
+                }
+              >
+                <BookmarksView
+                  currentMemberId={memberId}
+                  csrfToken={csrfToken}
+                  composerOpen={bookmarkComposerOpen}
+                  onComposerOpenChange={setBookmarkComposerOpen}
                 />
               </Suspense>
             ) : activeView === 'members' ? (

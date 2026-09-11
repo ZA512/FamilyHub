@@ -23,7 +23,13 @@ import { Card, CardContent } from '@/components/ui/card';
 type HomeViewProps = {
   firstName: string;
   onNavigate: (
-    view: 'notifications' | 'shopping' | 'tasks' | 'meals' | 'chat',
+    view:
+      | 'notifications'
+      | 'shopping'
+      | 'tasks'
+      | 'meals'
+      | 'chat'
+      | 'bookmarks',
   ) => void;
   onUnreadCountChange: (count: number) => void;
 };
@@ -225,7 +231,9 @@ function ActivitySection({
                           ? 'a créé une tâche'
                           : item.type === 'meal.planned'
                             ? 'a planifié'
-                            : 'a ajouté un plat'}
+                            : item.type === 'bookmark.shared'
+                              ? 'a partagé un bookmark'
+                              : 'a ajouté un plat'}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                   {item.subject} · {formatRelativeDate(item.occurredAt)}
