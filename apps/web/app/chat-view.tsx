@@ -9,8 +9,11 @@ import {
 import {
   ArrowLeft,
   CornerUpLeft,
+  Download,
+  FileText,
   LoaderCircle,
   MessageCircle,
+  Paperclip,
   Plus,
   Send,
   Users,
@@ -27,6 +30,16 @@ import type {
 } from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle,
+} from '@/components/ui/attachment';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -66,7 +79,11 @@ export function ChatView({
   const [body, setBody] = useState('');
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [sending, setSending] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [maxUploadBytes, setMaxUploadBytes] = useState(25 * 1024 * 1024);
+  const [uploadingLabel, setUploadingLabel] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selected = conversations.find((item) => item.id === selectedId) ?? null;
 
@@ -116,6 +133,21 @@ export function ChatView({
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/v1/chat/uploads/config', { signal: controller.signal })
+      .then(async (response) =>
+        response.ok
+          ? ((await response.json()) as { maxUploadBytes: number })
+          : null,
+      )
+      .then((payload) => {
+        if (payload) setMaxUploadBytes(payload.maxUploadBytes);
+      })
+      .catch(() => undefined);
     return () => controller.abort();
   }, []);
 
@@ -216,10 +248,58 @@ export function ChatView({
 
   async function sendMessage(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedId || !body.trim() || sending) return;
+    if (!selectedId || (!body.trim() && !selectedFiles.length) || sending)
+      return;
     setSending(true);
     setError('');
     try {
+      const attachmentIds = await Promise.all(
+        selectedFiles.map(async (file, index) => {
+          setUploadingLabel(`Envoi de ${index + 1}/${selectedFiles.length}…`);
+          const initialized = await fetch('/api/v1/chat/uploads/init', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-csrf-token': csrfToken,
+            },
+            body: JSON.stringify({
+              filename: file.name,
+              contentType: file.type || 'application/octet-stream',
+              size: file.size,
+              clientMutationId: crypto.randomUUID(),
+            }),
+          });
+          if (!initialized.ok)
+            throw new Error(`Impossible de préparer « ${file.name} ».`);
+          const { uploadId } = (await initialized.json()) as {
+            uploadId: string;
+          };
+          const uploaded = await fetch(
+            `/api/v1/chat/uploads/${uploadId}/content`,
+            {
+              method: 'PUT',
+              headers: {
+                'content-type': 'application/octet-stream',
+                'x-csrf-token': csrfToken,
+              },
+              body: file,
+            },
+          );
+          if (!uploaded.ok)
+            throw new Error(`Le format de « ${file.name} » est refusé.`);
+          const completed = await fetch(
+            `/api/v1/chat/uploads/${uploadId}/complete`,
+            {
+              method: 'POST',
+              headers: { 'x-csrf-token': csrfToken },
+            },
+          );
+          if (!completed.ok)
+            throw new Error(`Impossible de finaliser « ${file.name} ».`);
+          return uploadId;
+        }),
+      );
+      setUploadingLabel('Envoi du message…');
       const response = await fetch(
         `/api/v1/conversations/${selectedId}/messages`,
         {
@@ -231,6 +311,7 @@ export function ChatView({
           body: JSON.stringify({
             body: body.trim(),
             replyToId: replyTo?.id ?? null,
+            attachmentIds,
             clientMutationId: crypto.randomUUID(),
           }),
         },
@@ -243,12 +324,33 @@ export function ChatView({
       ]);
       setBody('');
       setReplyTo(null);
+      setSelectedFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       void loadConversations();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Envoi impossible.');
     } finally {
       setSending(false);
+      setUploadingLabel('');
     }
+  }
+
+  function selectFiles(files: FileList | null) {
+    if (!files) return;
+    if (selectedFiles.length + files.length > 8) {
+      setError('Vous pouvez joindre au maximum 8 fichiers par message.');
+      return;
+    }
+    const next = [...selectedFiles, ...Array.from(files)].slice(0, 8);
+    const oversized = next.find((file) => file.size > maxUploadBytes);
+    if (oversized) {
+      setError(
+        `« ${oversized.name} » dépasse la limite de ${formatFileSize(maxUploadBytes)}.`,
+      );
+      return;
+    }
+    setSelectedFiles(next);
+    setError('');
   }
 
   async function toggleReaction(messageId: string, emoji: ChatReaction) {
@@ -427,6 +529,41 @@ export function ChatView({
                     onSubmit={sendMessage}
                     className="shrink-0 border-t bg-background p-3"
                   >
+                    {selectedFiles.length ? (
+                      <AttachmentGroup className="mb-2">
+                        {selectedFiles.map((file, index) => (
+                          <Attachment
+                            key={`${file.name}-${file.size}-${index}`}
+                            size="sm"
+                          >
+                            <AttachmentMedia>
+                              <FileText aria-hidden="true" />
+                            </AttachmentMedia>
+                            <AttachmentContent>
+                              <AttachmentTitle>{file.name}</AttachmentTitle>
+                              <AttachmentDescription>
+                                {formatFileSize(file.size)}
+                              </AttachmentDescription>
+                            </AttachmentContent>
+                            <AttachmentActions>
+                              <AttachmentAction
+                                type="button"
+                                aria-label={`Retirer ${file.name}`}
+                                onClick={() =>
+                                  setSelectedFiles((current) =>
+                                    current.filter(
+                                      (_, itemIndex) => itemIndex !== index,
+                                    ),
+                                  )
+                                }
+                              >
+                                <X aria-hidden="true" />
+                              </AttachmentAction>
+                            </AttachmentActions>
+                          </Attachment>
+                        ))}
+                      </AttachmentGroup>
+                    ) : null}
                     {replyTo ? (
                       <div className="mb-2 flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-xs">
                         <CornerUpLeft className="size-3" />
@@ -443,6 +580,26 @@ export function ChatView({
                       </div>
                     ) : null}
                     <div className="flex items-end gap-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        className="sr-only"
+                        id="chat-attachments"
+                        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,application/json,.zip,.docx,.xlsx,.pptx"
+                        onChange={(event) => selectFiles(event.target.files)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={sending || selectedFiles.length >= 8}
+                        aria-label="Ajouter des fichiers"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="shrink-0"
+                      >
+                        <Paperclip aria-hidden="true" />
+                      </Button>
                       <Textarea
                         value={body}
                         onChange={(event) => setBody(event.target.value)}
@@ -461,7 +618,9 @@ export function ChatView({
                       <Button
                         type="submit"
                         size="icon"
-                        disabled={!body.trim() || sending}
+                        disabled={
+                          (!body.trim() && !selectedFiles.length) || sending
+                        }
                         aria-label="Envoyer"
                         className="shrink-0 bg-[#087f72] hover:bg-[#076d63]"
                       >
@@ -472,6 +631,11 @@ export function ChatView({
                         )}
                       </Button>
                     </div>
+                    {uploadingLabel ? (
+                      <output className="mt-1 block text-xs text-muted-foreground">
+                        {uploadingLabel}
+                      </output>
+                    ) : null}
                   </form>
                 </div>
               ) : (
@@ -526,7 +690,12 @@ function MessageBubble({
               </span>
             </div>
           ) : null}
-          <MessageText body={message.body} mine={mine} />
+          {message.attachments.length ? (
+            <MessageAttachments attachments={message.attachments} />
+          ) : null}
+          {message.body ? (
+            <MessageText body={message.body} mine={mine} />
+          ) : null}
           <time
             className={`mt-1 block text-right text-[10px] ${mine ? 'text-white/70' : 'text-muted-foreground'}`}
           >
@@ -582,6 +751,64 @@ function MessageBubble({
   );
 }
 
+function MessageAttachments({
+  attachments,
+}: {
+  attachments: ChatMessage['attachments'];
+}) {
+  return (
+    <div className="mb-2 space-y-2">
+      {attachments.map((attachment) =>
+        attachment.kind === 'image' ? (
+          <a
+            key={attachment.id}
+            href={attachment.url}
+            target="_blank"
+            rel="noreferrer"
+            className="block overflow-hidden rounded-xl bg-black/5"
+            aria-label={`Ouvrir l’image ${attachment.filename}`}
+          >
+            {/* The authenticated attachment endpoint cannot be handled by a static image optimizer. */}
+            {/* oxlint-disable-next-line next/no-img-element */}
+            <img
+              src={attachment.url}
+              alt={attachment.filename}
+              loading="lazy"
+              className="max-h-72 w-full object-contain"
+            />
+            <span className="block truncate bg-black/25 px-2 py-1 text-xs text-white">
+              {attachment.filename} · {formatFileSize(attachment.size)}
+            </span>
+          </a>
+        ) : (
+          <a
+            key={attachment.id}
+            href={attachment.url}
+            className="block text-foreground no-underline"
+            download={attachment.filename}
+            aria-label={`Télécharger ${attachment.filename}`}
+          >
+            <Attachment className="w-full bg-background/95" size="sm">
+              <AttachmentMedia>
+                <FileText aria-hidden="true" />
+              </AttachmentMedia>
+              <AttachmentContent>
+                <AttachmentTitle>{attachment.filename}</AttachmentTitle>
+                <AttachmentDescription>
+                  {formatFileSize(attachment.size)}
+                </AttachmentDescription>
+              </AttachmentContent>
+              <AttachmentActions>
+                <Download className="size-4" aria-hidden="true" />
+              </AttachmentActions>
+            </Attachment>
+          </a>
+        ),
+      )}
+    </div>
+  );
+}
+
 function MessageText({ body, mine }: { body: string; mine: boolean }) {
   const parts = body.split(/(https?:\/\/[^\s]+)/g);
   return (
@@ -603,6 +830,12 @@ function MessageText({ body, mine }: { body: string; mine: boolean }) {
       )}
     </p>
   );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1_024) return `${bytes} o`;
+  if (bytes < 1_048_576) return `${Math.round(bytes / 1_024)} Ko`;
+  return `${(bytes / 1_048_576).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`;
 }
 
 function ConversationDialog({

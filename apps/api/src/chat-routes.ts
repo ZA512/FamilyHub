@@ -92,7 +92,7 @@ async function loadConversations(
               JOIN app_user participant_user ON participant_user.id = participant_im.user_id
               WHERE participant_cm.conversation_id = c.id
             ), '[]'::jsonb) AS participants,
-            last_message.body AS "lastMessage", last_message.created_at AS "lastMessageAt",
+            last_message.preview AS "lastMessage", last_message.created_at AS "lastMessageAt",
             (SELECT count(*)::int FROM message unread
              WHERE unread.conversation_id = c.id AND unread.author_id <> $2
                AND unread.created_at > COALESCE(mine.last_read_at, mine.joined_at)) AS "unreadCount",
@@ -100,8 +100,14 @@ async function loadConversations(
      FROM conversation c
      JOIN conversation_member mine ON mine.conversation_id = c.id AND mine.member_id = $2
      LEFT JOIN LATERAL (
-       SELECT body, created_at FROM message
-       WHERE conversation_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1
+       SELECT COALESCE(
+                NULLIF(lm.body, ''),
+                concat('📎 ', (SELECT count(*) FROM message_attachment WHERE message_id = lm.id),
+                       ' pièce(s) jointe(s)')
+              ) AS preview,
+              lm.created_at
+       FROM message lm
+       WHERE lm.conversation_id = c.id ORDER BY lm.created_at DESC, lm.id DESC LIMIT 1
      ) last_message ON true
      WHERE c.instance_id = $1 AND c.deleted_at IS NULL${conversationId ? ' AND c.id = $3' : ''}
      ORDER BY COALESCE(last_message.created_at, c.updated_at) DESC, c.id DESC`,
@@ -128,12 +134,14 @@ async function loadMessage(
     body: string;
     replyTo: ChatMessage['replyTo'];
     reactions: ChatMessage['reactions'];
+    attachments: ChatMessage['attachments'];
     createdAt: Date;
   }>(
     `SELECT m.id, m.conversation_id AS "conversationId", m.author_id AS "authorId",
             author.first_name AS "authorName", m.body,
             CASE WHEN parent.id IS NULL THEN NULL ELSE jsonb_build_object(
-              'id', parent.id, 'authorName', parent_author.first_name, 'body', parent.body
+              'id', parent.id, 'authorName', parent_author.first_name,
+              'body', COALESCE(NULLIF(parent.body, ''), 'Pièce jointe')
             ) END AS "replyTo",
             COALESCE((
               SELECT jsonb_agg(reaction_group ORDER BY reaction_group->>'emoji')
@@ -145,6 +153,20 @@ async function loadMessage(
                 FROM message_reaction mr WHERE mr.message_id = m.id GROUP BY mr.emoji
               ) grouped
             ), '[]'::jsonb) AS reactions,
+            COALESCE((
+              SELECT jsonb_agg(jsonb_build_object(
+                'id', a.id,
+                'filename', a.original_filename,
+                'contentType', a.detected_mime,
+                'size', a.actual_size,
+                'sha256', a.sha256,
+                'kind', CASE WHEN a.detected_mime LIKE 'image/%' THEN 'image' ELSE 'file' END,
+                'url', concat('/api/v1/attachments/', a.id, '/content')
+              ) ORDER BY ma.sort_order, a.created_at)
+              FROM message_attachment ma
+              JOIN attachment a ON a.id = ma.attachment_id
+              WHERE ma.message_id = m.id AND a.status = 'READY'
+            ), '[]'::jsonb) AS attachments,
             m.created_at AS "createdAt"
      FROM message m
      JOIN instance_member author_member ON author_member.id = m.author_id
@@ -350,6 +372,7 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
       const parsed = chatMessageCreateSchema.safeParse(request.body);
       if (!id.success || !parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
       const session = request.session!;
+      const attachmentIds = [...new Set(parsed.data.attachmentIds)];
       if (!(await isMember(pool, id.data, session.id))) {
         return reply.code(404).send({ error: 'CONVERSATION_NOT_FOUND' });
       }
@@ -378,6 +401,27 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
           messageId = existing.rows[0]?.id;
         }
         if (!messageId) throw new Error('Message creation returned no row.');
+        if (attachmentIds.length) {
+          const allowedAttachments = await client.query<{ id: string }>(
+            `SELECT a.id
+             FROM attachment a
+             LEFT JOIN message_attachment ma ON ma.attachment_id = a.id
+             WHERE a.id = ANY($1::uuid[]) AND a.instance_id = $2 AND a.uploaded_by = $3
+               AND a.status = 'READY' AND (ma.attachment_id IS NULL OR ma.message_id = $4)`,
+            [attachmentIds, session.instanceId, session.id, messageId],
+          );
+          if (allowedAttachments.rowCount !== attachmentIds.length) {
+            await client.query('ROLLBACK');
+            return reply.code(400).send({ error: 'INVALID_ATTACHMENTS' });
+          }
+          await client.query(
+            `INSERT INTO message_attachment (message_id, attachment_id, sort_order)
+             SELECT $1, attachment_id, sort_order::int
+             FROM unnest($2::uuid[]) WITH ORDINALITY AS selected(attachment_id, sort_order)
+             ON CONFLICT DO NOTHING`,
+            [messageId, attachmentIds],
+          );
+        }
         await client.query('UPDATE conversation SET updated_at = now() WHERE id = $1', [id.data]);
         await client.query(
           `UPDATE conversation_member SET last_read_at = now()
@@ -392,7 +436,13 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
              SELECT $1, cm.member_id, $2, 'CHAT_MESSAGE', 'chat', $3, $4, 'conversation', $5
              FROM conversation_member cm
              WHERE cm.conversation_id = $5 AND cm.member_id <> $2 AND cm.muted = false`,
-            [session.instanceId, session.id, `Message de ${session.firstName}`, parsed.data.body.slice(0, 180), id.data],
+            [
+              session.instanceId,
+              session.id,
+              `Message de ${session.firstName}`,
+              parsed.data.body.slice(0, 180) || 'Pièce jointe',
+              id.data,
+            ],
           );
         }
         await client.query('COMMIT');

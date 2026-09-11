@@ -73,9 +73,14 @@ Utilisez pour `POSTGRES_PASSWORD` une valeur aléatoire d'au moins 32 caractère
 avec une URL (lettres, chiffres, tirets et underscores), car elle est injectée dans la chaîne
 de connexion interne de l'application.
 
-Configuration complémentaire prévue : taille maximale d'upload, quotas, SMTP, Web Push,
-durée de session, niveau de logs, UID/GID lorsque le NAS utilise des bind mounts, et backend
-S3 optionnel.
+`MAX_UPLOAD_BYTES` fixe la taille maximale d'un fichier (25 Mio par défaut). Les pièces
+jointes du chat acceptent les images JPEG, PNG, GIF et WebP, les PDF, les fichiers texte,
+CSV et JSON, les archives ZIP et les formats bureautiques DOCX, XLSX et PPTX. Leur type
+binaire réel est contrôlé avant publication et leur empreinte SHA-256 est conservée en base.
+
+Configuration complémentaire prévue : quota global par foyer, SMTP, Web Push, durée de
+session, niveau de logs, UID/GID lorsque le NAS utilise des bind mounts, et backend S3
+optionnel.
 
 ## Réseau et HTTPS
 
@@ -122,4 +127,5 @@ compatible ; sinon la procédure documentée restaure la sauvegarde complète.
 - Endpoint de santé sans détail sensible et endpoint de diagnostic réservé aux admins.
 - Arrêt du conteneur si PostgreSQL est trop ancien, inaccessible ou si les migrations ont
   échoué.
-- Quotas d'upload et espace libre contrôlés avant écriture.
+- Taille maximale contrôlée avant et pendant chaque écriture ; quotas globaux et contrôle
+  préventif de l'espace libre restent à ajouter.

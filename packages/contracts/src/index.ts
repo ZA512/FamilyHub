@@ -650,8 +650,18 @@ export const conversationCreateSchema = z.object({
 });
 
 export const chatMessageCreateSchema = z.object({
-  body: z.string().trim().min(1).max(4000),
+  body: z.string().trim().max(4000).default(''),
   replyToId: z.string().uuid().nullable().optional(),
+  attachmentIds: z.array(z.string().uuid()).max(8).default([]),
+  clientMutationId: z.string().uuid(),
+}).refine((value) => value.body.length > 0 || value.attachmentIds.length > 0, {
+  message: 'Un message ou une pièce jointe est requis.',
+});
+
+export const uploadInitSchema = z.object({
+  filename: z.string().trim().min(1).max(255),
+  contentType: z.string().trim().min(1).max(150),
+  size: z.number().int().positive(),
   clientMutationId: z.string().uuid(),
 });
 
@@ -689,6 +699,16 @@ export type ChatMessageReaction = {
   memberIds: string[];
 };
 
+export type ChatAttachment = {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  sha256: string;
+  kind: 'image' | 'file';
+  url: string;
+};
+
 export type ChatMessage = {
   id: string;
   conversationId: string;
@@ -700,6 +720,7 @@ export type ChatMessage = {
     authorName: string;
     body: string;
   } | null;
+  attachments: ChatAttachment[];
   reactions: ChatMessageReaction[];
   createdAt: string;
 };

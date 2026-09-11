@@ -631,3 +631,56 @@ export const messageReactions = pgTable(
   },
   (table) => [primaryKey({ columns: [table.messageId, table.memberId, table.emoji] })],
 );
+
+export const attachments = pgTable(
+  'attachment',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    uploadedBy: uuid('uploaded_by')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'restrict' }),
+    originalFilename: text('original_filename').notNull(),
+    storageKey: uuid('storage_key').notNull().defaultRandom(),
+    declaredMime: text('declared_mime').notNull(),
+    detectedMime: text('detected_mime'),
+    expectedSize: integer('expected_size').notNull(),
+    actualSize: integer('actual_size'),
+    sha256: text('sha256'),
+    status: text('status').notNull().default('PENDING'),
+    clientMutationId: uuid('client_mutation_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('attachment_storage_key_uq').on(table.storageKey),
+    uniqueIndex('attachment_instance_mutation_uq').on(
+      table.instanceId,
+      table.clientMutationId,
+    ),
+    index('attachment_uploader_status_idx').on(
+      table.uploadedBy,
+      table.status,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const messageAttachments = pgTable(
+  'message_attachment',
+  {
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    attachmentId: uuid('attachment_id')
+      .notNull()
+      .references(() => attachments.id, { onDelete: 'restrict' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.messageId, table.attachmentId] }),
+    uniqueIndex('message_attachment_attachment_uq').on(table.attachmentId),
+  ],
+);

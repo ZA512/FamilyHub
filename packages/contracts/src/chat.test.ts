@@ -32,6 +32,13 @@ describe('chat contracts', () => {
         clientMutationId: '912b6fb0-1a40-4918-a548-6382e855de82',
       }).success,
     ).toBe(false);
+    expect(
+      chatMessageCreateSchema.safeParse({
+        body: '',
+        attachmentIds: ['f41fb9af-c16d-468f-9881-8b35683cf1f0'],
+        clientMutationId: '912b6fb0-1a40-4918-a548-6382e855de82',
+      }).success,
+    ).toBe(true);
   });
 
   it('limits history pages and reaction values', () => {

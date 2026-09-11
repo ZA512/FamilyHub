@@ -23,6 +23,9 @@ export async function buildApp(config: AppConfig) {
 
   app.decorate('config', config);
   app.decorateRequest('session', undefined);
+  app.addContentTypeParser('application/octet-stream', (_request, payload, done) => {
+    done(null, payload);
+  });
 
   await app.register(cookie, { secret: config.SESSION_SECRET });
   await app.register(helmet, { contentSecurityPolicy: false });
