@@ -294,3 +294,72 @@ export const shoppingItems = pgTable(
     ),
   ],
 );
+
+export const familyTasks = pgTable(
+  'family_task',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .references(() => resources.id, { onDelete: 'cascade' }),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    kind: text('kind').notNull(),
+    status: text('status').notNull().default('OPEN'),
+    assigneeId: uuid('assignee_id').references(() => instanceMembers.id, {
+      onDelete: 'set null',
+    }),
+    claimable: boolean('claimable').notNull().default(false),
+    dueAt: timestamp('due_at', { withTimezone: true }),
+    periodStartAt: timestamp('period_start_at', { withTimezone: true }),
+    periodEndAt: timestamp('period_end_at', { withTimezone: true }),
+    recurrenceIntervalDays: integer('recurrence_interval_days'),
+    frequencyHint: text('frequency_hint'),
+    reopenPolicy: text('reopen_policy').notNull().default('NONE'),
+    reopenDelayHours: integer('reopen_delay_hours'),
+    nextAvailableAt: timestamp('next_available_at', { withTimezone: true }),
+    clientMutationId: uuid('client_mutation_id').notNull(),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('family_task_instance_mutation_uq').on(
+      table.instanceId,
+      table.clientMutationId,
+    ),
+    index('family_task_instance_state_idx').on(
+      table.instanceId,
+      table.status,
+      table.dueAt,
+      table.createdAt,
+    ),
+    index('family_task_assignee_state_idx').on(table.assigneeId, table.status),
+  ],
+);
+
+export const taskCompletions = pgTable(
+  'task_completion',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => familyTasks.id, { onDelete: 'cascade' }),
+    completedBy: uuid('completed_by')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'restrict' }),
+    completedAt: timestamp('completed_at', { withTimezone: true }).notNull().defaultNow(),
+    comment: text('comment'),
+    scheduledFor: timestamp('scheduled_for', { withTimezone: true }),
+    clientMutationId: uuid('client_mutation_id').notNull(),
+  },
+  (table) => [
+    uniqueIndex('task_completion_task_mutation_uq').on(
+      table.taskId,
+      table.clientMutationId,
+    ),
+    index('task_completion_task_date_idx').on(table.taskId, table.completedAt),
+  ],
+);

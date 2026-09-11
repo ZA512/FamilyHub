@@ -51,6 +51,7 @@ import { MembersView } from './members-view';
 import { NotificationsView } from './notifications-view';
 import { SearchView } from './search-view';
 import { SettingsView } from './settings-view';
+import { TasksView } from './tasks-view';
 
 type ViewId =
   | 'home'
@@ -66,10 +67,20 @@ type ViewId =
   | 'search';
 
 const primaryNavigation = [
-  { id: 'home' as const, label: 'Accueil', icon: Home },
-  { id: 'chat' as const, label: 'Chat', icon: MessageCircle, badge: '3' },
-  { id: 'agenda' as const, label: 'Agenda', icon: CalendarDays },
-  { id: 'tasks' as const, label: 'Tâches', icon: CheckSquare2, badge: '2' },
+  { id: 'home' as const, label: 'Accueil', icon: Home, badge: undefined },
+  { id: 'chat' as const, label: 'Chat', icon: MessageCircle, badge: undefined },
+  {
+    id: 'agenda' as const,
+    label: 'Agenda',
+    icon: CalendarDays,
+    badge: undefined,
+  },
+  {
+    id: 'tasks' as const,
+    label: 'Tâches',
+    icon: CheckSquare2,
+    badge: undefined,
+  },
 ];
 
 const secondaryNavigation = [
@@ -80,11 +91,26 @@ const secondaryNavigation = [
 ];
 
 const mobileNavigation = [
-  { id: 'home' as const, label: 'Accueil', icon: Home },
-  { id: 'chat' as const, label: 'Chat', icon: MessageCircle, badge: true },
-  { id: 'agenda' as const, label: 'Agenda', icon: CalendarDays },
-  { id: 'tasks' as const, label: 'Tâches', icon: CheckSquare2 },
-  { id: 'more' as const, label: 'Plus', icon: CircleEllipsis },
+  { id: 'home' as const, label: 'Accueil', icon: Home, badge: undefined },
+  { id: 'chat' as const, label: 'Chat', icon: MessageCircle, badge: undefined },
+  {
+    id: 'agenda' as const,
+    label: 'Agenda',
+    icon: CalendarDays,
+    badge: undefined,
+  },
+  {
+    id: 'tasks' as const,
+    label: 'Tâches',
+    icon: CheckSquare2,
+    badge: undefined,
+  },
+  {
+    id: 'more' as const,
+    label: 'Plus',
+    icon: CircleEllipsis,
+    badge: undefined,
+  },
 ];
 
 const quickCreateOptions = [
@@ -101,6 +127,7 @@ const quickCreateOptions = [
 ];
 
 type DashboardPageProps = {
+  memberId: string;
   firstName?: string;
   instanceName?: string;
   role: 'ADMIN' | 'MEMBER';
@@ -109,6 +136,7 @@ type DashboardPageProps = {
 };
 
 export default function DashboardPage({
+  memberId,
   firstName = 'Maxime',
   instanceName = 'Foyer Girard',
   role,
@@ -119,6 +147,7 @@ export default function DashboardPage({
   const initials = displayFirstName.slice(0, 2).toUpperCase();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [shoppingComposerOpen, setShoppingComposerOpen] = useState(false);
+  const [taskComposerOpen, setTaskComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
@@ -139,6 +168,7 @@ export default function DashboardPage({
   function startCreation(view: ViewId) {
     navigate(view);
     if (view === 'shopping') setShoppingComposerOpen(true);
+    if (view === 'tasks') setTaskComposerOpen(true);
   }
 
   async function toggleModule(key: ModuleKey, enabled: boolean) {
@@ -452,6 +482,14 @@ export default function DashboardPage({
                 composerOpen={shoppingComposerOpen}
                 onComposerOpenChange={setShoppingComposerOpen}
               />
+            ) : activeView === 'tasks' ? (
+              <TasksView
+                currentMemberId={memberId}
+                role={role}
+                csrfToken={csrfToken}
+                composerOpen={taskComposerOpen}
+                onComposerOpenChange={setTaskComposerOpen}
+              />
             ) : activeView === 'members' ? (
               <MembersView role={role} csrfToken={csrfToken} />
             ) : activeView === 'notifications' ? (
@@ -519,7 +557,13 @@ export default function DashboardPage({
 const viewLabels: Record<
   Exclude<
     ViewId,
-    'home' | 'shopping' | 'members' | 'settings' | 'notifications' | 'search'
+    | 'home'
+    | 'tasks'
+    | 'shopping'
+    | 'members'
+    | 'settings'
+    | 'notifications'
+    | 'search'
   >,
   { title: string; description: string }
 > = {
@@ -531,10 +575,6 @@ const viewLabels: Record<
   agenda: {
     title: 'Agenda',
     description: 'Les événements partagés seront bientôt reliés à cette vue.',
-  },
-  tasks: {
-    title: 'Tâches',
-    description: 'La gestion des tâches et corvées sera bientôt disponible.',
   },
   meals: {
     title: 'Repas',
@@ -551,7 +591,13 @@ function ComingSoonView({
 }: {
   view: Exclude<
     ViewId,
-    'home' | 'shopping' | 'members' | 'settings' | 'notifications' | 'search'
+    | 'home'
+    | 'tasks'
+    | 'shopping'
+    | 'members'
+    | 'settings'
+    | 'notifications'
+    | 'search'
   >;
 }) {
   const content = viewLabels[view];

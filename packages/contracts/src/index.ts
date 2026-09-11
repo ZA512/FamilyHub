@@ -218,34 +218,145 @@ export const searchQuerySchema = z.object({
 
 export type SearchResult = {
   id: string;
-  type: 'member' | 'shopping';
+  type: 'member' | 'shopping' | 'task';
   title: string;
   description: string | null;
-  view: 'members' | 'shopping';
+  view: 'members' | 'shopping' | 'tasks';
   updatedAt: string;
 };
 
 export type HomeAttention = {
-  id: 'notifications' | 'shopping';
+  id: 'notifications' | 'shopping' | 'tasks';
   count: number;
   title: string;
   detail: string;
-  view: 'notifications' | 'shopping';
+  view: 'notifications' | 'shopping' | 'tasks';
 };
 
 export type HomeActivity = {
   id: string;
-  type: 'shopping.added' | 'shopping.purchased';
+  type: 'shopping.added' | 'shopping.purchased' | 'task.created' | 'task.completed';
   actorName: string;
   subject: string;
   occurredAt: string;
-  view: 'shopping';
+  view: 'shopping' | 'tasks';
 };
 
 export type HomeSummary = {
   attention: HomeAttention[];
   activity: HomeActivity[];
   unreadNotificationCount: number;
+};
+
+export const taskKindSchema = z.enum(['SCHEDULED', 'OPEN_CHORE', 'SEASONAL']);
+export const taskStatusSchema = z.enum(['OPEN', 'IN_PROGRESS', 'DONE', 'CANCELLED']);
+export const taskVisibilitySchema = z.enum(['PRIVATE', 'ALL_MEMBERS']);
+export const taskReopenPolicySchema = z.enum(['NONE', 'IMMEDIATE', 'AFTER_DELAY', 'MANUAL']);
+
+const taskOptionalText = (maximum: number) =>
+  z
+    .string()
+    .trim()
+    .max(maximum)
+    .transform((value) => value || null)
+    .nullable()
+    .optional();
+
+const taskFields = z.object({
+  title: z.string().trim().min(1).max(160),
+  description: taskOptionalText(1000),
+  kind: taskKindSchema,
+  assigneeId: z.string().uuid().nullable().optional(),
+  claimable: z.boolean().default(false),
+  dueAt: z.string().datetime({ offset: true }).nullable().optional(),
+  periodStartAt: z.string().datetime({ offset: true }).nullable().optional(),
+  periodEndAt: z.string().datetime({ offset: true }).nullable().optional(),
+  recurrenceIntervalDays: z.number().int().min(1).max(365).nullable().optional(),
+  frequencyHint: taskOptionalText(160),
+  reopenPolicy: taskReopenPolicySchema.default('NONE'),
+  reopenDelayHours: z.number().int().min(1).max(8760).nullable().optional(),
+  visibility: taskVisibilitySchema.default('ALL_MEMBERS'),
+});
+
+export const taskCreateSchema = taskFields
+  .extend({ clientMutationId: z.string().uuid() })
+  .superRefine((value, context) => {
+    if (value.kind === 'SCHEDULED' && (!value.assigneeId || !value.dueAt)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Une tâche planifiée nécessite une échéance et un responsable.',
+      });
+    }
+    if (value.kind === 'OPEN_CHORE' && (value.dueAt || value.periodStartAt || value.periodEndAt)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Une corvée ouverte ne possède pas de date planifiée.',
+      });
+    }
+    if (value.kind !== 'OPEN_CHORE' && value.reopenPolicy !== 'NONE') {
+      context.addIssue({
+        code: 'custom',
+        message: 'La réouverture est réservée aux corvées ouvertes.',
+      });
+    }
+    if (value.reopenPolicy === 'AFTER_DELAY' && !value.reopenDelayHours) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Un délai de réouverture est requis.',
+      });
+    }
+    if (
+      value.periodStartAt &&
+      value.periodEndAt &&
+      new Date(value.periodEndAt).getTime() < new Date(value.periodStartAt).getTime()
+    ) {
+      context.addIssue({ code: 'custom', message: 'La période de fin doit suivre le début.' });
+    }
+  });
+
+export const taskStatusUpdateSchema = z.object({ status: taskStatusSchema });
+export const taskCompleteSchema = z.object({
+  comment: taskOptionalText(500),
+  clientMutationId: z.string().uuid(),
+});
+
+export type TaskKind = z.infer<typeof taskKindSchema>;
+export type TaskStatus = z.infer<typeof taskStatusSchema>;
+export type TaskReopenPolicy = z.infer<typeof taskReopenPolicySchema>;
+
+export type TaskCompletion = {
+  id: string;
+  completedBy: string;
+  completedByName: string;
+  completedAt: string;
+  comment: string | null;
+  scheduledFor: string | null;
+};
+
+export type FamilyTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  kind: TaskKind;
+  status: TaskStatus;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  createdBy: string;
+  createdByName: string;
+  claimable: boolean;
+  dueAt: string | null;
+  periodStartAt: string | null;
+  periodEndAt: string | null;
+  recurrenceIntervalDays: number | null;
+  frequencyHint: string | null;
+  reopenPolicy: TaskReopenPolicy;
+  reopenDelayHours: number | null;
+  nextAvailableAt: string | null;
+  visibility: 'PRIVATE' | 'ALL_MEMBERS';
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  completions: TaskCompletion[];
 };
 
 const optionalText = (maximum: number) =>

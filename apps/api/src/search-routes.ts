@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 
 import { createSessionGuard } from './auth.js';
+import { reopenAvailableTasks } from './task-routes.js';
 
 type SearchRow = Omit<SearchResult, 'updatedAt'> & { updatedAt: Date };
 
@@ -19,6 +20,7 @@ export async function registerSearchRoutes(app: FastifyInstance, pool: Pool) {
       }
 
       const pattern = `%${parsed.data.q}%`;
+      await reopenAvailableTasks(pool, request.session!.instanceId);
       const result = await pool.query<SearchRow>(
         `SELECT * FROM (
            SELECT m.id, 'member'::text AS type,
@@ -43,10 +45,43 @@ export async function registerSearchRoutes(app: FastifyInstance, pool: Pool) {
                WHERE mc.instance_id = i.instance_id
                  AND mc.module_key = 'shopping' AND mc.enabled = true
              )
+
+           UNION ALL
+
+           SELECT t.id, 'task'::text AS type, t.title,
+                  concat_ws(' · ', NULLIF(t.description, ''),
+                    CASE t.status
+                      WHEN 'OPEN' THEN 'À faire'
+                      WHEN 'IN_PROGRESS' THEN 'En cours'
+                      WHEN 'DONE' THEN 'Terminée'
+                      ELSE 'Annulée'
+                    END) AS description,
+                  'tasks'::text AS view, t.updated_at AS "updatedAt", 2 AS type_order
+           FROM family_task t
+           JOIN resource r ON r.id = t.id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND concat_ws(' ', t.title, t.description, t.frequency_hint) ILIKE $2
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'tasks' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $3
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $3
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $3
+               )
+             )
          ) matches
          ORDER BY type_order, "updatedAt" DESC
          LIMIT 30`,
-        [request.session?.instanceId, pattern],
+        [request.session?.instanceId, pattern, request.session?.id],
       );
 
       return {

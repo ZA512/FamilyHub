@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 
 import { createSessionGuard } from './auth.js';
+import { reopenAvailableTasks } from './task-routes.js';
 
 type ActivityRow = Omit<HomeActivity, 'occurredAt'> & { occurredAt: Date };
 
@@ -10,7 +11,8 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
   const requireSession = createSessionGuard(pool);
 
   app.get('/api/v1/home', { preHandler: requireSession }, async (request) => {
-    const [unreadResult, shoppingResult, activityResult] = await Promise.all([
+    await reopenAvailableTasks(pool, request.session!.instanceId);
+    const [unreadResult, shoppingResult, taskResult, activityResult] = await Promise.all([
       pool.query<{ count: number }>(
         `SELECT count(*)::int AS count
          FROM notification
@@ -27,6 +29,32 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
                AND mc.module_key = 'shopping' AND mc.enabled = true
            )`,
         [request.session?.instanceId],
+      ),
+      pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count
+         FROM family_task t
+         JOIN resource r ON r.id = t.id
+         WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+           AND t.status IN ('OPEN', 'IN_PROGRESS')
+           AND (t.assignee_id = $2 OR t.claimable = true OR r.created_by = $2)
+           AND (
+             r.visibility = 'ALL_MEMBERS' OR r.created_by = $2
+             OR EXISTS (
+               SELECT 1 FROM resource_acl_user rau
+               WHERE rau.resource_id = r.id AND rau.member_id = $2
+             )
+             OR EXISTS (
+               SELECT 1 FROM resource_acl_group rag
+               JOIN group_membership gm ON gm.group_id = rag.group_id
+               WHERE rag.resource_id = r.id AND gm.member_id = $2
+             )
+           )
+           AND EXISTS (
+             SELECT 1 FROM module_config mc
+             WHERE mc.instance_id = r.instance_id
+               AND mc.module_key = 'tasks' AND mc.enabled = true
+           )`,
+        [request.session?.instanceId, request.session?.id],
       ),
       pool.query<ActivityRow>(
         `SELECT * FROM (
@@ -57,15 +85,73 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
                WHERE mc.instance_id = i.instance_id
                  AND mc.module_key = 'shopping' AND mc.enabled = true
              )
+
+           UNION ALL
+
+           SELECT concat('task.created:', t.id) AS id,
+                  'task.created'::text AS type, creator.first_name AS "actorName",
+                  t.title AS subject, t.created_at AS "occurredAt", 'tasks'::text AS view
+           FROM family_task t
+           JOIN resource r ON r.id = t.id
+           JOIN instance_member creator_member ON creator_member.id = r.created_by
+           JOIN app_user creator ON creator.id = creator_member.user_id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'tasks' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $2
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $2
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $2
+               )
+             )
+
+           UNION ALL
+
+           SELECT concat('task.completed:', c.id) AS id,
+                  'task.completed'::text AS type, performer.first_name AS "actorName",
+                  t.title AS subject, c.completed_at AS "occurredAt", 'tasks'::text AS view
+           FROM task_completion c
+           JOIN family_task t ON t.id = c.task_id
+           JOIN resource r ON r.id = t.id
+           JOIN instance_member performer_member ON performer_member.id = c.completed_by
+           JOIN app_user performer ON performer.id = performer_member.user_id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'tasks' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $2
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $2
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $2
+               )
+             )
          ) events
          ORDER BY "occurredAt" DESC
          LIMIT 12`,
-        [request.session?.instanceId],
+        [request.session?.instanceId, request.session?.id],
       ),
     ]);
 
     const unreadNotificationCount = unreadResult.rows[0]?.count ?? 0;
     const pendingShoppingCount = shoppingResult.rows[0]?.count ?? 0;
+    const activeTaskCount = taskResult.rows[0]?.count ?? 0;
     const attention: HomeAttention[] = [];
 
     if (unreadNotificationCount) {
@@ -84,6 +170,15 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
         title: 'Liste de courses',
         detail: `${pendingShoppingCount} article${pendingShoppingCount > 1 ? 's' : ''} à acheter`,
         view: 'shopping',
+      });
+    }
+    if (activeTaskCount) {
+      attention.push({
+        id: 'tasks',
+        count: activeTaskCount,
+        title: 'Tâches et corvées',
+        detail: `${activeTaskCount} élément${activeTaskCount > 1 ? 's' : ''} à faire`,
+        view: 'tasks',
       });
     }
 

@@ -239,6 +239,7 @@ export function App() {
   if (view === 'dashboard' && member) {
     return (
       <DashboardPage
+        memberId={member.id}
         firstName={member.firstName}
         instanceName={member.instanceName}
         role={member.role}

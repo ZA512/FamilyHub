@@ -3,6 +3,7 @@ import {
   ChevronRight,
   LoaderCircle,
   Search,
+  CheckSquare2,
   ShoppingBasket,
   Users,
   X,
@@ -17,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type SearchViewProps = {
-  onNavigate: (view: 'members' | 'shopping') => void;
+  onNavigate: (view: 'members' | 'shopping' | 'tasks') => void;
 };
 
 export function SearchView({ onNavigate }: SearchViewProps) {
@@ -92,7 +93,7 @@ export function SearchView({ onNavigate }: SearchViewProps) {
           onChange={(event) => setQuery(event.target.value)}
           autoComplete="off"
           maxLength={100}
-          placeholder="Un membre, un article de courses…"
+          placeholder="Une tâche, un membre, un article de courses…"
           className="h-12 rounded-2xl bg-card pl-12 pr-12 text-base shadow-sm"
         />
         {query ? (
@@ -144,6 +145,8 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                 <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
                   {result.type === 'member' ? (
                     <Users className="size-4" aria-hidden="true" />
+                  ) : result.type === 'task' ? (
+                    <CheckSquare2 className="size-4" aria-hidden="true" />
                   ) : (
                     <ShoppingBasket className="size-4" aria-hidden="true" />
                   )}
@@ -152,7 +155,11 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{result.title}</span>
                     <Badge variant="outline">
-                      {result.type === 'member' ? 'Membre' : 'Courses'}
+                      {result.type === 'member'
+                        ? 'Membre'
+                        : result.type === 'task'
+                          ? 'Tâche'
+                          : 'Courses'}
                     </Badge>
                   </span>
                   {result.description ? (
@@ -176,7 +183,7 @@ export function SearchView({ onNavigate }: SearchViewProps) {
               </span>
               <h2 className="font-semibold">Aucun résultat</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Essayez un autre prénom ou un autre article.
+                Essayez une autre tâche, un autre prénom ou un autre article.
               </p>
             </CardContent>
           </Card>
