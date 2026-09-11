@@ -105,6 +105,23 @@ export async function registerSearchRoutes(app: FastifyInstance, pool: Pool) {
                  WHERE rag.resource_id = r.id AND gm.member_id = $3
                )
              )
+
+           UNION ALL
+
+           SELECT m.id, 'meal'::text AS type, m.name AS title,
+                  concat_ws(' · ', NULLIF(m.description, ''), array_to_string(m.tags, ', ')) AS description,
+                  'meals'::text AS view, m.updated_at AS "updatedAt", 4 AS type_order
+           FROM meal m
+           JOIN resource r ON r.id = m.id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND concat_ws(' ', m.name, m.description, m.instructions, m.comments,
+                   array_to_string(m.tags, ' ')) ILIKE $2
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'meals' AND mc.enabled = true
+             )
+             AND (r.visibility = 'ALL_MEMBERS' OR r.created_by = $3)
          ) matches
          ORDER BY type_order, "updatedAt" DESC
          LIMIT 30`,

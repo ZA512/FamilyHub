@@ -1,12 +1,15 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -424,5 +427,115 @@ export const calendarEventParticipants = pgTable(
   (table) => [
     primaryKey({ columns: [table.eventId, table.memberId] }),
     index('calendar_event_participant_member_idx').on(table.memberId, table.response),
+  ],
+);
+
+export const meals = pgTable(
+  'meal',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .references(() => resources.id, { onDelete: 'cascade' }),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    photoUrl: text('photo_url'),
+    referencePortions: integer('reference_portions').notNull().default(4),
+    instructions: text('instructions'),
+    tags: text('tags').array().notNull().default([]),
+    comments: text('comments'),
+    clientMutationId: uuid('client_mutation_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('meal_instance_mutation_uq').on(table.instanceId, table.clientMutationId),
+    index('meal_instance_name_idx').on(table.instanceId, table.name),
+  ],
+);
+
+export const ingredients = pgTable(
+  'ingredient',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    normalizedName: text('normalized_name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('ingredient_instance_normalized_uq').on(
+      table.instanceId,
+      table.normalizedName,
+    ),
+  ],
+);
+
+export const mealIngredients = pgTable(
+  'meal_ingredient',
+  {
+    mealId: uuid('meal_id')
+      .notNull()
+      .references(() => meals.id, { onDelete: 'cascade' }),
+    ingredientId: uuid('ingredient_id')
+      .notNull()
+      .references(() => ingredients.id, { onDelete: 'restrict' }),
+    quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
+    unit: text('unit').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.mealId, table.ingredientId] })],
+);
+
+export const mealPreferences = pgTable(
+  'meal_preference',
+  {
+    mealId: uuid('meal_id')
+      .notNull()
+      .references(() => meals.id, { onDelete: 'cascade' }),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+    value: smallint('value').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.mealId, table.memberId] }),
+    index('meal_preference_member_idx').on(table.memberId),
+  ],
+);
+
+export const mealPlanEntries = pgTable(
+  'meal_plan_entry',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    mealId: uuid('meal_id')
+      .notNull()
+      .references(() => meals.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    slot: text('slot').notNull(),
+    slotLabel: text('slot_label'),
+    portions: integer('portions').notNull(),
+    note: text('note'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'restrict' }),
+    clientMutationId: uuid('client_mutation_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('meal_plan_instance_mutation_uq').on(
+      table.instanceId,
+      table.clientMutationId,
+    ),
+    index('meal_plan_instance_date_idx').on(table.instanceId, table.date, table.slot),
   ],
 );

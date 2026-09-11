@@ -12,7 +12,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
   app.get('/api/v1/home', { preHandler: requireSession }, async (request) => {
     await reopenAvailableTasks(pool, request.session!.instanceId);
-    const [unreadResult, shoppingResult, taskResult, activityResult] = await Promise.all([
+    const [unreadResult, shoppingResult, taskResult, mealResult, activityResult] = await Promise.all([
       pool.query<{ count: number }>(
         `SELECT count(*)::int AS count
          FROM notification
@@ -53,6 +53,23 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              SELECT 1 FROM module_config mc
              WHERE mc.instance_id = r.instance_id
                AND mc.module_key = 'tasks' AND mc.enabled = true
+           )`,
+        [request.session?.instanceId, request.session?.id],
+      ),
+      pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count
+         FROM meal_plan_entry pe
+         JOIN meal m ON m.id = pe.meal_id
+         JOIN resource r ON r.id = m.id
+         JOIN instance i ON i.id = pe.instance_id
+         WHERE pe.instance_id = $1
+           AND pe.date = (now() AT TIME ZONE i.timezone)::date
+           AND r.deleted_at IS NULL
+           AND (r.visibility = 'ALL_MEMBERS' OR r.created_by = $2)
+           AND EXISTS (
+             SELECT 1 FROM module_config mc
+             WHERE mc.instance_id = pe.instance_id
+               AND mc.module_key = 'meals' AND mc.enabled = true
            )`,
         [request.session?.instanceId, request.session?.id],
       ),
@@ -142,6 +159,41 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
                  WHERE rag.resource_id = r.id AND gm.member_id = $2
                )
              )
+
+           UNION ALL
+
+           SELECT concat('meal.created:', m.id) AS id,
+                  'meal.created'::text AS type, creator.first_name AS "actorName",
+                  m.name AS subject, m.created_at AS "occurredAt", 'meals'::text AS view
+           FROM meal m
+           JOIN resource r ON r.id = m.id
+           JOIN instance_member creator_member ON creator_member.id = r.created_by
+           JOIN app_user creator ON creator.id = creator_member.user_id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'meals' AND mc.enabled = true
+             )
+             AND (r.visibility = 'ALL_MEMBERS' OR r.created_by = $2)
+
+           UNION ALL
+
+           SELECT concat('meal.planned:', pe.id) AS id,
+                  'meal.planned'::text AS type, planner.first_name AS "actorName",
+                  m.name AS subject, pe.created_at AS "occurredAt", 'meals'::text AS view
+           FROM meal_plan_entry pe
+           JOIN meal m ON m.id = pe.meal_id
+           JOIN resource r ON r.id = m.id
+           JOIN instance_member planner_member ON planner_member.id = pe.created_by
+           JOIN app_user planner ON planner.id = planner_member.user_id
+           WHERE pe.instance_id = $1 AND r.deleted_at IS NULL
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = pe.instance_id
+                 AND mc.module_key = 'meals' AND mc.enabled = true
+             )
+             AND (r.visibility = 'ALL_MEMBERS' OR r.created_by = $2)
          ) events
          ORDER BY "occurredAt" DESC
          LIMIT 12`,
@@ -152,6 +204,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
     const unreadNotificationCount = unreadResult.rows[0]?.count ?? 0;
     const pendingShoppingCount = shoppingResult.rows[0]?.count ?? 0;
     const activeTaskCount = taskResult.rows[0]?.count ?? 0;
+    const todayMealCount = mealResult.rows[0]?.count ?? 0;
     const attention: HomeAttention[] = [];
 
     if (unreadNotificationCount) {
@@ -179,6 +232,15 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
         title: 'Tâches et corvées',
         detail: `${activeTaskCount} élément${activeTaskCount > 1 ? 's' : ''} à faire`,
         view: 'tasks',
+      });
+    }
+    if (todayMealCount) {
+      attention.push({
+        id: 'meals',
+        count: todayMealCount,
+        title: 'Repas du jour',
+        detail: `${todayMealCount} repas${todayMealCount > 1 ? ' planifiés' : ' planifié'} aujourd’hui`,
+        view: 'meals',
       });
     }
 

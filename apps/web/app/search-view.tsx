@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ChevronRight,
+  ChefHat,
   LoaderCircle,
   Search,
   CheckSquare2,
@@ -19,7 +20,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type SearchViewProps = {
-  onNavigate: (view: 'members' | 'shopping' | 'tasks' | 'agenda') => void;
+  onNavigate: (
+    view: 'members' | 'shopping' | 'tasks' | 'agenda' | 'meals',
+  ) => void;
 };
 
 export function SearchView({ onNavigate }: SearchViewProps) {
@@ -150,6 +153,8 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                     <CheckSquare2 className="size-4" aria-hidden="true" />
                   ) : result.type === 'agenda' ? (
                     <CalendarDays className="size-4" aria-hidden="true" />
+                  ) : result.type === 'meal' ? (
+                    <ChefHat className="size-4" aria-hidden="true" />
                   ) : (
                     <ShoppingBasket className="size-4" aria-hidden="true" />
                   )}
@@ -164,7 +169,9 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                           ? 'Tâche'
                           : result.type === 'agenda'
                             ? 'Agenda'
-                          : 'Courses'}
+                            : result.type === 'meal'
+                              ? 'Repas'
+                              : 'Courses'}
                     </Badge>
                   </span>
                   {result.description ? (

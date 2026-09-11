@@ -57,6 +57,9 @@ import { TasksView } from './tasks-view';
 const AgendaView = lazy(() =>
   import('./agenda-view').then((module) => ({ default: module.AgendaView })),
 );
+const MealsView = lazy(() =>
+  import('./meals-view').then((module) => ({ default: module.MealsView })),
+);
 
 type ViewId =
   | 'home'
@@ -154,6 +157,7 @@ export default function DashboardPage({
   const [shoppingComposerOpen, setShoppingComposerOpen] = useState(false);
   const [agendaComposerOpen, setAgendaComposerOpen] = useState(false);
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
+  const [mealComposerOpen, setMealComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
@@ -176,6 +180,7 @@ export default function DashboardPage({
     if (view === 'shopping') setShoppingComposerOpen(true);
     if (view === 'agenda') setAgendaComposerOpen(true);
     if (view === 'tasks') setTaskComposerOpen(true);
+    if (view === 'meals') setMealComposerOpen(true);
   }
 
   async function toggleModule(key: ModuleKey, enabled: boolean) {
@@ -514,6 +519,23 @@ export default function DashboardPage({
                 composerOpen={taskComposerOpen}
                 onComposerOpenChange={setTaskComposerOpen}
               />
+            ) : activeView === 'meals' ? (
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground">
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                    Chargement des repas…
+                  </div>
+                }
+              >
+                <MealsView
+                  currentMemberId={memberId}
+                  role={role}
+                  csrfToken={csrfToken}
+                  composerOpen={mealComposerOpen}
+                  onComposerOpenChange={setMealComposerOpen}
+                />
+              </Suspense>
             ) : activeView === 'members' ? (
               <MembersView role={role} csrfToken={csrfToken} />
             ) : activeView === 'notifications' ? (
@@ -584,6 +606,7 @@ const viewLabels: Record<
     | 'home'
     | 'tasks'
     | 'agenda'
+    | 'meals'
     | 'shopping'
     | 'members'
     | 'settings'
@@ -596,10 +619,6 @@ const viewLabels: Record<
     title: 'Chat',
     description:
       'La messagerie familiale arrive dans la prochaine tranche fonctionnelle.',
-  },
-  meals: {
-    title: 'Repas',
-    description: 'La planification des repas sera bientôt disponible.',
   },
   bookmarks: {
     title: 'Bookmarks',
@@ -615,6 +634,7 @@ function ComingSoonView({
     | 'home'
     | 'tasks'
     | 'agenda'
+    | 'meals'
     | 'shopping'
     | 'members'
     | 'settings'

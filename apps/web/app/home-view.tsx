@@ -3,6 +3,7 @@ import {
   Bell,
   CheckCircle2,
   CheckSquare2,
+  ChefHat,
   ChevronRight,
   LoaderCircle,
   ShoppingBasket,
@@ -20,7 +21,7 @@ import { Card, CardContent } from '@/components/ui/card';
 
 type HomeViewProps = {
   firstName: string;
-  onNavigate: (view: 'notifications' | 'shopping' | 'tasks') => void;
+  onNavigate: (view: 'notifications' | 'shopping' | 'tasks' | 'meals') => void;
   onUnreadCountChange: (count: number) => void;
 };
 
@@ -141,6 +142,8 @@ function AttentionSection({
                   <Bell className="size-4" aria-hidden="true" />
                 ) : item.id === 'tasks' ? (
                   <CheckSquare2 className="size-4" aria-hidden="true" />
+                ) : item.id === 'meals' ? (
+                  <ChefHat className="size-4" aria-hidden="true" />
                 ) : (
                   <ShoppingBasket className="size-4" aria-hidden="true" />
                 )}
@@ -213,7 +216,11 @@ function ActivitySection({
                       ? 'a ajouté aux courses'
                       : item.type === 'task.completed'
                         ? 'a terminé'
-                        : 'a créé une tâche'}
+                        : item.type === 'task.created'
+                          ? 'a créé une tâche'
+                          : item.type === 'meal.planned'
+                            ? 'a planifié'
+                            : 'a ajouté un plat'}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                   {item.subject} · {formatRelativeDate(item.occurredAt)}

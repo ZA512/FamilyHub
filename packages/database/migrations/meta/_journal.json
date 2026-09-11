@@ -43,6 +43,13 @@
       "when": 1789196400000,
       "tag": "0005_agenda",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789205400000,
+      "tag": "0006_meals",
+      "breakpoints": true
     }
   ]
 }

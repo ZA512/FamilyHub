@@ -218,28 +218,34 @@ export const searchQuerySchema = z.object({
 
 export type SearchResult = {
   id: string;
-  type: 'member' | 'shopping' | 'task' | 'agenda';
+  type: 'member' | 'shopping' | 'task' | 'agenda' | 'meal';
   title: string;
   description: string | null;
-  view: 'members' | 'shopping' | 'tasks' | 'agenda';
+  view: 'members' | 'shopping' | 'tasks' | 'agenda' | 'meals';
   updatedAt: string;
 };
 
 export type HomeAttention = {
-  id: 'notifications' | 'shopping' | 'tasks';
+  id: 'notifications' | 'shopping' | 'tasks' | 'meals';
   count: number;
   title: string;
   detail: string;
-  view: 'notifications' | 'shopping' | 'tasks';
+  view: 'notifications' | 'shopping' | 'tasks' | 'meals';
 };
 
 export type HomeActivity = {
   id: string;
-  type: 'shopping.added' | 'shopping.purchased' | 'task.created' | 'task.completed';
+  type:
+    | 'shopping.added'
+    | 'shopping.purchased'
+    | 'task.created'
+    | 'task.completed'
+    | 'meal.created'
+    | 'meal.planned';
   actorName: string;
   subject: string;
   occurredAt: string;
-  view: 'shopping' | 'tasks';
+  view: 'shopping' | 'tasks' | 'meals';
 };
 
 export type HomeSummary = {
@@ -493,4 +499,142 @@ export type AgendaEntry = {
   recurrenceUntil: string | null;
   reminderMinutes: number | null;
   participants: AgendaParticipant[];
+};
+
+export const mealPreferenceSchema = z.union([z.literal(-1), z.literal(0), z.literal(1)]);
+export const mealSlotSchema = z.enum(['LUNCH', 'DINNER', 'OTHER']);
+
+export const mealIngredientSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(120),
+  quantity: z.number().positive().max(100000),
+  unit: z.string().trim().min(1).max(40),
+});
+
+const mealFields = z.object({
+  name: z.string().trim().min(1).max(160),
+  description: optionalText(2000),
+  photoUrl: z
+    .string()
+    .trim()
+    .url()
+    .max(2000)
+    .refine((value) => value.startsWith('https://') || value.startsWith('http://'), {
+      message: 'La photo doit utiliser une adresse HTTP ou HTTPS.',
+    })
+    .nullable()
+    .optional(),
+  referencePortions: z.number().int().min(1).max(100),
+  ingredients: z.array(mealIngredientSchema).min(1).max(100),
+  instructions: optionalText(10000),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20),
+  comments: optionalText(2000),
+  visibility: taskVisibilitySchema.default('ALL_MEMBERS'),
+});
+
+export const mealCreateSchema = mealFields.extend({ clientMutationId: z.string().uuid() });
+export const mealUpdateSchema = mealFields;
+export const mealPreferenceUpdateSchema = z.object({ value: mealPreferenceSchema });
+
+export const mealPlanRangeSchema = z
+  .object({
+    start: z.string().date(),
+    end: z.string().date(),
+  })
+  .refine((value) => {
+    const start = Date.parse(`${value.start}T00:00:00Z`);
+    const end = Date.parse(`${value.end}T00:00:00Z`);
+    return end >= start && end - start <= 62 * 24 * 60 * 60 * 1000;
+  });
+
+export const mealPlanCreateSchema = z
+  .object({
+    mealId: z.string().uuid(),
+    date: z.string().date(),
+    slot: mealSlotSchema,
+    slotLabel: optionalText(80),
+    portions: z.number().int().min(1).max(100),
+    note: optionalText(500),
+    clientMutationId: z.string().uuid(),
+  })
+  .refine((value) => value.slot !== 'OTHER' || Boolean(value.slotLabel), {
+    message: 'Un libellé est requis pour un autre créneau.',
+    path: ['slotLabel'],
+  });
+
+export const mealPlanUpdateSchema = z
+  .object({
+    mealId: z.string().uuid(),
+    date: z.string().date(),
+    slot: mealSlotSchema,
+    slotLabel: optionalText(80),
+    portions: z.number().int().min(1).max(100),
+    note: optionalText(500),
+  })
+  .refine((value) => value.slot !== 'OTHER' || Boolean(value.slotLabel), {
+    message: 'Un libellé est requis pour un autre créneau.',
+    path: ['slotLabel'],
+  });
+
+export const mealToShoppingSchema = z.object({
+  portions: z.number().int().min(1).max(100),
+  items: z
+    .array(
+      z.object({
+        ingredientId: z.string().uuid(),
+        clientMutationId: z.string().uuid(),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
+export type MealPreference = z.infer<typeof mealPreferenceSchema>;
+export type MealSlot = z.infer<typeof mealSlotSchema>;
+export type MealIngredient = {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+};
+
+export type MealPreferenceEntry = {
+  memberId: string;
+  memberName: string;
+  value: MealPreference;
+};
+
+export type FamilyMeal = {
+  id: string;
+  name: string;
+  description: string | null;
+  photoUrl: string | null;
+  referencePortions: number;
+  ingredients: MealIngredient[];
+  instructions: string | null;
+  tags: string[];
+  comments: string | null;
+  visibility: 'PRIVATE' | 'ALL_MEMBERS';
+  createdBy: string;
+  createdByName: string;
+  editable: boolean;
+  preferences: MealPreferenceEntry[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MealPlanEntry = {
+  id: string;
+  mealId: string;
+  mealName: string;
+  date: string;
+  slot: MealSlot;
+  slotLabel: string | null;
+  portions: number;
+  note: string | null;
+  createdBy: string;
+  createdByName: string;
+  editable: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
