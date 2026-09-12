@@ -20,11 +20,29 @@ import {
 } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import {
+  clearOfflineData,
+  readOfflineSession,
+  saveOfflineSession,
+} from '../lib/offline-storage';
 
 type View = 'loading' | 'setup' | 'login' | 'invite' | 'dashboard';
+const PENDING_LOGOUT_KEY = 'familyhub-pending-logout';
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
   return (await response.json().catch(() => ({}))) as Record<string, unknown>;
+}
+
+async function persistAuthenticatedSession(member: CurrentMember) {
+  const cachedMember = await readOfflineSession().catch(() => null);
+  if (
+    cachedMember &&
+    (cachedMember.id !== member.id ||
+      cachedMember.instanceId !== member.instanceId)
+  ) {
+    await clearOfflineData();
+  }
+  await saveOfflineSession(member);
 }
 
 export function App() {
@@ -85,12 +103,21 @@ export function App() {
           };
           setMember(payload.member);
           setCsrfToken(payload.csrfToken);
+          await persistAuthenticatedSession(payload.member);
           setView('dashboard');
         } else {
           setView('login');
         }
       } catch (reason) {
         if (controller.signal.aborted) return;
+        const cachedMember = await readOfflineSession().catch(() => null);
+        if (cachedMember) {
+          setMember(cachedMember);
+          setCsrfToken('');
+          setError('');
+          setView('dashboard');
+          return;
+        }
         setError(
           reason instanceof Error
             ? reason.message
@@ -128,6 +155,7 @@ export function App() {
       setCsrfToken(
         typeof payload.csrfToken === 'string' ? payload.csrfToken : '',
       );
+      await persistAuthenticatedSession(payload.member as CurrentMember);
       setView('dashboard');
     } catch (reason) {
       setError(
@@ -161,6 +189,8 @@ export function App() {
       setCsrfToken(
         typeof payload.csrfToken === 'string' ? payload.csrfToken : '',
       );
+      localStorage.removeItem(PENDING_LOGOUT_KEY);
+      await persistAuthenticatedSession(payload.member as CurrentMember);
       setView('dashboard');
     } catch (reason) {
       setError(
@@ -206,6 +236,7 @@ export function App() {
       setCsrfToken(
         typeof payload.csrfToken === 'string' ? payload.csrfToken : '',
       );
+      await persistAuthenticatedSession(payload.member as CurrentMember);
       window.history.replaceState({}, '', window.location.pathname);
       setView('dashboard');
     } catch (reason) {
@@ -220,6 +251,17 @@ export function App() {
   }
 
   async function logout() {
+    if (!navigator.onLine) {
+      localStorage.setItem(PENDING_LOGOUT_KEY, 'true');
+      await clearOfflineData();
+      setMember(null);
+      setCsrfToken('');
+      setError(
+        'Déconnexion locale terminée. Le serveur sera notifié à la reconnexion.',
+      );
+      setView('login');
+      return;
+    }
     const response = await fetch('/api/v1/auth/logout', {
       method: 'POST',
       headers: {
@@ -229,17 +271,97 @@ export function App() {
       body: '{}',
     });
     if (!response.ok) throw new Error('La déconnexion a échoué.');
+    localStorage.removeItem(PENDING_LOGOUT_KEY);
+    await clearOfflineData();
     setMember(null);
     setCsrfToken('');
     setError('');
     setView('login');
   }
 
+  useEffect(() => {
+    if (view !== 'dashboard' || csrfToken) return;
+    const controller = new AbortController();
+    async function restoreOnlineSession() {
+      try {
+        const response = await fetch('/api/v1/me', {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          if (response.status === 401) {
+            setMember(null);
+            setCsrfToken('');
+            setError(
+              'Votre session a expiré. Reconnectez-vous pour synchroniser.',
+            );
+            setView('login');
+          }
+          return;
+        }
+        const payload = (await response.json()) as {
+          member: CurrentMember;
+          csrfToken: string;
+        };
+        setMember(payload.member);
+        setCsrfToken(payload.csrfToken);
+        await persistAuthenticatedSession(payload.member);
+      } catch {
+        // La session locale reste utilisable tant que le serveur est indisponible.
+      }
+    }
+    function onOnline() {
+      void restoreOnlineSession();
+    }
+    window.addEventListener('online', onOnline);
+    if (navigator.onLine) void restoreOnlineSession();
+    return () => {
+      controller.abort();
+      window.removeEventListener('online', onOnline);
+    };
+  }, [csrfToken, view]);
+
+  useEffect(() => {
+    if (view !== 'login' || localStorage.getItem(PENDING_LOGOUT_KEY) !== 'true')
+      return;
+    async function finishRemoteLogout() {
+      setSubmitting(true);
+      try {
+        const meResponse = await fetch('/api/v1/me');
+        if (meResponse.status === 401) {
+          localStorage.removeItem(PENDING_LOGOUT_KEY);
+          return;
+        }
+        if (!meResponse.ok) return;
+        const payload = (await meResponse.json()) as { csrfToken: string };
+        const response = await fetch('/api/v1/auth/logout', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-csrf-token': payload.csrfToken,
+          },
+          body: '{}',
+        });
+        if (response.ok) localStorage.removeItem(PENDING_LOGOUT_KEY);
+      } catch {
+        // Une nouvelle reconnexion relancera la révocation distante.
+      } finally {
+        setSubmitting(false);
+      }
+    }
+    function onOnline() {
+      void finishRemoteLogout();
+    }
+    window.addEventListener('online', onOnline);
+    if (navigator.onLine) void finishRemoteLogout();
+    return () => window.removeEventListener('online', onOnline);
+  }, [view]);
+
   if (view === 'loading') return <LoadingScreen />;
   if (view === 'dashboard' && member) {
     return (
       <DashboardPage
         memberId={member.id}
+        instanceId={member.instanceId}
         firstName={member.firstName}
         instanceName={member.instanceName}
         role={member.role}

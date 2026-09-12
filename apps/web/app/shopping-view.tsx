@@ -1,14 +1,24 @@
-import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from 'react';
 import {
   Check,
+  CloudOff,
   LoaderCircle,
   Plus,
+  RefreshCw,
   RotateCcw,
   ShoppingBasket,
 } from 'lucide-react';
 
-import type { ShoppingItem } from '@familyhub/contracts';
+import type { ShoppingItem, ShoppingItemCreate } from '@familyhub/contracts';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -21,49 +31,153 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  applyOptimisticShoppingUpdate,
+  createOptimisticShoppingItem,
+  discardShoppingConflicts,
+  enqueueShoppingCreate,
+  enqueueShoppingUpdate,
+  readShoppingCache,
+  shoppingMutationCounts,
+  synchronizeShoppingMutations,
+  writeShoppingCache,
+} from '@/lib/offline-storage';
 
 type ShoppingViewProps = {
+  currentMemberId: string;
+  currentMemberName: string;
+  instanceId: string;
   csrfToken: string;
   composerOpen: boolean;
   onComposerOpenChange: (open: boolean) => void;
 };
 
+function formText(data: FormData, key: string): string {
+  const value = data.get(key);
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export function ShoppingView({
+  currentMemberId,
+  currentMemberName,
+  instanceId,
   csrfToken,
   composerOpen,
   onComposerOpenChange,
 }: ShoppingViewProps) {
+  const sessionKey = `${instanceId}:${currentMemberId}`;
+  const member = useMemo(
+    () => ({ id: currentMemberId, firstName: currentMemberName }),
+    [currentMemberId, currentMemberName],
+  );
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [serverAvailable, setServerAvailable] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [conflictCount, setConflictCount] = useState(0);
   const [error, setError] = useState('');
+  const synchronization = useRef<Promise<void> | null>(null);
+
+  const refreshCounts = useCallback(async () => {
+    const counts = await shoppingMutationCounts(sessionKey);
+    setPendingCount(counts.pending);
+    setConflictCount(counts.conflicts);
+  }, [sessionKey]);
+
+  const synchronize = useCallback(() => {
+    if (synchronization.current) return synchronization.current;
+    if (!navigator.onLine || !csrfToken) return Promise.resolve();
+
+    const operation = (async () => {
+      setSyncing(true);
+      try {
+        const result = await synchronizeShoppingMutations({
+          sessionKey,
+          csrfToken,
+        });
+        setPendingCount(result.pending);
+        setConflictCount(result.conflicts);
+        if (result.authenticationRequired) {
+          setError(
+            'Votre session doit être renouvelée avant la synchronisation.',
+          );
+          return;
+        }
+
+        const response = await fetch('/api/v1/shopping-items');
+        if (!response.ok)
+          throw new Error('Impossible de rafraîchir la liste de courses.');
+        const payload = (await response.json()) as { items: ShoppingItem[] };
+        setItems(payload.items);
+        await writeShoppingCache(sessionKey, payload.items);
+        setServerAvailable(true);
+        setError('');
+      } catch {
+        setServerAvailable(false);
+        const cached = await readShoppingCache(sessionKey);
+        if (cached) {
+          setItems(cached);
+        } else {
+          setError(
+            'Le serveur est indisponible et aucune liste locale n’a encore été enregistrée.',
+          );
+        }
+      } finally {
+        setLoading(false);
+        setSyncing(false);
+      }
+    })().finally(() => {
+      synchronization.current = null;
+    });
+    synchronization.current = operation;
+    return operation;
+  }, [csrfToken, sessionKey]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/v1/shopping-items', { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error('Impossible de charger la liste de courses.');
-        return (await response.json()) as { items: ShoppingItem[] };
-      })
-      .then((payload) => {
-        setItems(payload.items);
-        setError('');
-      })
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : 'La liste est indisponible.',
-        );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
+    let active = true;
+    async function initialize() {
+      const cached = await readShoppingCache(sessionKey).catch(() => null);
+      if (!active) return;
+      if (cached) setItems(cached);
+      await refreshCounts();
+      if (!active) return;
+      if (navigator.onLine && csrfToken) {
+        await synchronize();
+      } else {
+        setLoading(false);
+        if (!cached) {
+          setError(
+            'Aucune liste n’est encore disponible hors connexion sur cet appareil.',
+          );
+        }
+      }
+    }
+    void initialize();
+    return () => {
+      active = false;
+    };
+  }, [csrfToken, refreshCounts, sessionKey, synchronize]);
+
+  useEffect(() => {
+    function handleOffline() {
+      setOnline(false);
+      setServerAvailable(false);
+    }
+    function handleOnline() {
+      setOnline(true);
+      void synchronize();
+    }
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [synchronize]);
 
   const pending = useMemo(
     () => items.filter((item) => !item.purchasedAt),
@@ -74,30 +188,62 @@ export function ShoppingView({
     [items],
   );
 
+  async function queueCreate(item: ShoppingItem, payload: ShoppingItemCreate) {
+    await writeShoppingCache(sessionKey, items);
+    await enqueueShoppingCreate(sessionKey, item, payload);
+    setItems((current) => [item, ...current]);
+    await refreshCounts();
+  }
+
   async function createItem(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError('');
     const form = event.currentTarget;
     const data = new FormData(form);
+    const clientMutationId = crypto.randomUUID();
+    const payload = {
+      name: formText(data, 'name'),
+      quantity: formText(data, 'quantity') || null,
+      note: formText(data, 'note') || null,
+      clientMutationId,
+    } satisfies ShoppingItemCreate;
+    const optimisticItem = createOptimisticShoppingItem(
+      clientMutationId,
+      payload,
+      member,
+    );
 
     try {
-      const response = await fetch('/api/v1/shopping-items', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({
-          name: data.get('name'),
-          quantity: data.get('quantity'),
-          note: data.get('note'),
-          clientMutationId: crypto.randomUUID(),
-        }),
-      });
-      if (!response.ok) throw new Error('Impossible d’ajouter cet article.');
-      const payload = (await response.json()) as { item: ShoppingItem };
-      setItems((current) => [payload.item, ...current]);
+      if (!navigator.onLine || !csrfToken) {
+        await queueCreate(optimisticItem, payload);
+      } else {
+        let response: Response | null = null;
+        try {
+          response = await fetch('/api/v1/shopping-items', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-csrf-token': csrfToken,
+            },
+            body: JSON.stringify(payload),
+          });
+        } catch {
+          setServerAvailable(false);
+        }
+
+        if (!response || response.status === 429 || response.status >= 500) {
+          await queueCreate(optimisticItem, payload);
+        } else if (!response.ok) {
+          throw new Error('Impossible d’ajouter cet article.');
+        } else {
+          const body = (await response.json()) as { item: ShoppingItem };
+          const nextItems = [body.item, ...items];
+          setItems(nextItems);
+          await writeShoppingCache(sessionKey, nextItems);
+          setServerAvailable(true);
+        }
+      }
       form.reset();
       onComposerOpenChange(false);
     } catch (reason) {
@@ -110,23 +256,50 @@ export function ShoppingView({
   async function setPurchased(item: ShoppingItem, value: boolean) {
     setBusyId(item.id);
     setError('');
+    const update = { purchased: value };
+    const optimisticItem = applyOptimisticShoppingUpdate(item, update, member);
+    const optimisticItems = items.map((candidate) =>
+      candidate.id === item.id ? optimisticItem : candidate,
+    );
+    setItems(optimisticItems);
+    await writeShoppingCache(sessionKey, optimisticItems);
+
     try {
-      const response = await fetch(`/api/v1/shopping-items/${item.id}`, {
-        method: 'PATCH',
-        headers: {
-          'content-type': 'application/json',
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({ purchased: value }),
-      });
-      if (!response.ok)
+      if (!navigator.onLine || !csrfToken || item.id.startsWith('offline:')) {
+        await enqueueShoppingUpdate(sessionKey, optimisticItem, update);
+        await refreshCounts();
+        return;
+      }
+
+      let response: Response | null = null;
+      try {
+        response = await fetch(`/api/v1/shopping-items/${item.id}`, {
+          method: 'PATCH',
+          headers: {
+            'content-type': 'application/json',
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify(update),
+        });
+      } catch {
+        setServerAvailable(false);
+      }
+      if (!response || response.status === 429 || response.status >= 500) {
+        await enqueueShoppingUpdate(sessionKey, optimisticItem, update);
+        await refreshCounts();
+      } else if (!response.ok) {
+        setItems(items);
+        await writeShoppingCache(sessionKey, items);
         throw new Error('La modification n’a pas pu être enregistrée.');
-      const payload = (await response.json()) as { item: ShoppingItem };
-      setItems((current) =>
-        current.map((candidate) =>
-          candidate.id === payload.item.id ? payload.item : candidate,
-        ),
-      );
+      } else {
+        const body = (await response.json()) as { item: ShoppingItem };
+        const nextItems = optimisticItems.map((candidate) =>
+          candidate.id === body.item.id ? body.item : candidate,
+        );
+        setItems(nextItems);
+        await writeShoppingCache(sessionKey, nextItems);
+        setServerAvailable(true);
+      }
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Modification impossible.',
@@ -135,6 +308,13 @@ export function ShoppingView({
       setBusyId(null);
     }
   }
+
+  async function acceptServerVersion() {
+    await discardShoppingConflicts(sessionKey);
+    await synchronize();
+  }
+
+  const connectionProblem = !online || !serverAvailable;
 
   return (
     <>
@@ -182,7 +362,7 @@ export function ShoppingView({
             ) : null}
             <Button
               type="submit"
-              disabled={submitting || !csrfToken}
+              disabled={submitting}
               className="w-full bg-[#087f72] hover:bg-[#076d63]"
             >
               {submitting ? (
@@ -190,7 +370,9 @@ export function ShoppingView({
               ) : (
                 <Plus aria-hidden="true" />
               )}
-              Ajouter à la liste
+              {connectionProblem
+                ? 'Ajouter hors connexion'
+                : 'Ajouter à la liste'}
             </Button>
           </form>
         </DialogContent>
@@ -219,6 +401,50 @@ export function ShoppingView({
             Ajouter un article
           </Button>
         </div>
+
+        {connectionProblem || pendingCount || conflictCount || syncing ? (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            {syncing ? (
+              <LoaderCircle
+                className="size-4 animate-spin"
+                aria-hidden="true"
+              />
+            ) : connectionProblem ? (
+              <CloudOff className="size-4" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="size-4" aria-hidden="true" />
+            )}
+            <p className="min-w-0 flex-1">
+              {syncing
+                ? 'Synchronisation des courses…'
+                : conflictCount
+                  ? `${conflictCount} changement${conflictCount > 1 ? 's' : ''} à résoudre.`
+                  : pendingCount
+                    ? `${pendingCount} changement${pendingCount > 1 ? 's' : ''} sera synchronisé à la reconnexion.`
+                    : 'Liste affichée depuis cet appareil. Vous pouvez continuer à la modifier.'}
+            </p>
+            {conflictCount ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void acceptServerVersion()}
+              >
+                Utiliser la version du serveur
+              </Button>
+            ) : online &&
+              csrfToken &&
+              !syncing &&
+              (pendingCount || !serverAvailable) ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void synchronize()}
+              >
+                {pendingCount ? 'Synchroniser' : 'Réessayer'}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
 
         {error && !composerOpen ? (
           <p
@@ -297,6 +523,7 @@ function ShoppingRow({
   onToggle: () => void;
 }) {
   const purchased = Boolean(item.purchasedAt);
+  const local = item.id.startsWith('offline:');
   return (
     <div
       className={`flex items-center gap-3 px-4 py-4 ${divided ? 'border-t' : ''}`}
@@ -323,9 +550,16 @@ function ShoppingRow({
         )}
       </Button>
       <div className="min-w-0 flex-1">
-        <p className={`font-medium ${purchased ? 'line-through' : ''}`}>
-          {item.name}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className={`font-medium ${purchased ? 'line-through' : ''}`}>
+            {item.name}
+          </p>
+          {local ? (
+            <Badge variant="outline" className="text-amber-800">
+              À synchroniser
+            </Badge>
+          ) : null}
+        </div>
         <p className="mt-0.5 truncate text-sm text-muted-foreground">
           {[item.quantity, item.note, `Demandé par ${item.requestedByName}`]
             .filter(Boolean)

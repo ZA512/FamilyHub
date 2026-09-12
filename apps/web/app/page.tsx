@@ -26,6 +26,7 @@ import {
   Sparkles,
   Users,
   Utensils,
+  WifiOff,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -192,6 +193,7 @@ const quickCreateOptions = [
 
 type DashboardPageProps = {
   memberId: string;
+  instanceId: string;
   firstName?: string;
   instanceName?: string;
   role: 'ADMIN' | 'MEMBER';
@@ -201,6 +203,7 @@ type DashboardPageProps = {
 
 export default function DashboardPage({
   memberId,
+  instanceId,
   firstName = 'Maxime',
   instanceName = 'Foyer Girard',
   role,
@@ -226,6 +229,7 @@ export default function DashboardPage({
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   function moduleEnabled(key: ModuleKey) {
     return modules?.find((module) => module.key === key)?.enabled ?? true;
@@ -311,6 +315,18 @@ export default function DashboardPage({
       })
       .catch(() => undefined);
     return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    function updateConnectionState() {
+      setIsOnline(navigator.onLine);
+    }
+    window.addEventListener('online', updateConnectionState);
+    window.addEventListener('offline', updateConnectionState);
+    return () => {
+      window.removeEventListener('online', updateConnectionState);
+      window.removeEventListener('offline', updateConnectionState);
+    };
   }, []);
 
   useEffect(() => {
@@ -549,6 +565,13 @@ export default function DashboardPage({
             ) : null}
           </header>
 
+          {!isOnline ? (
+            <output className="flex items-center justify-center gap-2 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
+              <WifiOff className="size-4" aria-hidden="true" />
+              Hors connexion · les courses restent disponibles
+            </output>
+          ) : null}
+
           <div className="mx-auto w-full max-w-[1180px] flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-10 md:pt-8">
             {activeView === 'settings' ? (
               <SettingsView
@@ -562,6 +585,9 @@ export default function DashboardPage({
               />
             ) : activeView === 'shopping' ? (
               <ShoppingView
+                currentMemberId={memberId}
+                currentMemberName={displayFirstName}
+                instanceId={instanceId}
                 csrfToken={csrfToken}
                 composerOpen={shoppingComposerOpen}
                 onComposerOpenChange={setShoppingComposerOpen}

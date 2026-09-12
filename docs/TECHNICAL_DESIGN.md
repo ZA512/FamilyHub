@@ -340,6 +340,12 @@ La première tranche offline porte sur Courses : ajout, modification, coche et d
 tâches suivent avec la même infrastructure. L'agenda et le planning des repas sont ensuite
 mis en lecture seule offline.
 
+La tranche Courses conserve dans IndexedDB une copie bornée de la liste par couple
+instance/membre et une file de mutations idempotentes. L'interface applique immédiatement
+les ajouts et changements d'état, indique ce qui reste à synchroniser, puis rejoue la file au
+retour du réseau. Une déconnexion efface les données locales privées ; si elle survient hors
+ligne, la révocation de la session serveur est finalisée à la reconnexion.
+
 Pour Pages, une mutation avec `baseVersion` obsolète devient un conflit explicite ; le texte
 local et distant est conservé. Chat est append-only. Les champs simples de tâches/courses
 acceptent last-write-wins côté serveur tout en gardant le journal de synchronisation.
