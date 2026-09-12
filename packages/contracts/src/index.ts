@@ -218,7 +218,16 @@ export const searchQuerySchema = z.object({
 
 export type SearchResult = {
   id: string;
-  type: 'member' | 'shopping' | 'task' | 'agenda' | 'meal' | 'bookmark' | 'page' | 'collection';
+  type:
+    | 'member'
+    | 'shopping'
+    | 'task'
+    | 'agenda'
+    | 'meal'
+    | 'bookmark'
+    | 'page'
+    | 'collection'
+    | 'poll';
   title: string;
   description: string | null;
   view:
@@ -229,7 +238,8 @@ export type SearchResult = {
     | 'meals'
     | 'bookmarks'
     | 'pages'
-    | 'collections';
+    | 'collections'
+    | 'polls';
   updatedAt: string;
 };
 
@@ -252,11 +262,12 @@ export type HomeActivity = {
     | 'meal.planned'
     | 'bookmark.shared'
     | 'page.updated'
-    | 'collection.item.added';
+    | 'collection.item.added'
+    | 'poll.created';
   actorName: string;
   subject: string;
   occurredAt: string;
-  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks' | 'pages' | 'collections';
+  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks' | 'pages' | 'collections' | 'polls';
 };
 
 export type HomeSummary = {
@@ -1231,6 +1242,107 @@ export type FamilyCollectionItem = {
   preference: -1 | 0 | 1 | null;
   preferences: CollectionPreferenceSummary;
   comments: CollectionItemComment[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const pollVisibilitySchema = bookmarkVisibilitySchema;
+
+const pollFieldsSchema = z
+  .object({
+    question: z.string().trim().min(1).max(300),
+    description: optionalText(1500),
+    options: z.array(z.string().trim().min(1).max(160)).min(2).max(12),
+    allowMultiple: z.boolean().default(false),
+    anonymous: z.boolean().default(false),
+    endsAt: z.string().datetime({ offset: true }).nullable().optional(),
+    visibility: pollVisibilitySchema.default('ALL_MEMBERS'),
+    groupIds: z.array(z.string().uuid()).max(50).default([]),
+    memberIds: z.array(z.string().uuid()).max(100).default([]),
+  })
+  .superRefine((value, context) => {
+    const normalized = value.options.map((option) => option.toLocaleLowerCase('fr'));
+    if (new Set(normalized).size !== normalized.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['options'],
+        message: 'Chaque réponse doit être unique.',
+      });
+    }
+    if (value.endsAt && new Date(value.endsAt).getTime() <= Date.now()) {
+      context.addIssue({
+        code: 'custom',
+        path: ['endsAt'],
+        message: 'La date de fin doit être dans le futur.',
+      });
+    }
+    if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['groupIds'],
+        message: 'Sélectionnez au moins un groupe.',
+      });
+    }
+    if (value.visibility === 'SELECTED_USERS' && value.memberIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['memberIds'],
+        message: 'Sélectionnez au moins un membre.',
+      });
+    }
+  });
+
+export const pollCreateSchema = pollFieldsSchema.and(
+  z.object({ clientMutationId: z.string().uuid() }),
+);
+
+export const pollsQuerySchema = z
+  .object({
+    scope: z.enum(['mine', 'shared', 'all']).default('all'),
+    status: z.enum(['active', 'ended', 'all']).default('active'),
+    q: z.string().trim().max(100).optional(),
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(30),
+  })
+  .refine((value) => Boolean(value.before) === Boolean(value.beforeId), {
+    message: 'before et beforeId doivent être fournis ensemble.',
+  });
+
+export const pollVoteSchema = z.object({
+  optionIds: z.array(z.string().uuid()).min(1).max(12),
+});
+
+export type PollVisibility = z.infer<typeof pollVisibilitySchema>;
+
+export type FamilyPollOption = {
+  id: string;
+  label: string;
+  position: number;
+  voteCount: number;
+  percentage: number;
+  selectedByMe: boolean;
+  voterNames: string[] | null;
+};
+
+export type FamilyPoll = {
+  id: string;
+  question: string;
+  description: string | null;
+  allowMultiple: boolean;
+  anonymous: boolean;
+  endsAt: string | null;
+  ended: boolean;
+  visibility: PollVisibility;
+  groupIds: string[];
+  memberIds: string[];
+  options: FamilyPollOption[];
+  hasVoted: boolean;
+  voterCount: number;
+  createdBy: string;
+  createdByName: string;
+  editable: boolean;
   version: number;
   createdAt: string;
   updatedAt: string;

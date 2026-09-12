@@ -220,6 +220,37 @@ export async function registerSearchRoutes(app: FastifyInstance, pool: Pool) {
                  WHERE rag.resource_id = r.id AND gm.member_id = $3
                )
              )
+
+           UNION ALL
+
+           SELECT p.id, 'poll'::text AS type, p.question AS title,
+                  left(concat_ws(' · ', NULLIF(p.description, ''),
+                    (SELECT string_agg(po.label, ', ' ORDER BY po.position)
+                     FROM poll_option po WHERE po.poll_id = p.id)), 180) AS description,
+                  'polls'::text AS view, p.updated_at AS "updatedAt", 8 AS type_order
+           FROM poll p
+           JOIN resource r ON r.id = p.id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND concat_ws(' ', p.question, p.description, (
+               SELECT string_agg(po.label, ' ') FROM poll_option po WHERE po.poll_id = p.id
+             )) ILIKE $2
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'polls' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $3
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $3
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $3
+               )
+             )
          ) matches
          ORDER BY type_order, "updatedAt" DESC
          LIMIT 30`,

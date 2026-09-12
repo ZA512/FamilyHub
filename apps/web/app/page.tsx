@@ -8,6 +8,7 @@ import {
   Bell,
   Bookmark,
   CalendarDays,
+  ChartBar,
   CheckSquare2,
   CircleEllipsis,
   Home,
@@ -78,6 +79,9 @@ const CollectionsView = lazy(() =>
     default: module.CollectionsView,
   })),
 );
+const PollsView = lazy(() =>
+  import('./polls-view').then((module) => ({ default: module.PollsView })),
+);
 
 type ViewId =
   | 'home'
@@ -89,6 +93,7 @@ type ViewId =
   | 'bookmarks'
   | 'pages'
   | 'collections'
+  | 'polls'
   | 'members'
   | 'settings'
   | 'notifications'
@@ -117,6 +122,7 @@ const secondaryNavigation = [
   { id: 'bookmarks' as const, label: 'Bookmarks', icon: Bookmark },
   { id: 'pages' as const, label: 'Pages', icon: NotebookText },
   { id: 'collections' as const, label: 'Collections', icon: LibraryBig },
+  { id: 'polls' as const, label: 'Sondages', icon: ChartBar },
   { id: 'members' as const, label: 'Membres', icon: Users },
 ];
 
@@ -156,6 +162,7 @@ const quickCreateOptions = [
   { view: 'bookmarks' as const, label: 'Bookmark', icon: Bookmark },
   { view: 'pages' as const, label: 'Page', icon: NotebookText },
   { view: 'collections' as const, label: 'Collection', icon: LibraryBig },
+  { view: 'polls' as const, label: 'Sondage', icon: ChartBar },
 ];
 
 type DashboardPageProps = {
@@ -186,6 +193,7 @@ export default function DashboardPage({
   const [bookmarkComposerOpen, setBookmarkComposerOpen] = useState(false);
   const [pageComposerOpen, setPageComposerOpen] = useState(false);
   const [collectionComposerOpen, setCollectionComposerOpen] = useState(false);
+  const [pollComposerOpen, setPollComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
@@ -213,6 +221,7 @@ export default function DashboardPage({
     if (view === 'bookmarks') setBookmarkComposerOpen(true);
     if (view === 'pages') setPageComposerOpen(true);
     if (view === 'collections') setCollectionComposerOpen(true);
+    if (view === 'polls') setPollComposerOpen(true);
   }
 
   async function toggleModule(key: ModuleKey, enabled: boolean) {
@@ -630,6 +639,22 @@ export default function DashboardPage({
                   csrfToken={csrfToken}
                   composerOpen={collectionComposerOpen}
                   onComposerOpenChange={setCollectionComposerOpen}
+                />
+              </Suspense>
+            ) : activeView === 'polls' ? (
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground">
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                    Chargement des sondages…
+                  </div>
+                }
+              >
+                <PollsView
+                  currentMemberId={memberId}
+                  csrfToken={csrfToken}
+                  composerOpen={pollComposerOpen}
+                  onComposerOpenChange={setPollComposerOpen}
                 />
               </Suspense>
             ) : activeView === 'members' ? (

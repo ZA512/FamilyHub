@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Bell,
   Bookmark,
+  ChartBar,
   NotebookText,
   Check,
   CheckCheck,
@@ -233,6 +234,8 @@ function NotificationRow({
           <NotebookText className="size-4" aria-hidden="true" />
         ) : notification.moduleKey === 'collections' ? (
           <LibraryBig className="size-4" aria-hidden="true" />
+        ) : notification.moduleKey === 'polls' ? (
+          <ChartBar className="size-4" aria-hidden="true" />
         ) : (
           <Bell className="size-4" aria-hidden="true" />
         )}
