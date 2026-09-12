@@ -66,6 +66,12 @@ export const moduleUpdateSchema = z.object({ enabled: z.boolean() });
 export type ModuleKey = z.infer<typeof moduleKeySchema>;
 export type ModuleConfig = { key: ModuleKey; enabled: boolean };
 
+export const instanceSettingsUpdateSchema = z.object({
+  apiRateLimitPerMinute: z.number().int().min(300).max(10_000),
+});
+
+export type InstanceSettings = z.infer<typeof instanceSettingsUpdateSchema>;
+
 const groupFields = z.object({
   name: z.string().trim().min(1).max(80),
   description: z

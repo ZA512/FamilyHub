@@ -78,6 +78,11 @@ jointes du chat acceptent les images JPEG, PNG, GIF et WebP, les PDF, les fichie
 CSV et JSON, les archives ZIP et les formats bureautiques DOCX, XLSX et PPTX. Leur type
 binaire réel est contrôlé avant publication et leur empreinte SHA-256 est conservée en base.
 
+La limite générale des appels API est fixée à 1 200 requêtes par minute et par session.
+Un administrateur peut l'ajuster entre 300 et 10 000 dans **Paramètres → Limite des appels
+API**. Les ressources statiques et les contrôles de santé ne consomment pas ce quota. Les
+connexions, invitations et uploads gardent toujours leurs limites de sécurité plus strictes.
+
 Configuration complémentaire prévue : quota global par foyer, SMTP, Web Push, durée de
 session, niveau de logs, UID/GID lorsque le NAS utilise des bind mounts, et backend S3
 optionnel.

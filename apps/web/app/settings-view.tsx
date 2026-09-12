@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState, type SyntheticEvent } from 'react';
 import {
   Bookmark,
   CalendarDays,
   CheckSquare2,
   ContactRound,
   FileText,
+  Gauge,
   Lightbulb,
   ListChecks,
   LoaderCircle,
@@ -15,9 +16,14 @@ import {
   Vote,
 } from 'lucide-react';
 
-import type { ModuleConfig, ModuleKey } from '@familyhub/contracts';
+import type {
+  InstanceSettings,
+  ModuleConfig,
+  ModuleKey,
+} from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -25,6 +31,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ProfileSettings } from './profile-settings';
 
@@ -159,6 +167,8 @@ export function SettingsView({
         onLogout={onLogout}
       />
 
+      <RateLimitSettings role={role} csrfToken={csrfToken} />
+
       <div className="mb-4">
         <h2 className="text-xl font-semibold tracking-tight">Modules</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -257,5 +267,137 @@ export function SettingsView({
         </Card>
       )}
     </section>
+  );
+}
+
+function RateLimitSettings({
+  role,
+  csrfToken,
+}: {
+  role: 'ADMIN' | 'MEMBER';
+  csrfToken: string;
+}) {
+  const [limit, setLimit] = useState(1_200);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/v1/instance-settings', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error('Impossible de charger les limites de l’instance.');
+        return (await response.json()) as { settings: InstanceSettings };
+      })
+      .then((payload) => setLimit(payload.settings.apiRateLimitPerMinute))
+      .catch((reason: unknown) => {
+        if (controller.signal.aborted) return;
+        setError(
+          reason instanceof Error ? reason.message : 'Limites indisponibles.',
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, []);
+
+  async function save(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await fetch('/api/v1/instance-settings', {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ apiRateLimitPerMinute: limit }),
+      });
+      if (!response.ok)
+        throw new Error('La limite n’a pas pu être enregistrée.');
+      const payload = (await response.json()) as { settings: InstanceSettings };
+      setLimit(payload.settings.apiRateLimitPerMinute);
+      setMessage('Nouvelle limite active immédiatement.');
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : 'Enregistrement impossible.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="mb-8">
+      <CardHeader className="flex-row items-start gap-4">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+          <Gauge className="size-5" aria-hidden="true" />
+        </span>
+        <div>
+          <CardTitle className="text-base">Limite des appels API</CardTitle>
+          <CardDescription className="mt-1">
+            Protège l’instance sans ralentir la navigation du foyer. Les
+            connexions, invitations et fichiers conservent leurs propres
+            protections renforcées.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          onSubmit={save}
+        >
+          <div className="w-full max-w-xs space-y-2">
+            <Label htmlFor="api-rate-limit">
+              Requêtes par minute et par session
+            </Label>
+            <Input
+              id="api-rate-limit"
+              type="number"
+              min={300}
+              max={10_000}
+              step={100}
+              value={limit}
+              disabled={loading || role !== 'ADMIN'}
+              onChange={(event) => setLimit(Number(event.target.value))}
+            />
+          </div>
+          {role === 'ADMIN' ? (
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={
+                loading || saving || !csrfToken || limit < 300 || limit > 10_000
+              }
+            >
+              {saving ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : null}
+              Enregistrer
+            </Button>
+          ) : null}
+        </form>
+        {role !== 'ADMIN' ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Seul un administrateur peut modifier cette limite.
+          </p>
+        ) : null}
+        {message ? (
+          <output className="mt-3 block text-sm text-[#087f72]">
+            {message}
+          </output>
+        ) : null}
+        {error ? (
+          <p role="alert" className="mt-3 text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

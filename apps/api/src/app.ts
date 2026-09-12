@@ -11,7 +11,21 @@ import type { AppConfig } from '@familyhub/config';
 import { createPool } from '@familyhub/database';
 import Fastify from 'fastify';
 
+import { digest, SESSION_COOKIE } from './auth.js';
 import { registerRoutes } from './routes.js';
+import {
+  DEFAULT_API_RATE_LIMIT_PER_MINUTE,
+  readApiRateLimit,
+  type RuntimeSettings,
+} from './runtime-settings.js';
+
+const IP_RATE_LIMIT_PATHS = [
+  '/api/v1/setup',
+  '/api/v1/auth/login',
+  '/api/v1/invitations/inspect',
+  '/api/v1/invitations/accept',
+  '/api/v1/uploads/',
+];
 
 export async function buildApp(config: AppConfig) {
   const app = Fastify({
@@ -20,6 +34,9 @@ export async function buildApp(config: AppConfig) {
     bodyLimit: 1_048_576,
   });
   const pool = createPool(config.DATABASE_URL);
+  const runtimeSettings: RuntimeSettings = {
+    apiRateLimitPerMinute: DEFAULT_API_RATE_LIMIT_PER_MINUTE,
+  };
 
   app.decorate('config', config);
   app.decorateRequest('session', undefined);
@@ -29,7 +46,34 @@ export async function buildApp(config: AppConfig) {
 
   await app.register(cookie, { secret: config.SESSION_SECRET });
   await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(rateLimit, { global: true, max: 200, timeWindow: '1 minute' });
+  try {
+    const result = await pool.query<{ api_rate_limit: unknown }>(
+      `SELECT settings -> 'apiRateLimitPerMinute' AS api_rate_limit
+       FROM module_config WHERE module_key = 'settings' LIMIT 1`,
+    );
+    runtimeSettings.apiRateLimitPerMinute = readApiRateLimit(result.rows[0]?.api_rate_limit);
+  } catch (error) {
+    app.log.warn({ error }, 'Could not load runtime settings; safe defaults are active.');
+  }
+  await app.register(rateLimit, {
+    global: true,
+    max: () => runtimeSettings.apiRateLimitPerMinute,
+    timeWindow: '1 minute',
+    allowList: (request) =>
+      !request.url.startsWith('/api/v1/') || request.url.startsWith('/api/v1/health/'),
+    keyGenerator: (request) => {
+      if (IP_RATE_LIMIT_PATHS.some((path) => request.url.startsWith(path))) {
+        return `ip:${request.ip}`;
+      }
+      const sessionToken = request.cookies[SESSION_COOKIE];
+      return sessionToken ? `session:${digest(sessionToken)}` : `ip:${request.ip}`;
+    },
+    errorResponseBuilder: (_request, context) => ({
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: 'Trop de requêtes. Réessayez dans quelques instants.',
+      retryAfter: context.after,
+    }),
+  });
   await app.register(websocket, {
     options: { maxPayload: 65_536, perMessageDeflate: false },
   });
@@ -46,7 +90,7 @@ export async function buildApp(config: AppConfig) {
     }
   });
 
-  await registerRoutes(app, pool, config);
+  await registerRoutes(app, pool, config, runtimeSettings);
 
   const webRoot = resolve(import.meta.dirname, '../../web/dist');
   try {

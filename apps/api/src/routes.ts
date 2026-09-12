@@ -1,11 +1,13 @@
 import {
   essentialModuleKeys,
   functionalModuleKeys,
+  instanceSettingsUpdateSchema,
   loginRequestSchema,
   moduleKeySchema,
   moduleUpdateSchema,
   setupRequestSchema,
   type ModuleConfig,
+  type InstanceSettings,
 } from '@familyhub/contracts';
 import type { AppConfig } from '@familyhub/config';
 import type { FastifyInstance } from 'fastify';
@@ -42,8 +44,14 @@ import { registerPollRoutes } from './poll-routes.js';
 import { registerIdeaRoutes } from './idea-routes.js';
 import { registerContactRoutes } from './contact-routes.js';
 import { registerDocumentRoutes } from './document-routes.js';
+import type { RuntimeSettings } from './runtime-settings.js';
 
-export async function registerRoutes(app: FastifyInstance, pool: Pool, config: AppConfig) {
+export async function registerRoutes(
+  app: FastifyInstance,
+  pool: Pool,
+  config: AppConfig,
+  runtimeSettings: RuntimeSettings,
+) {
   const requireSession = createSessionGuard(pool);
   const dummyPasswordHash = await hashPassword('familyhub-password-verification-placeholder');
 
@@ -329,6 +337,66 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
           key: moduleKey.data,
           enabled: row.enabled,
         } satisfies ModuleConfig,
+      };
+    },
+  );
+
+  app.get('/api/v1/instance-settings', { preHandler: requireSession }, async () => ({
+    settings: {
+      apiRateLimitPerMinute: runtimeSettings.apiRateLimitPerMinute,
+    } satisfies InstanceSettings,
+  }));
+
+  app.patch(
+    '/api/v1/instance-settings',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      if (request.session?.role !== 'ADMIN') {
+        return reply.code(403).send({ error: 'ADMIN_REQUIRED' });
+      }
+      const parsed = instanceSettingsUpdateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'INVALID_REQUEST', details: parsed.error.flatten() });
+      }
+
+      const previousLimit = runtimeSettings.apiRateLimitPerMinute;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE module_config
+           SET settings = jsonb_set(settings, '{apiRateLimitPerMinute}', to_jsonb($1::integer)),
+               updated_at = now()
+           WHERE instance_id = $2 AND module_key = 'settings'`,
+          [parsed.data.apiRateLimitPerMinute, request.session.instanceId],
+        );
+        await client.query(
+          `INSERT INTO admin_audit_log
+            (instance_id, actor_member_id, action, target_type, target_id, details)
+           VALUES ($1, $2, 'instance.settings.updated', 'instance', $1, $3::jsonb)`,
+          [
+            request.session.instanceId,
+            request.session.id,
+            JSON.stringify({
+              apiRateLimitPerMinute: {
+                before: previousLimit,
+                after: parsed.data.apiRateLimitPerMinute,
+              },
+            }),
+          ],
+        );
+        await client.query('COMMIT');
+        runtimeSettings.apiRateLimitPerMinute = parsed.data.apiRateLimitPerMinute;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      return {
+        settings: {
+          apiRateLimitPerMinute: runtimeSettings.apiRateLimitPerMinute,
+        } satisfies InstanceSettings,
       };
     },
   );
