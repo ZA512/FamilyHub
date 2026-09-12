@@ -229,7 +229,8 @@ export type SearchResult = {
     | 'collection'
     | 'poll'
     | 'idea'
-    | 'contact';
+    | 'contact'
+    | 'document';
   title: string;
   description: string | null;
   view:
@@ -243,7 +244,8 @@ export type SearchResult = {
     | 'collections'
     | 'polls'
     | 'ideas'
-    | 'contacts';
+    | 'contacts'
+    | 'documents';
   updatedAt: string;
 };
 
@@ -269,7 +271,8 @@ export type HomeActivity = {
     | 'collection.item.added'
     | 'poll.created'
     | 'idea.created'
-    | 'contact.created';
+    | 'contact.created'
+    | 'document.created';
   actorName: string;
   subject: string;
   occurredAt: string;
@@ -282,7 +285,8 @@ export type HomeActivity = {
     | 'collections'
     | 'polls'
     | 'ideas'
-    | 'contacts';
+    | 'contacts'
+    | 'documents';
 };
 
 export type HomeSummary = {
@@ -1573,6 +1577,67 @@ export type FamilyContact = {
   visibility: ContactVisibility;
   groupIds: string[];
   memberIds: string[];
+  createdBy: string;
+  createdByName: string;
+  editable: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const documentVisibilitySchema = bookmarkVisibilitySchema;
+
+const documentFieldsSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    category: z.string().trim().min(1).max(80),
+    comment: optionalText(2000),
+    tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+    visibility: documentVisibilitySchema.default('ALL_MEMBERS'),
+    groupIds: z.array(z.string().uuid()).max(50).default([]),
+    memberIds: z.array(z.string().uuid()).max(100).default([]),
+  })
+  .superRefine((value, context) => {
+    if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
+      context.addIssue({ code: 'custom', path: ['groupIds'], message: 'Sélectionnez au moins un groupe.' });
+    }
+    if (value.visibility === 'SELECTED_USERS' && value.memberIds.length === 0) {
+      context.addIssue({ code: 'custom', path: ['memberIds'], message: 'Sélectionnez au moins un membre.' });
+    }
+  });
+
+export const documentCreateSchema = documentFieldsSchema.and(
+  z.object({ attachmentId: z.string().uuid(), clientMutationId: z.string().uuid() }),
+);
+export const documentUpdateSchema = documentFieldsSchema.and(
+  z.object({ version: z.number().int().positive() }),
+);
+export const documentsQuerySchema = z
+  .object({
+    scope: z.enum(['mine', 'shared', 'all']).default('all'),
+    q: z.string().trim().max(100).optional(),
+    category: z.string().trim().max(80).optional(),
+    tag: z.string().trim().max(40).optional(),
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .refine((value) => Boolean(value.before) === Boolean(value.beforeId), {
+    message: 'before et beforeId doivent être fournis ensemble.',
+  });
+
+export type DocumentVisibility = z.infer<typeof documentVisibilitySchema>;
+
+export type FamilyDocument = {
+  id: string;
+  title: string;
+  category: string;
+  comment: string | null;
+  tags: string[];
+  visibility: DocumentVisibility;
+  groupIds: string[];
+  memberIds: string[];
+  attachment: ChatAttachment;
   createdBy: string;
   createdByName: string;
   editable: boolean;

@@ -4,6 +4,7 @@ import {
   Bookmark,
   ChartBar,
   ContactRound,
+  FileText,
   Lightbulb,
   NotebookText,
   Check,
@@ -242,6 +243,8 @@ function NotificationRow({
           <Lightbulb className="size-4" aria-hidden="true" />
         ) : notification.moduleKey === 'contacts' ? (
           <ContactRound className="size-4" aria-hidden="true" />
+        ) : notification.moduleKey === 'documents' ? (
+          <FileText className="size-4" aria-hidden="true" />
         ) : (
           <Bell className="size-4" aria-hidden="true" />
         )}

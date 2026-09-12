@@ -12,6 +12,7 @@ import {
   CheckSquare2,
   CircleEllipsis,
   ContactRound,
+  FileText,
   Home,
   LibraryBig,
   Lightbulb,
@@ -92,6 +93,11 @@ const ContactsView = lazy(() =>
     default: module.ContactsView,
   })),
 );
+const DocumentsView = lazy(() =>
+  import('./documents-view').then((module) => ({
+    default: module.DocumentsView,
+  })),
+);
 
 type ViewId =
   | 'home'
@@ -106,6 +112,7 @@ type ViewId =
   | 'polls'
   | 'ideas'
   | 'contacts'
+  | 'documents'
   | 'members'
   | 'settings'
   | 'notifications'
@@ -137,6 +144,7 @@ const secondaryNavigation = [
   { id: 'polls' as const, label: 'Sondages', icon: ChartBar },
   { id: 'ideas' as const, label: 'Boîte à idées', icon: Lightbulb },
   { id: 'contacts' as const, label: 'Contacts', icon: ContactRound },
+  { id: 'documents' as const, label: 'Documents', icon: FileText },
   { id: 'members' as const, label: 'Membres', icon: Users },
 ];
 
@@ -179,6 +187,7 @@ const quickCreateOptions = [
   { view: 'polls' as const, label: 'Sondage', icon: ChartBar },
   { view: 'ideas' as const, label: 'Idée', icon: Lightbulb },
   { view: 'contacts' as const, label: 'Contact', icon: ContactRound },
+  { view: 'documents' as const, label: 'Document', icon: FileText },
 ];
 
 type DashboardPageProps = {
@@ -212,6 +221,7 @@ export default function DashboardPage({
   const [pollComposerOpen, setPollComposerOpen] = useState(false);
   const [ideaComposerOpen, setIdeaComposerOpen] = useState(false);
   const [contactComposerOpen, setContactComposerOpen] = useState(false);
+  const [documentComposerOpen, setDocumentComposerOpen] = useState(false);
   const [activeView, setActiveView] = useState<ViewId>('home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
@@ -242,6 +252,7 @@ export default function DashboardPage({
     if (view === 'polls') setPollComposerOpen(true);
     if (view === 'ideas') setIdeaComposerOpen(true);
     if (view === 'contacts') setContactComposerOpen(true);
+    if (view === 'documents') setDocumentComposerOpen(true);
   }
 
   async function toggleModule(key: ModuleKey, enabled: boolean) {
@@ -708,6 +719,22 @@ export default function DashboardPage({
                   csrfToken={csrfToken}
                   composerOpen={contactComposerOpen}
                   onComposerOpenChange={setContactComposerOpen}
+                />
+              </Suspense>
+            ) : activeView === 'documents' ? (
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground">
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                    Chargement des documents…
+                  </div>
+                }
+              >
+                <DocumentsView
+                  currentMemberId={memberId}
+                  csrfToken={csrfToken}
+                  composerOpen={documentComposerOpen}
+                  onComposerOpenChange={setDocumentComposerOpen}
                 />
               </Suspense>
             ) : activeView === 'members' ? (

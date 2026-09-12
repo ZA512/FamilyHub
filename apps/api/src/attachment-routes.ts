@@ -27,7 +27,7 @@ const binaryTypes = new Set([
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ]);
 
-async function requireChatModule(
+async function requireFileModule(
   request: FastifyRequest,
   reply: FastifyReply,
   pool: Pool,
@@ -35,7 +35,8 @@ async function requireChatModule(
   if (!request.session) return false;
   const result = await pool.query(
     `SELECT 1 FROM module_config
-     WHERE instance_id = $1 AND module_key = 'chat' AND enabled = true`,
+     WHERE instance_id = $1 AND module_key IN ('chat', 'documents') AND enabled = true
+     LIMIT 1`,
     [request.session.instanceId],
   );
   if (!result.rowCount) {
@@ -67,8 +68,8 @@ async function detectMime(path: string, declaredMime: string): Promise<string | 
 export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool) {
   const requireSession = createSessionGuard(pool);
 
-  app.get('/api/v1/chat/uploads/config', { preHandler: requireSession }, async (request, reply) => {
-    if (!(await requireChatModule(request, reply, pool))) return;
+  app.get('/api/v1/uploads/config', { preHandler: requireSession }, async (request, reply) => {
+    if (!(await requireFileModule(request, reply, pool))) return;
     return {
       maxUploadBytes: request.server.config.MAX_UPLOAD_BYTES,
       maxAttachmentsPerMessage: 8,
@@ -76,13 +77,13 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
   });
 
   app.post(
-    '/api/v1/chat/uploads/init',
+    '/api/v1/uploads/init',
     {
       preHandler: [requireSession, requireCsrf],
       config: { rateLimit: { max: 30, timeWindow: '1 hour' } },
     },
     async (request, reply) => {
-      if (!(await requireChatModule(request, reply, pool))) return;
+      if (!(await requireFileModule(request, reply, pool))) return;
       const parsed = uploadInitSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
       if (parsed.data.size > request.server.config.MAX_UPLOAD_BYTES) {
@@ -117,14 +118,14 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
   );
 
   app.put(
-    '/api/v1/chat/uploads/:id/content',
+    '/api/v1/uploads/:id/content',
     {
       bodyLimit: 1_073_742_848,
       preHandler: [requireSession, requireCsrf],
       config: { rateLimit: { max: 60, timeWindow: '1 hour' } },
     },
     async (request, reply) => {
-      if (!(await requireChatModule(request, reply, pool))) return;
+      if (!(await requireFileModule(request, reply, pool))) return;
       const id = idSchema.safeParse((request.params as { id?: string }).id);
       if (!id.success || !(request.body instanceof Readable)) {
         return reply.code(400).send({ error: 'INVALID_UPLOAD' });
@@ -194,10 +195,10 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
   );
 
   app.post(
-    '/api/v1/chat/uploads/:id/complete',
+    '/api/v1/uploads/:id/complete',
     { preHandler: [requireSession, requireCsrf] },
     async (request, reply) => {
-      if (!(await requireChatModule(request, reply, pool))) return;
+      if (!(await requireFileModule(request, reply, pool))) return;
       const id = idSchema.safeParse((request.params as { id?: string }).id);
       if (!id.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
       const result = await pool.query<{
@@ -227,7 +228,7 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
     '/api/v1/attachments/:id/content',
     { preHandler: requireSession },
     async (request, reply) => {
-      if (!(await requireChatModule(request, reply, pool))) return;
+      if (!(await requireFileModule(request, reply, pool))) return;
       const id = idSchema.safeParse((request.params as { id?: string }).id);
       if (!id.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
       const result = await pool.query<{
@@ -239,11 +240,36 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
         `SELECT a.original_filename AS filename, a.detected_mime AS "contentType",
                 a.actual_size AS size, a.storage_key AS "storageKey"
          FROM attachment a
-         JOIN message_attachment ma ON ma.attachment_id = a.id
-         JOIN message m ON m.id = ma.message_id
-         JOIN conversation_member cm ON cm.conversation_id = m.conversation_id
          WHERE a.id = $1 AND a.instance_id = $2 AND a.status = 'READY'
-           AND m.deleted_at IS NULL AND cm.member_id = $3`,
+           AND (
+             EXISTS (
+               SELECT 1 FROM message_attachment ma
+               JOIN message m ON m.id = ma.message_id
+               JOIN conversation_member cm ON cm.conversation_id = m.conversation_id
+               JOIN module_config mc ON mc.instance_id = a.instance_id
+                 AND mc.module_key = 'chat' AND mc.enabled = true
+               WHERE ma.attachment_id = a.id AND m.deleted_at IS NULL AND cm.member_id = $3
+             )
+             OR EXISTS (
+               SELECT 1 FROM document d
+               JOIN resource r ON r.id = d.id
+               JOIN module_config mc ON mc.instance_id = r.instance_id
+                 AND mc.module_key = 'documents' AND mc.enabled = true
+               WHERE d.attachment_id = a.id AND r.deleted_at IS NULL
+                 AND (
+                   r.visibility = 'ALL_MEMBERS' OR r.created_by = $3
+                   OR EXISTS (
+                     SELECT 1 FROM resource_acl_user rau
+                     WHERE rau.resource_id = r.id AND rau.member_id = $3
+                   )
+                   OR EXISTS (
+                     SELECT 1 FROM resource_acl_group rag
+                     JOIN group_membership gm ON gm.group_id = rag.group_id
+                     WHERE rag.resource_id = r.id AND gm.member_id = $3
+                   )
+                 )
+             )
+           )`,
         [id.data, request.session!.instanceId, request.session!.id],
       );
       const attachment = result.rows[0];

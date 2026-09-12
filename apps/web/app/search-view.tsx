@@ -11,6 +11,7 @@ import {
   CalendarDays,
   ChartBar,
   ContactRound,
+  FileText,
   Lightbulb,
   ShoppingBasket,
   Users,
@@ -38,7 +39,8 @@ type SearchViewProps = {
       | 'collections'
       | 'polls'
       | 'ideas'
-      | 'contacts',
+      | 'contacts'
+      | 'documents',
   ) => void;
 };
 
@@ -184,6 +186,8 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                     <Lightbulb className="size-4" aria-hidden="true" />
                   ) : result.type === 'contact' ? (
                     <ContactRound className="size-4" aria-hidden="true" />
+                  ) : result.type === 'document' ? (
+                    <FileText className="size-4" aria-hidden="true" />
                   ) : (
                     <ShoppingBasket className="size-4" aria-hidden="true" />
                   )}
@@ -212,7 +216,9 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                                         ? 'Idée'
                                         : result.type === 'contact'
                                           ? 'Contact'
-                                          : 'Courses'}
+                                          : result.type === 'document'
+                                            ? 'Document'
+                                            : 'Courses'}
                     </Badge>
                   </span>
                   {result.description ? (

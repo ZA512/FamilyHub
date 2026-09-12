@@ -158,7 +158,7 @@ export function ChatView({
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/v1/chat/uploads/config', { signal: controller.signal })
+    fetch('/api/v1/uploads/config', { signal: controller.signal })
       .then(async (response) =>
         response.ok
           ? ((await response.json()) as { maxUploadBytes: number })
@@ -279,7 +279,7 @@ export function ChatView({
       const attachmentIds = await Promise.all(
         selectedFiles.map(async (file, index) => {
           setUploadingLabel(`Envoi de ${index + 1}/${selectedFiles.length}…`);
-          const initialized = await fetch('/api/v1/chat/uploads/init', {
+          const initialized = await fetch('/api/v1/uploads/init', {
             method: 'POST',
             headers: {
               'content-type': 'application/json',
@@ -298,7 +298,7 @@ export function ChatView({
             uploadId: string;
           };
           const uploaded = await fetch(
-            `/api/v1/chat/uploads/${uploadId}/content`,
+            `/api/v1/uploads/${uploadId}/content`,
             {
               method: 'PUT',
               headers: {
@@ -311,7 +311,7 @@ export function ChatView({
           if (!uploaded.ok)
             throw new Error(`Le format de « ${file.name} » est refusé.`);
           const completed = await fetch(
-            `/api/v1/chat/uploads/${uploadId}/complete`,
+            `/api/v1/uploads/${uploadId}/complete`,
             {
               method: 'POST',
               headers: { 'x-csrf-token': csrfToken },
