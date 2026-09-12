@@ -228,7 +228,8 @@ export type SearchResult = {
     | 'page'
     | 'collection'
     | 'poll'
-    | 'idea';
+    | 'idea'
+    | 'contact';
   title: string;
   description: string | null;
   view:
@@ -241,7 +242,8 @@ export type SearchResult = {
     | 'pages'
     | 'collections'
     | 'polls'
-    | 'ideas';
+    | 'ideas'
+    | 'contacts';
   updatedAt: string;
 };
 
@@ -266,11 +268,21 @@ export type HomeActivity = {
     | 'page.updated'
     | 'collection.item.added'
     | 'poll.created'
-    | 'idea.created';
+    | 'idea.created'
+    | 'contact.created';
   actorName: string;
   subject: string;
   occurredAt: string;
-  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks' | 'pages' | 'collections' | 'polls' | 'ideas';
+  view:
+    | 'shopping'
+    | 'tasks'
+    | 'meals'
+    | 'bookmarks'
+    | 'pages'
+    | 'collections'
+    | 'polls'
+    | 'ideas'
+    | 'contacts';
 };
 
 export type HomeSummary = {
@@ -1485,6 +1497,82 @@ export type FamilyIdea = {
   myReaction: -1 | 1 | null;
   comments: IdeaComment[];
   conversion: IdeaConversion | null;
+  createdBy: string;
+  createdByName: string;
+  editable: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const contactVisibilitySchema = bookmarkVisibilitySchema;
+
+const contactEmailSchema = z
+  .string()
+  .trim()
+  .max(254)
+  .transform((value) => value.toLowerCase() || null)
+  .nullable()
+  .optional()
+  .refine((value) => value === null || value === undefined || z.string().email().safeParse(value).success, {
+    message: 'Adresse e-mail invalide.',
+  });
+
+const contactFieldsSchema = z
+  .object({
+    firstName: z.string().trim().min(1).max(80),
+    lastName: optionalText(80),
+    phone: optionalText(40),
+    email: contactEmailSchema,
+    address: optionalText(500),
+    notes: optionalText(2000),
+    tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+    visibility: contactVisibilitySchema.default('ALL_MEMBERS'),
+    groupIds: z.array(z.string().uuid()).max(50).default([]),
+    memberIds: z.array(z.string().uuid()).max(100).default([]),
+  })
+  .superRefine((value, context) => {
+    if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
+      context.addIssue({ code: 'custom', path: ['groupIds'], message: 'Sélectionnez au moins un groupe.' });
+    }
+    if (value.visibility === 'SELECTED_USERS' && value.memberIds.length === 0) {
+      context.addIssue({ code: 'custom', path: ['memberIds'], message: 'Sélectionnez au moins un membre.' });
+    }
+  });
+
+export const contactCreateSchema = contactFieldsSchema.and(
+  z.object({ clientMutationId: z.string().uuid() }),
+);
+export const contactUpdateSchema = contactFieldsSchema.and(
+  z.object({ version: z.number().int().positive() }),
+);
+export const contactsQuerySchema = z
+  .object({
+    scope: z.enum(['mine', 'shared', 'all']).default('all'),
+    q: z.string().trim().max(100).optional(),
+    tag: z.string().trim().max(40).optional(),
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .refine((value) => Boolean(value.before) === Boolean(value.beforeId), {
+    message: 'before et beforeId doivent être fournis ensemble.',
+  });
+
+export type ContactVisibility = z.infer<typeof contactVisibilitySchema>;
+
+export type FamilyContact = {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+  tags: string[];
+  visibility: ContactVisibility;
+  groupIds: string[];
+  memberIds: string[];
   createdBy: string;
   createdByName: string;
   editable: boolean;

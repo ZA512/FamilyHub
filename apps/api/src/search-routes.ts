@@ -281,6 +281,37 @@ export async function registerSearchRoutes(app: FastifyInstance, pool: Pool) {
                  WHERE rag.resource_id = r.id AND gm.member_id = $3
                )
              )
+
+           UNION ALL
+
+           SELECT c.id, 'contact'::text AS type,
+                  concat_ws(' ', c.first_name, c.last_name) AS title,
+                  concat_ws(' · ', NULLIF(c.phone, ''), NULLIF(c.email, ''), NULLIF(c.address, '')) AS description,
+                  'contacts'::text AS view, c.updated_at AS "updatedAt", 10 AS type_order
+           FROM contact c
+           JOIN resource r ON r.id = c.id
+           WHERE r.instance_id = $1 AND r.deleted_at IS NULL
+             AND concat_ws(' ', c.first_name, c.last_name, c.phone, c.email, c.address, c.notes, (
+               SELECT string_agg(t.name, ' ') FROM resource_tag rt
+               JOIN tag t ON t.id = rt.tag_id WHERE rt.resource_id = c.id
+             )) ILIKE $2
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = r.instance_id
+                 AND mc.module_key = 'contacts' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $3
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $3
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $3
+               )
+             )
          ) matches
          ORDER BY type_order, "updatedAt" DESC
          LIMIT 30`,

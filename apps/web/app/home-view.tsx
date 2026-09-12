@@ -33,7 +33,8 @@ type HomeViewProps = {
       | 'pages'
       | 'collections'
       | 'polls'
-      | 'ideas',
+      | 'ideas'
+      | 'contacts',
   ) => void;
   onUnreadCountChange: (count: number) => void;
 };
@@ -245,7 +246,9 @@ function ActivitySection({
                                     ? 'a lancé un sondage'
                                     : item.type === 'idea.created'
                                       ? 'a proposé une idée'
-                                      : 'a ajouté un plat'}
+                                      : item.type === 'contact.created'
+                                        ? 'a partagé un contact'
+                                        : 'a ajouté un plat'}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                   {item.subject} · {formatRelativeDate(item.occurredAt)}

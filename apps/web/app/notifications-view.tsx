@@ -3,6 +3,7 @@ import {
   Bell,
   Bookmark,
   ChartBar,
+  ContactRound,
   Lightbulb,
   NotebookText,
   Check,
@@ -239,6 +240,8 @@ function NotificationRow({
           <ChartBar className="size-4" aria-hidden="true" />
         ) : notification.moduleKey === 'ideas' ? (
           <Lightbulb className="size-4" aria-hidden="true" />
+        ) : notification.moduleKey === 'contacts' ? (
+          <ContactRound className="size-4" aria-hidden="true" />
         ) : (
           <Bell className="size-4" aria-hidden="true" />
         )}

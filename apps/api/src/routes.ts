@@ -40,6 +40,7 @@ import { registerPageRoutes } from './page-routes.js';
 import { registerCollectionRoutes } from './collection-routes.js';
 import { registerPollRoutes } from './poll-routes.js';
 import { registerIdeaRoutes } from './idea-routes.js';
+import { registerContactRoutes } from './contact-routes.js';
 
 export async function registerRoutes(app: FastifyInstance, pool: Pool, config: AppConfig) {
   const requireSession = createSessionGuard(pool);
@@ -348,4 +349,5 @@ export async function registerRoutes(app: FastifyInstance, pool: Pool, config: A
   await registerCollectionRoutes(app, pool);
   await registerPollRoutes(app, pool);
   await registerIdeaRoutes(app, pool);
+  await registerContactRoutes(app, pool);
 }
