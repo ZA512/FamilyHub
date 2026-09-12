@@ -227,7 +227,8 @@ export type SearchResult = {
     | 'bookmark'
     | 'page'
     | 'collection'
-    | 'poll';
+    | 'poll'
+    | 'idea';
   title: string;
   description: string | null;
   view:
@@ -239,7 +240,8 @@ export type SearchResult = {
     | 'bookmarks'
     | 'pages'
     | 'collections'
-    | 'polls';
+    | 'polls'
+    | 'ideas';
   updatedAt: string;
 };
 
@@ -263,11 +265,12 @@ export type HomeActivity = {
     | 'bookmark.shared'
     | 'page.updated'
     | 'collection.item.added'
-    | 'poll.created';
+    | 'poll.created'
+    | 'idea.created';
   actorName: string;
   subject: string;
   occurredAt: string;
-  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks' | 'pages' | 'collections' | 'polls';
+  view: 'shopping' | 'tasks' | 'meals' | 'bookmarks' | 'pages' | 'collections' | 'polls' | 'ideas';
 };
 
 export type HomeSummary = {
@@ -1340,6 +1343,148 @@ export type FamilyPoll = {
   options: FamilyPollOption[];
   hasVoted: boolean;
   voterCount: number;
+  createdBy: string;
+  createdByName: string;
+  editable: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const ideaCategorySchema = z.enum([
+  'OUTING',
+  'MOVIE',
+  'PURCHASE',
+  'ACTIVITY',
+  'PROJECT',
+  'RESTAURANT',
+  'DESTINATION',
+  'GENERAL',
+]);
+export const ideaStatusSchema = z.enum(['PROPOSED', 'RETAINED', 'REJECTED', 'REALIZED']);
+export const ideaVisibilitySchema = bookmarkVisibilitySchema;
+
+const ideaFieldsSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    description: optionalText(2000),
+    category: ideaCategorySchema.default('GENERAL'),
+    visibility: ideaVisibilitySchema.default('ALL_MEMBERS'),
+    groupIds: z.array(z.string().uuid()).max(50).default([]),
+    memberIds: z.array(z.string().uuid()).max(100).default([]),
+  })
+  .superRefine((value, context) => {
+    if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['groupIds'],
+        message: 'Sélectionnez au moins un groupe.',
+      });
+    }
+    if (value.visibility === 'SELECTED_USERS' && value.memberIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['memberIds'],
+        message: 'Sélectionnez au moins un membre.',
+      });
+    }
+  });
+
+export const ideaCreateSchema = ideaFieldsSchema.and(
+  z.object({ clientMutationId: z.string().uuid() }),
+);
+
+export const ideasQuerySchema = z
+  .object({
+    scope: z.enum(['mine', 'shared', 'all']).default('all'),
+    status: z.union([ideaStatusSchema, z.literal('ALL')]).default('PROPOSED'),
+    category: ideaCategorySchema.optional(),
+    q: z.string().trim().max(100).optional(),
+    before: z.string().datetime({ offset: true }).optional(),
+    beforeId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(30),
+  })
+  .refine((value) => Boolean(value.before) === Boolean(value.beforeId), {
+    message: 'before et beforeId doivent être fournis ensemble.',
+  });
+
+export const ideaStatusUpdateSchema = z.object({
+  status: ideaStatusSchema,
+  version: z.number().int().positive(),
+});
+
+export const ideaReactionSchema = z.object({
+  value: z.union([z.literal(-1), z.literal(1), z.null()]),
+});
+
+export const ideaCommentCreateSchema = z.object({
+  body: z.string().trim().min(1).max(1000),
+  clientMutationId: z.string().uuid(),
+});
+
+const ideaConversionMutationSchema = z.object({ clientMutationId: z.string().uuid() });
+
+export const ideaConvertSchema = z
+  .discriminatedUnion('target', [
+    ideaConversionMutationSchema.extend({ target: z.literal('TASK') }),
+    ideaConversionMutationSchema.extend({
+      target: z.literal('EVENT'),
+      startsAt: z.string().datetime({ offset: true }),
+      endsAt: z.string().datetime({ offset: true }),
+    }),
+    ideaConversionMutationSchema.extend({
+      target: z.literal('COLLECTION_ITEM'),
+      collectionId: z.string().uuid(),
+    }),
+  ])
+  .superRefine((value, context) => {
+    if (
+      value.target === 'EVENT' &&
+      new Date(value.endsAt).getTime() <= new Date(value.startsAt).getTime()
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'La fin doit suivre le début.',
+        path: ['endsAt'],
+      });
+    }
+  });
+
+export type IdeaCategory = z.infer<typeof ideaCategorySchema>;
+export type IdeaStatus = z.infer<typeof ideaStatusSchema>;
+export type IdeaVisibility = z.infer<typeof ideaVisibilitySchema>;
+
+export type IdeaComment = {
+  id: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  editable: boolean;
+  createdAt: string;
+};
+
+export type IdeaConversion = {
+  id: string;
+  targetType: 'TASK' | 'EVENT' | 'COLLECTION_ITEM';
+  targetId: string;
+  convertedByName: string;
+  createdAt: string;
+};
+
+export type FamilyIdea = {
+  id: string;
+  title: string;
+  description: string | null;
+  category: IdeaCategory;
+  status: IdeaStatus;
+  visibility: IdeaVisibility;
+  groupIds: string[];
+  memberIds: string[];
+  positiveCount: number;
+  negativeCount: number;
+  myReaction: -1 | 1 | null;
+  comments: IdeaComment[];
+  conversion: IdeaConversion | null;
   createdBy: string;
   createdByName: string;
   editable: boolean;

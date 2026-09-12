@@ -10,6 +10,7 @@ import {
   CheckSquare2,
   CalendarDays,
   ChartBar,
+  Lightbulb,
   ShoppingBasket,
   Users,
   X,
@@ -34,7 +35,8 @@ type SearchViewProps = {
       | 'bookmarks'
       | 'pages'
       | 'collections'
-      | 'polls',
+      | 'polls'
+      | 'ideas',
   ) => void;
 };
 
@@ -176,6 +178,8 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                     <LibraryBig className="size-4" aria-hidden="true" />
                   ) : result.type === 'poll' ? (
                     <ChartBar className="size-4" aria-hidden="true" />
+                  ) : result.type === 'idea' ? (
+                    <Lightbulb className="size-4" aria-hidden="true" />
                   ) : (
                     <ShoppingBasket className="size-4" aria-hidden="true" />
                   )}
@@ -200,7 +204,9 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                                     ? 'Collection'
                                     : result.type === 'poll'
                                       ? 'Sondage'
-                                      : 'Courses'}
+                                      : result.type === 'idea'
+                                        ? 'Idée'
+                                        : 'Courses'}
                     </Badge>
                   </span>
                   {result.description ? (
