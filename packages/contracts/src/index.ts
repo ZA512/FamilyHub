@@ -78,6 +78,7 @@ export type StorageUsage = {
   reservedBytes: number;
   quotaBytes: number;
   attachmentCount: number;
+  filesystemFreeBytes: number | null;
 };
 
 const groupFields = z.object({
@@ -102,6 +103,15 @@ export const groupUpdateSchema = groupFields
 
 export type GroupCreate = z.infer<typeof groupCreateSchema>;
 export type GroupUpdate = z.infer<typeof groupUpdateSchema>;
+
+export const memberAdministrationUpdateSchema = z
+  .object({
+    role: z.enum(['ADMIN', 'MEMBER']).optional(),
+    status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  })
+  .refine((value) => value.role !== undefined || value.status !== undefined, {
+    message: 'Au moins un champ doit être modifié.',
+  });
 
 export type FamilyMember = {
   id: string;
@@ -779,6 +789,7 @@ export const chatMessagesQuerySchema = z
   });
 
 export const chatReactionUpdateSchema = z.object({ emoji: chatReactionSchema });
+export const conversationMuteUpdateSchema = z.object({ muted: z.boolean() });
 
 export type ConversationType = z.infer<typeof conversationTypeSchema>;
 export type ChatReaction = z.infer<typeof chatReactionSchema>;
@@ -798,6 +809,7 @@ export type ConversationSummary = {
   lastMessage: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
+  muted: boolean;
   createdAt: string;
 };
 

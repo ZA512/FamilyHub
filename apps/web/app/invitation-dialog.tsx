@@ -31,6 +31,7 @@ export function InvitationDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [inviteUrl, setInviteUrl] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
   const [copied, setCopied] = useState(false);
 
   function changeOpen(nextOpen: boolean) {
@@ -38,6 +39,7 @@ export function InvitationDialog({
     if (!nextOpen) {
       setError('');
       setInviteUrl('');
+      setEmailSent(false);
       setCopied(false);
     }
   }
@@ -64,6 +66,7 @@ export function InvitationDialog({
         error?: string;
         invitation?: PendingInvitation;
         inviteUrl?: string;
+        emailSent?: boolean;
       };
       if (!response.ok) {
         throw new Error(
@@ -77,6 +80,7 @@ export function InvitationDialog({
       }
       onCreated(payload.invitation);
       setInviteUrl(payload.inviteUrl);
+      setEmailSent(payload.emailSent === true);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Invitation impossible.',
@@ -114,7 +118,9 @@ export function InvitationDialog({
             </DialogTitle>
             <DialogDescription>
               {inviteUrl
-                ? 'Ce lien est valable sept jours et ne sera affiché qu’une fois.'
+                ? emailSent
+                  ? 'L’email a été envoyé. Le lien reste disponible ici pour le copier.'
+                  : 'Ce lien est valable sept jours et ne sera affiché qu’une fois.'
                 : 'Vous pourrez transmettre vous-même le lien généré.'}
             </DialogDescription>
           </DialogHeader>

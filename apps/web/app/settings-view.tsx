@@ -42,6 +42,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { parseBookmarkImport } from '@/lib/bookmark-import';
 import {
   NativeSelect,
   NativeSelectOption,
@@ -349,7 +350,7 @@ function BookmarkImport({ csrfToken }: { csrfToken: string }) {
     setError('');
     try {
       if (file.size > 5_242_880) throw new Error('Le fichier dépasse 5 Mio.');
-      const payload = JSON.parse(await file.text()) as unknown;
+      const payload = parseBookmarkImport(await file.text());
       const response = await fetch('/api/v1/imports/bookmarks', {
         method: 'POST',
         headers: {
@@ -360,7 +361,7 @@ function BookmarkImport({ csrfToken }: { csrfToken: string }) {
       });
       if (!response.ok)
         throw new Error(
-          'Le fichier ne correspond pas à un export bookmarks FamilyHub.',
+          'Les favoris n’ont pas pu être importés. Vérifiez le format du fichier.',
         );
       const result = (await response.json()) as {
         imported: number;
@@ -387,9 +388,8 @@ function BookmarkImport({ csrfToken }: { csrfToken: string }) {
         <div>
           <p className="text-sm font-medium">Importer des bookmarks</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Sélectionnez le fichier <code>bookmarks.json</code> d’une archive
-            FamilyHub. Les liens importés restent privés et les doublons sont
-            ignorés.
+            Sélectionnez un export HTML ou JSON de Chrome, Firefox, Edge, Safari
+            ou FamilyHub. Les liens restent privés et les doublons sont ignorés.
           </p>
         </div>
       </div>
@@ -397,7 +397,7 @@ function BookmarkImport({ csrfToken }: { csrfToken: string }) {
         <Input
           key={file?.name ?? 'empty'}
           type="file"
-          accept="application/json,.json"
+          accept="application/json,text/html,.json,.html,.htm"
           className="max-w-md"
           onChange={(event) => {
             setFile(event.target.files?.[0] ?? null);
@@ -1075,6 +1075,12 @@ function RateLimitSettings({
               <p className="mt-2 text-xs text-muted-foreground">
                 {formatStorageSize(usage.reservedBytes)} temporairement réservé
                 par des envois en cours.
+              </p>
+            ) : null}
+            {usage.filesystemFreeBytes !== null ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {formatStorageSize(usage.filesystemFreeBytes)} libres sur le
+                volume physique.
               </p>
             ) : null}
           </div>

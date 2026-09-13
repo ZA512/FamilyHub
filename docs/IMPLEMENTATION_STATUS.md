@@ -34,12 +34,20 @@ Les cinq phases recommandées sont couvertes :
 Les paramètres personnels couvrent désormais l’avatar, les coordonnées, le fuseau, la
 langue et la confidentialité du profil. La date de naissance maintient automatiquement un
 événement annuel dans l’agenda. L’administration affiche l’usage des fichiers et permet de
-régler le quota global du foyer.
+régler le quota global du foyer, ainsi que l’espace libre réel du volume. Elle permet aussi
+de gérer le rôle et l’activation des membres, avec protection du dernier administrateur,
+révocation des sessions concernées et annulation des invitations encore en attente.
+
+Chaque conversation peut être rendue silencieuse sans quitter le chat. L’import de favoris
+accepte désormais les exports HTML Netscape et les arborescences JSON des navigateurs, en
+plus des archives FamilyHub, avec normalisation et déduplication des liens.
+Un relais SMTP peut être configuré pour envoyer les invitations automatiquement, sans
+supprimer le parcours autonome par lien copiable si le relais est absent ou indisponible.
 
 ## Enrichissements restant hors critères globaux
 
 Le PRD contient aussi des extensions qui ne bloquent pas le MVP et pourront constituer une
-suite : import d'autres formats que les bookmarks JSON, interface entièrement traduite,
-SMTP, silence par conversation, fichiers attachés à tous les types d'objet, et backend S3.
+suite : interface entièrement traduite, fichiers attachés à tous les types d'objet et
+backend S3.
 Une matrice manuelle iPhone/Android et plusieurs reverse proxies NAS reste recommandée avant
 une version déclarée stable.

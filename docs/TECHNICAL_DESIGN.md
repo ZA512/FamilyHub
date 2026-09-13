@@ -260,8 +260,9 @@ POST   /auth/refresh
 GET    /me
 
 GET    /members                 POST /members/invitations
-PATCH  /members/:id             GET|POST /groups
-PATCH  /groups/:id              PUT|DELETE /groups/:id/members/:memberId
+PATCH  /members/:id             DELETE /members/invitations/:id
+GET|POST /groups                PATCH|DELETE /groups/:id
+PUT|DELETE /groups/:id/members/:memberId
 GET    /modules                 PATCH /modules/:key
 
 GET    /home                    GET /activity
@@ -271,6 +272,7 @@ GET    /push/config             POST|DELETE /push/subscriptions
 GET    /search?q=...
 
 GET|POST /conversations         GET|POST /conversations/:id/messages
+PATCH    /conversations/:id/mute
 POST     /messages/:id/reactions
 GET|POST /events                PATCH /events/:id
 PUT      /events/:id/response

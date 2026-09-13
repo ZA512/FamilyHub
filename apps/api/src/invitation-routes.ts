@@ -10,6 +10,7 @@ import {
 } from '@familyhub/contracts';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Pool } from 'pg';
+import { z } from 'zod';
 
 import {
   createSession,
@@ -19,6 +20,7 @@ import {
   setSessionCookie,
 } from './auth.js';
 import { hashPassword } from './password.js';
+import { sendInvitationEmail } from './mailer.js';
 
 type InvitationRow = {
   id: string;
@@ -29,6 +31,8 @@ type InvitationRow = {
   role: 'ADMIN' | 'MEMBER';
   expires_at: Date;
 };
+
+const invitationParamsSchema = z.object({ id: z.string().uuid() });
 
 function requireAdmin(role: 'ADMIN' | 'MEMBER' | undefined, reply: FastifyReply) {
   if (role !== 'ADMIN') {
@@ -86,6 +90,54 @@ export async function registerInvitationRoutes(
       ),
     };
   });
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/v1/members/invitations/:id',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      const denied = requireAdmin(request.session?.role, reply);
+      if (denied) return denied;
+
+      const params = invitationParamsSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const revoked = await client.query<{ email: string }>(
+          `UPDATE invite
+           SET revoked_at = now()
+           WHERE id = $1 AND instance_id = $2
+             AND consumed_at IS NULL AND revoked_at IS NULL
+           RETURNING email`,
+          [params.data.id, request.session?.instanceId],
+        );
+        const row = revoked.rows[0];
+        if (!row) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'INVITATION_NOT_FOUND' });
+        }
+        await client.query(
+          `INSERT INTO admin_audit_log
+             (instance_id, actor_member_id, action, target_type, target_id, details)
+           VALUES ($1, $2, 'invitation.revoked', 'invitation', $3, $4::jsonb)`,
+          [
+            request.session?.instanceId,
+            request.session?.id,
+            params.data.id,
+            JSON.stringify({ email: row.email }),
+          ],
+        );
+        await client.query('COMMIT');
+        return reply.code(204).send();
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
 
   app.post(
     '/api/v1/members/invitations',
@@ -162,6 +214,18 @@ export async function registerInvitationRoutes(
         );
         await client.query('COMMIT');
 
+        const inviteUrl = invitationUrl(config.FAMILYHUB_ORIGIN, token);
+        let emailSent = false;
+        try {
+          emailSent = await sendInvitationEmail(config, {
+            email: row.email,
+            instanceName: request.session!.instanceName,
+            inviteUrl,
+          });
+        } catch (error) {
+          request.log.warn({ error }, 'Invitation email delivery failed.');
+        }
+
         return reply.code(201).send({
           invitation: {
             id: row.id,
@@ -170,7 +234,8 @@ export async function registerInvitationRoutes(
             expiresAt: row.expires_at.toISOString(),
             createdAt: row.created_at.toISOString(),
           } satisfies PendingInvitation,
-          inviteUrl: invitationUrl(config.FAMILYHUB_ORIGIN, token),
+          inviteUrl,
+          emailSent,
         });
       } catch (error) {
         await client.query('ROLLBACK');

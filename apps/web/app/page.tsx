@@ -807,7 +807,11 @@ export default function DashboardPage({
                 />
               </Suspense>
             ) : activeView === 'members' ? (
-              <MembersView role={role} csrfToken={csrfToken} />
+              <MembersView
+                role={role}
+                currentMemberId={memberId}
+                csrfToken={csrfToken}
+              />
             ) : activeView === 'notifications' ? (
               <NotificationsView
                 csrfToken={csrfToken}

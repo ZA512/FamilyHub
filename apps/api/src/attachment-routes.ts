@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rename, rm } from 'node:fs/promises';
+import { mkdir, rename, rm, statfs } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -83,16 +83,27 @@ async function removeUploadFiles(request: FastifyRequest, storageKeys: string[])
   }
 }
 
+async function filesystemFreeBytes(directory: string): Promise<number | null> {
+  try {
+    await mkdir(directory, { recursive: true });
+    const statistics = await statfs(directory);
+    return statistics.bavail * statistics.bsize;
+  } catch {
+    return null;
+  }
+}
+
 export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool) {
   const requireSession = createSessionGuard(pool);
 
   app.get('/api/v1/storage/usage', { preHandler: requireSession }, async (request) => {
-    const [stored, usage] = await Promise.all([
+    const [stored, freeBytes, usage] = await Promise.all([
       pool.query<{ storageQuota: unknown }>(
         `SELECT settings -> 'storageQuotaBytes' AS "storageQuota"
          FROM module_config WHERE instance_id = $1 AND module_key = 'settings'`,
         [request.session?.instanceId],
       ),
+      filesystemFreeBytes(request.server.config.ATTACHMENTS_DIR),
       pool.query<{
         usedBytes: number;
         reservedBytes: number;
@@ -114,6 +125,7 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
         reservedBytes: usage.rows[0]?.reservedBytes ?? 0,
         attachmentCount: usage.rows[0]?.attachmentCount ?? 0,
         quotaBytes: readStorageQuota(stored.rows[0]?.storageQuota),
+        filesystemFreeBytes: freeBytes,
       } satisfies StorageUsage,
     };
   });
@@ -149,6 +161,13 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
           : request.server.config.MAX_UPLOAD_BYTES;
       if (parsed.data.size > uploadLimit) {
         return reply.code(413).send({ error: 'FILE_TOO_LARGE' });
+      }
+      const freeBytes = await filesystemFreeBytes(request.server.config.ATTACHMENTS_DIR);
+      if (freeBytes !== null && parsed.data.size > freeBytes) {
+        return reply.code(507).send({
+          error: 'FILESYSTEM_CAPACITY_EXCEEDED',
+          availableBytes: freeBytes,
+        });
       }
       const filename = cleanFilename(parsed.data.filename);
       if (!filename) return reply.code(400).send({ error: 'INVALID_FILENAME' });
@@ -313,6 +332,14 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
         await rm(temporaryPath, { force: true });
         await pool.query("UPDATE attachment SET status = 'PENDING' WHERE id = $1", [id.data]);
         const reason = error instanceof Error ? error.message : 'UPLOAD_FAILED';
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          error.code === 'ENOSPC'
+        ) {
+          return reply.code(507).send({ error: 'FILESYSTEM_CAPACITY_EXCEEDED' });
+        }
         if (reason === 'FILE_TOO_LARGE') return reply.code(413).send({ error: reason });
         if (reason === 'FILE_SIZE_MISMATCH' || reason === 'FILE_TYPE_NOT_ALLOWED') {
           return reply.code(400).send({ error: reason });

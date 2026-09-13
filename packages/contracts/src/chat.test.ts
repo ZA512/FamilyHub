@@ -4,6 +4,7 @@ import {
   chatMessageCreateSchema,
   chatMessagesQuerySchema,
   chatReactionUpdateSchema,
+  conversationMuteUpdateSchema,
   conversationCreateSchema,
 } from './index.js';
 
@@ -57,5 +58,10 @@ describe('chat contracts', () => {
     ).toBe(false);
     expect(chatReactionUpdateSchema.safeParse({ emoji: '❤️' }).success).toBe(true);
     expect(chatReactionUpdateSchema.safeParse({ emoji: '<script>' }).success).toBe(false);
+  });
+
+  it('requires an explicit conversation mute state', () => {
+    expect(conversationMuteUpdateSchema.parse({ muted: true })).toEqual({ muted: true });
+    expect(conversationMuteUpdateSchema.safeParse({ muted: 'yes' }).success).toBe(false);
   });
 });

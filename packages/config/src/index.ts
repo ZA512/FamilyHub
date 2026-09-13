@@ -8,6 +8,11 @@ const booleanFromString = z
 const optionalSecret = (minimum: number) =>
   z.preprocess((value) => (value === '' ? undefined : value), z.string().min(minimum).optional());
 
+const optionalPort = z.preprocess(
+  (value) => (value === '' || value === undefined ? 587 : value),
+  z.coerce.number().int().min(1).max(65_535),
+);
+
 const configSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -25,6 +30,12 @@ const configSchema = z
     VAPID_PUBLIC_KEY: optionalSecret(40),
     VAPID_PRIVATE_KEY: optionalSecret(20),
     VAPID_SUBJECT: optionalSecret(1),
+    SMTP_HOST: optionalSecret(1),
+    SMTP_PORT: optionalPort,
+    SMTP_SECURE: booleanFromString,
+    SMTP_USER: optionalSecret(1),
+    SMTP_PASSWORD: optionalSecret(1),
+    SMTP_FROM: optionalSecret(3),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
@@ -55,6 +66,29 @@ const configSchema = z
         code: z.ZodIssueCode.custom,
         message: 'VAPID_SUBJECT doit être une URL HTTPS ou mailto: valide.',
         path: ['VAPID_SUBJECT'],
+      });
+    }
+
+    const smtpAuthValues = [config.SMTP_USER, config.SMTP_PASSWORD];
+    if (smtpAuthValues.some(Boolean) && !smtpAuthValues.every(Boolean)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SMTP_USER et SMTP_PASSWORD doivent être fournis ensemble.',
+        path: ['SMTP_USER'],
+      });
+    }
+    if ((config.SMTP_USER || config.SMTP_PASSWORD || config.SMTP_FROM) && !config.SMTP_HOST) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SMTP_HOST est requis lorsque SMTP est configuré.',
+        path: ['SMTP_HOST'],
+      });
+    }
+    if (config.SMTP_HOST && (!config.SMTP_FROM || !config.SMTP_FROM.includes('@'))) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SMTP_FROM doit contenir une adresse email.',
+        path: ['SMTP_FROM'],
       });
     }
 

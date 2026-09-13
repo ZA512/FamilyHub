@@ -47,4 +47,24 @@ describe('loadConfig', () => {
       /trois paramètres VAPID/,
     );
   });
+
+  it('valide une configuration SMTP complète', () => {
+    const config = loadConfig({
+      ...baseEnvironment,
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_PORT: '465',
+      SMTP_SECURE: 'true',
+      SMTP_USER: 'familyhub',
+      SMTP_PASSWORD: 'secret',
+      SMTP_FROM: 'FamilyHub <familyhub@example.com>',
+    });
+    expect(config.SMTP_PORT).toBe(465);
+    expect(config.SMTP_SECURE).toBe(true);
+  });
+
+  it('refuse une configuration SMTP partielle', () => {
+    expect(() =>
+      loadConfig({ ...baseEnvironment, SMTP_HOST: 'smtp.example.com' }),
+    ).toThrow(/SMTP_FROM/);
+  });
 });

@@ -8,6 +8,8 @@ import {
 } from 'react';
 import {
   ArrowLeft,
+  Bell,
+  BellOff,
   CornerUpLeft,
   Download,
   ExternalLink,
@@ -100,6 +102,7 @@ export function ChatView({
     null,
   );
   const [deleting, setDeleting] = useState(false);
+  const [muting, setMuting] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -485,6 +488,44 @@ export function ChatView({
     setSelectedId(conversationId);
   }
 
+  async function toggleMute() {
+    if (!selected || muting) return;
+    setMuting(true);
+    setError('');
+    try {
+      const response = await fetch(
+        `/api/v1/conversations/${selected.id}/mute`,
+        {
+          method: 'PATCH',
+          headers: {
+            'content-type': 'application/json',
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify({ muted: !selected.muted }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          'La préférence de notification n’a pas pu être modifiée.',
+        );
+      }
+      const payload = (await response.json()) as { muted: boolean };
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === selected.id
+            ? { ...conversation, muted: payload.muted }
+            : conversation,
+        ),
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : 'Modification impossible.',
+      );
+    } finally {
+      setMuting(false);
+    }
+  }
+
   return (
     <>
       <ConversationDialog
@@ -588,6 +629,12 @@ export function ChatView({
                           <span className="truncate font-medium">
                             {conversation.displayTitle}
                           </span>
+                          {conversation.muted ? (
+                            <BellOff
+                              className="size-3.5 shrink-0 text-muted-foreground"
+                              aria-label="Conversation silencieuse"
+                            />
+                          ) : null}
                           {conversation.unreadCount ? (
                             <Badge className="bg-[#087f72]">
                               {conversation.unreadCount}
@@ -637,6 +684,35 @@ export function ChatView({
                           .join(', ')}
                       </p>
                     </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto rounded-xl"
+                      disabled={muting}
+                      aria-label={
+                        selected.muted
+                          ? 'Réactiver les notifications de cette conversation'
+                          : 'Mettre cette conversation en silencieux'
+                      }
+                      title={
+                        selected.muted
+                          ? 'Réactiver les notifications'
+                          : 'Mettre en silencieux'
+                      }
+                      onClick={() => void toggleMute()}
+                    >
+                      {muting ? (
+                        <LoaderCircle
+                          className="animate-spin"
+                          aria-hidden="true"
+                        />
+                      ) : selected.muted ? (
+                        <BellOff aria-hidden="true" />
+                      ) : (
+                        <Bell aria-hidden="true" />
+                      )}
+                    </Button>
                   </header>
                   <div
                     ref={messageListRef}

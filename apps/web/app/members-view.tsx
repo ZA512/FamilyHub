@@ -5,7 +5,11 @@ import {
   Pencil,
   Plus,
   ShieldCheck,
+  Trash2,
+  UserCheck,
+  UserCog,
   UserRound,
+  UserX,
   UsersRound,
 } from 'lucide-react';
 
@@ -35,10 +39,15 @@ import { InvitationDialog } from './invitation-dialog';
 
 type MembersViewProps = {
   role: 'ADMIN' | 'MEMBER';
+  currentMemberId: string;
   csrfToken: string;
 };
 
-export function MembersView({ role, csrfToken }: MembersViewProps) {
+export function MembersView({
+  role,
+  currentMemberId,
+  csrfToken,
+}: MembersViewProps) {
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [groups, setGroups] = useState<FamilyGroup[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
@@ -48,6 +57,9 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
   const [editedGroup, setEditedGroup] = useState<FamilyGroup | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [busyMembership, setBusyMembership] = useState<string | null>(null);
+  const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
+  const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null);
+  const [busyGroupId, setBusyGroupId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -102,6 +114,76 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
       invitation,
       ...current.filter((candidate) => candidate.email !== invitation.email),
     ]);
+  }
+
+  async function revokeInvitation(invitation: PendingInvitation) {
+    if (!window.confirm(`Annuler l’invitation envoyée à ${invitation.email} ?`))
+      return;
+    setBusyInvitationId(invitation.id);
+    setError('');
+    try {
+      const response = await fetch(
+        `/api/v1/members/invitations/${invitation.id}`,
+        {
+          method: 'DELETE',
+          headers: { 'x-csrf-token': csrfToken },
+        },
+      );
+      if (!response.ok)
+        throw new Error('L’invitation n’a pas pu être annulée.');
+      setInvitations((current) =>
+        current.filter((item) => item.id !== invitation.id),
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : 'Annulation impossible.',
+      );
+    } finally {
+      setBusyInvitationId(null);
+    }
+  }
+
+  async function updateMember(
+    member: FamilyMember,
+    update: Partial<Pick<FamilyMember, 'role' | 'status'>>,
+  ) {
+    setBusyMemberId(member.id);
+    setError('');
+    try {
+      const response = await fetch(`/api/v1/members/${member.id}`, {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify(update),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        member?: Pick<FamilyMember, 'id' | 'role' | 'status'>;
+      };
+      if (response.status === 409 && payload.error === 'LAST_ACTIVE_ADMIN') {
+        throw new Error(
+          'Le foyer doit conserver au moins un administrateur actif.',
+        );
+      }
+      if (!response.ok || !payload.member) {
+        throw new Error('Le membre n’a pas pu être modifié.');
+      }
+      setMembers((current) =>
+        current.map((candidate) =>
+          candidate.id === payload.member?.id
+            ? { ...candidate, ...payload.member }
+            : candidate,
+        ),
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : 'Modification impossible.',
+      );
+    } finally {
+      setBusyMemberId(null);
+    }
   }
 
   function openNewGroup() {
@@ -161,6 +243,42 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
       );
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function deleteGroup(group: FamilyGroup) {
+    if (!window.confirm(`Supprimer le groupe « ${group.name} » ?`)) return;
+    setBusyGroupId(group.id);
+    setError('');
+    try {
+      const response = await fetch(`/api/v1/groups/${group.id}`, {
+        method: 'DELETE',
+        headers: { 'x-csrf-token': csrfToken },
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (response.status === 409 && payload.error === 'GROUP_IN_USE') {
+        throw new Error(
+          'Ce groupe protège encore des contenus. Modifiez leur visibilité avant de le supprimer.',
+        );
+      }
+      if (!response.ok) throw new Error('Le groupe n’a pas pu être supprimé.');
+      setGroups((current) =>
+        current.filter((candidate) => candidate.id !== group.id),
+      );
+      setMembers((current) =>
+        current.map((member) => ({
+          ...member,
+          groupIds: member.groupIds.filter((id) => id !== group.id),
+        })),
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : 'Suppression impossible.',
+      );
+    } finally {
+      setBusyGroupId(null);
     }
   }
 
@@ -375,6 +493,23 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
                             month: 'short',
                           }).format(new Date(invitation.expiresAt))}
                         </span>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          disabled={busyInvitationId !== null}
+                          aria-label={`Annuler l’invitation de ${invitation.email}`}
+                          onClick={() => void revokeInvitation(invitation)}
+                        >
+                          {busyInvitationId === invitation.id ? (
+                            <LoaderCircle
+                              className="animate-spin"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Trash2 aria-hidden="true" />
+                          )}
+                        </Button>
                       </div>
                     ))}
                   </CardContent>
@@ -382,7 +517,16 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
               ) : null}
               <div className="grid gap-3 lg:grid-cols-2">
                 {members.map((member) => (
-                  <MemberCard key={member.id} member={member} groups={groups} />
+                  <MemberCard
+                    key={member.id}
+                    member={member}
+                    groups={groups}
+                    canAdminister={
+                      role === 'ADMIN' && member.id !== currentMemberId
+                    }
+                    busy={busyMemberId === member.id}
+                    onUpdate={updateMember}
+                  />
                 ))}
               </div>
             </TabsContent>
@@ -413,16 +557,37 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
                         </p>
                       </div>
                       {role === 'ADMIN' && !group.isSystem ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Modifier le groupe ${group.name}`}
-                          onClick={() => openEditGroup(group)}
-                          className="rounded-xl"
-                        >
-                          <Pencil aria-hidden="true" />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={busyGroupId !== null}
+                            aria-label={`Modifier le groupe ${group.name}`}
+                            onClick={() => openEditGroup(group)}
+                            className="rounded-xl"
+                          >
+                            <Pencil aria-hidden="true" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={busyGroupId !== null}
+                            aria-label={`Supprimer le groupe ${group.name}`}
+                            onClick={() => void deleteGroup(group)}
+                            className="rounded-xl text-destructive hover:text-destructive"
+                          >
+                            {busyGroupId === group.id ? (
+                              <LoaderCircle
+                                className="animate-spin"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <Trash2 aria-hidden="true" />
+                            )}
+                          </Button>
+                        </div>
                       ) : null}
                     </CardHeader>
                     <CardContent>
@@ -483,9 +648,18 @@ export function MembersView({ role, csrfToken }: MembersViewProps) {
 function MemberCard({
   member,
   groups,
+  canAdminister,
+  busy,
+  onUpdate,
 }: {
   member: FamilyMember;
   groups: FamilyGroup[];
+  canAdminister: boolean;
+  busy: boolean;
+  onUpdate: (
+    member: FamilyMember,
+    update: Partial<Pick<FamilyMember, 'role' | 'status'>>,
+  ) => Promise<void>;
 }) {
   const displayName = [member.firstName, member.lastName]
     .filter(Boolean)
@@ -534,6 +708,54 @@ function MemberCard({
               </Badge>
             ))}
           </div>
+          {canAdminister ? (
+            <div className="mt-4 flex flex-wrap gap-2 border-t pt-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() =>
+                  void onUpdate(member, {
+                    role: member.role === 'ADMIN' ? 'MEMBER' : 'ADMIN',
+                  })
+                }
+              >
+                {busy ? (
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <UserCog aria-hidden="true" />
+                )}
+                {member.role === 'ADMIN' ? 'Retirer admin' : 'Rendre admin'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={member.status === 'ACTIVE' ? 'destructive' : 'outline'}
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    member.status === 'ACTIVE' &&
+                    !window.confirm(
+                      `Désactiver ${displayName} ? Ses sessions seront immédiatement fermées.`,
+                    )
+                  ) {
+                    return;
+                  }
+                  void onUpdate(member, {
+                    status: member.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
+                  });
+                }}
+              >
+                {member.status === 'ACTIVE' ? (
+                  <UserX aria-hidden="true" />
+                ) : (
+                  <UserCheck aria-hidden="true" />
+                )}
+                {member.status === 'ACTIVE' ? 'Désactiver' : 'Réactiver'}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </CardContent>
     </Card>

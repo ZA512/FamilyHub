@@ -1,6 +1,7 @@
 import {
   groupCreateSchema,
   groupUpdateSchema,
+  memberAdministrationUpdateSchema,
   type FamilyGroup,
   type FamilyMember,
 } from '@familyhub/contracts';
@@ -74,6 +75,108 @@ export async function registerMemberRoutes(app: FastifyInstance, pool: Pool) {
       ),
     };
   });
+
+  app.patch<{ Params: { id: string } }>(
+    '/api/v1/members/:id',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      const denied = requireAdmin(request.session?.role, reply);
+      if (denied) return denied;
+
+      const params = idParamsSchema.safeParse(request.params);
+      const parsed = memberAdministrationUpdateSchema.safeParse(request.body);
+      if (!params.success || !parsed.success) {
+        return reply.code(400).send({ error: 'INVALID_REQUEST' });
+      }
+
+      const instanceId = request.session?.instanceId;
+      const actorId = request.session?.id;
+      if (
+        params.data.id === actorId &&
+        ((parsed.data.role !== undefined && parsed.data.role !== 'ADMIN') ||
+          (parsed.data.status !== undefined && parsed.data.status !== 'ACTIVE'))
+      ) {
+        return reply.code(409).send({ error: 'SELF_ADMIN_CHANGE_FORBIDDEN' });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [instanceId]);
+
+        const target = await client.query<{
+          role: 'ADMIN' | 'MEMBER';
+          status: 'ACTIVE' | 'INACTIVE';
+        }>(
+          `SELECT role, status
+           FROM instance_member
+           WHERE id = $1 AND instance_id = $2
+           FOR UPDATE`,
+          [params.data.id, instanceId],
+        );
+        const current = target.rows[0];
+        if (!current) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'MEMBER_NOT_FOUND' });
+        }
+
+        const nextRole = parsed.data.role ?? current.role;
+        const nextStatus = parsed.data.status ?? current.status;
+        if (
+          current.role === 'ADMIN' &&
+          current.status === 'ACTIVE' &&
+          (nextRole !== 'ADMIN' || nextStatus !== 'ACTIVE')
+        ) {
+          const otherAdmins = await client.query<{ count: string }>(
+            `SELECT count(*)::text AS count
+             FROM instance_member
+             WHERE instance_id = $1 AND id <> $2
+               AND role = 'ADMIN' AND status = 'ACTIVE'`,
+            [instanceId, params.data.id],
+          );
+          if (Number(otherAdmins.rows[0]?.count ?? 0) === 0) {
+            await client.query('ROLLBACK');
+            return reply.code(409).send({ error: 'LAST_ACTIVE_ADMIN' });
+          }
+        }
+
+        await client.query(
+          `UPDATE instance_member
+           SET role = $1, status = $2
+           WHERE id = $3 AND instance_id = $4`,
+          [nextRole, nextStatus, params.data.id, instanceId],
+        );
+        if (
+          (current.status === 'ACTIVE' && nextStatus === 'INACTIVE') ||
+          nextRole !== current.role
+        ) {
+          await client.query('DELETE FROM session WHERE member_id = $1', [params.data.id]);
+        }
+        await client.query(
+          `INSERT INTO admin_audit_log
+             (instance_id, actor_member_id, action, target_type, target_id, details)
+           VALUES ($1, $2, 'member.updated', 'member', $3, $4::jsonb)`,
+          [
+            instanceId,
+            actorId,
+            params.data.id,
+            JSON.stringify({
+              before: current,
+              after: { role: nextRole, status: nextStatus },
+            }),
+          ],
+        );
+        await client.query('COMMIT');
+
+        return { member: { id: params.data.id, role: nextRole, status: nextStatus } };
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
 
   app.get('/api/v1/groups', { preHandler: requireSession }, async (request) => {
     const result = await pool.query<{
@@ -250,6 +353,64 @@ export async function registerMemberRoutes(app: FastifyInstance, pool: Pool) {
           return reply.code(409).send({ error: 'GROUP_NAME_ALREADY_EXISTS' });
         }
         throw error;
+      }
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/v1/groups/:id',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      const denied = requireAdmin(request.session?.role, reply);
+      if (denied) return denied;
+      const params = idParamsSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const group = await client.query<{ name: string; is_system: boolean }>(
+          `SELECT name, is_system FROM member_group
+           WHERE id = $1 AND instance_id = $2 FOR UPDATE`,
+          [params.data.id, request.session?.instanceId],
+        );
+        const row = group.rows[0];
+        if (!row) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'GROUP_NOT_FOUND' });
+        }
+        if (row.is_system) {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({ error: 'SYSTEM_GROUP_IMMUTABLE' });
+        }
+        const referenced = await client.query(
+          'SELECT 1 FROM resource_acl_group WHERE group_id = $1 LIMIT 1',
+          [params.data.id],
+        );
+        if (referenced.rowCount) {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({ error: 'GROUP_IN_USE' });
+        }
+
+        await client.query('DELETE FROM member_group WHERE id = $1', [params.data.id]);
+        await client.query(
+          `INSERT INTO admin_audit_log
+             (instance_id, actor_member_id, action, target_type, target_id, details)
+           VALUES ($1, $2, 'group.deleted', 'group', $3, $4::jsonb)`,
+          [
+            request.session?.instanceId,
+            request.session?.id,
+            params.data.id,
+            JSON.stringify({ name: row.name }),
+          ],
+        );
+        await client.query('COMMIT');
+        return reply.code(204).send();
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
     },
   );

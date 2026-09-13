@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { groupCreateSchema, groupUpdateSchema } from './index.js';
+import {
+  groupCreateSchema,
+  groupUpdateSchema,
+  memberAdministrationUpdateSchema,
+} from './index.js';
 
 describe('member group contracts', () => {
   it('normalise le nom et une description vide', () => {
@@ -22,5 +26,15 @@ describe('member group contracts', () => {
     expect(groupUpdateSchema.parse({ description: '  Groupe temporaire  ' })).toEqual({
       description: 'Groupe temporaire',
     });
+  });
+
+  it('valide les changements administratifs de membre', () => {
+    expect(memberAdministrationUpdateSchema.parse({ role: 'ADMIN' })).toEqual({
+      role: 'ADMIN',
+    });
+    expect(memberAdministrationUpdateSchema.parse({ status: 'INACTIVE' })).toEqual({
+      status: 'INACTIVE',
+    });
+    expect(memberAdministrationUpdateSchema.safeParse({}).success).toBe(false);
   });
 });

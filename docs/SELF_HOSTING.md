@@ -112,8 +112,27 @@ désactive ensuite Web Push sur chacun de ses appareils depuis **Paramètres →
 Une terminaison HTTPS est indispensable hors localhost. Les abonnements expirés sont
 supprimés automatiquement.
 
-Configuration complémentaire prévue : SMTP, UID/GID lorsque le NAS utilise des bind mounts,
-et backend S3 optionnel.
+### Envoi des invitations par email (facultatif)
+
+Sans SMTP, l’administrateur copie le lien d’invitation généré par FamilyHub. Pour envoyer
+également ce lien automatiquement, renseignez :
+
+```dotenv
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=familyhub
+SMTP_PASSWORD=...
+SMTP_FROM=FamilyHub <familyhub@example.com>
+```
+
+`SMTP_SECURE=true` convient généralement au port 465 ; le port 587 utilise STARTTLS avec
+`false`. `SMTP_USER` et `SMTP_PASSWORD` sont facultatifs pour un relais sans authentification,
+mais doivent être fournis ensemble. Un échec d’envoi n’annule pas l’invitation : son lien
+reste affiché pour être copié manuellement.
+
+Configuration complémentaire prévue : UID/GID lorsque le NAS utilise des bind mounts et
+backend S3 optionnel.
 
 ## Réseau et HTTPS
 
@@ -166,9 +185,10 @@ en plus de **Tout le foyer**. L'archive ZIP contient les données accessibles da
 ouverts : JSON, tâches et collections CSV, agenda ICS, bookmarks HTML, pages Markdown et
 fichiers originaux. Les exports sont limités à trois par heure et journalisés.
 
-L'import partiel accepte actuellement le fichier `bookmarks.json` extrait d'une archive
-FamilyHub. Les liens sont importés en privé avec leurs tags, les doublons sont ignorés et
-l'opération est transactionnelle et journalisée.
+L'import partiel accepte le fichier `bookmarks.json` extrait d'une archive FamilyHub, les
+exports HTML standard de Chrome, Firefox, Edge et Safari, ainsi que les arborescences JSON
+de navigateurs. Les liens sont importés en privé, les tags FamilyHub sont conservés, les
+doublons sont ignorés et l'opération est transactionnelle et journalisée.
 
 ## Mise à jour et retour arrière
 
@@ -190,5 +210,5 @@ compatible ; sinon la procédure documentée restaure la sauvegarde complète.
 - Endpoint de santé sans détail sensible et endpoint de diagnostic réservé aux admins.
 - Arrêt du conteneur si PostgreSQL est trop ancien, inaccessible ou si les migrations ont
   échoué.
-- Taille maximale contrôlée avant et pendant chaque écriture et quota global appliqué de
-  façon atomique ; le contrôle préventif de l'espace libre physique reste à ajouter.
+- Taille maximale contrôlée avant et pendant chaque écriture, quota global appliqué de
+  façon atomique et contrôle préventif de l'espace libre physique du volume.

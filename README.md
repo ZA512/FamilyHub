@@ -46,8 +46,8 @@ Consultez `docs/SELF_HOSTING.md` pour le contrat d'exploitation et
 Sauvegarde rapide : `./scripts/backup.sh /chemin/vers/les/sauvegardes` sous Linux/NAS ou
 `./scripts/backup.ps1 -OutputDirectory D:\Backups\FamilyHub` sous PowerShell. Les exports
 personnels et administrateur sont également disponibles dans l'écran Paramètres.
-Les notifications Web Push sont optionnelles ; leur activation VAPID est documentée dans
-le guide d'auto-hébergement.
+Les notifications Web Push et l’envoi SMTP des invitations sont optionnels ; leur
+configuration est documentée dans le guide d'auto-hébergement.
 
 ## Intégration continue et images
 

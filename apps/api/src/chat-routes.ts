@@ -3,6 +3,7 @@ import {
   chatMessagesQuerySchema,
   chatReactionUpdateSchema,
   conversationCreateSchema,
+  conversationMuteUpdateSchema,
   type ChatMessage,
   type ChatRealtimeEvent,
   type ConversationSummary,
@@ -71,6 +72,7 @@ async function loadConversations(
     lastMessage: string | null;
     lastMessageAt: Date | null;
     unreadCount: number;
+    muted: boolean;
     createdAt: Date;
   }>(
     `SELECT c.id, c.type, c.title,
@@ -100,7 +102,7 @@ async function loadConversations(
              WHERE unread.conversation_id = c.id AND unread.author_id <> $2
                AND unread.deleted_at IS NULL
                AND unread.created_at > COALESCE(mine.last_read_at, mine.joined_at)) AS "unreadCount",
-            c.created_at AS "createdAt"
+            mine.muted, c.created_at AS "createdAt"
      FROM conversation c
      JOIN conversation_member mine ON mine.conversation_id = c.id AND mine.member_id = $2
      LEFT JOIN LATERAL (
@@ -582,6 +584,32 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
         message,
       });
       return message;
+    },
+  );
+
+  app.patch(
+    '/api/v1/conversations/:id/mute',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      if (!(await requireChatModule(request, reply, pool))) return;
+      const id = idSchema.safeParse((request.params as { id?: string }).id);
+      const parsed = conversationMuteUpdateSchema.safeParse(request.body);
+      if (!id.success || !parsed.success) {
+        return reply.code(400).send({ error: 'INVALID_REQUEST' });
+      }
+      const result = await pool.query(
+        `UPDATE conversation_member cm
+         SET muted = $3
+         FROM conversation c
+         WHERE cm.conversation_id = $1 AND cm.member_id = $2
+           AND c.id = cm.conversation_id AND c.deleted_at IS NULL
+         RETURNING cm.member_id`,
+        [id.data, request.session!.id, parsed.data.muted],
+      );
+      if (!result.rowCount) {
+        return reply.code(404).send({ error: 'CONVERSATION_NOT_FOUND' });
+      }
+      return { muted: parsed.data.muted };
     },
   );
 
