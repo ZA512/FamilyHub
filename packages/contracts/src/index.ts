@@ -205,6 +205,33 @@ export type MemberProfile = z.infer<typeof profileUpdateSchema> & {
 
 export const notificationReadSchema = z.object({ read: z.boolean() });
 
+export const notificationPreferenceSchema = z.object({
+  level: z.enum(['ALL', 'IMPORTANT']),
+  mutedModules: z.array(z.enum(functionalModuleKeys)).max(functionalModuleKeys.length),
+  quietStart: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .nullable(),
+  quietEnd: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .nullable(),
+});
+
+export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
+
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url().startsWith('https://').max(2_048),
+  keys: z.object({
+    p256dh: z.string().min(20).max(512),
+    auth: z.string().min(8).max(256),
+  }),
+});
+
+export const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().url().startsWith('https://').max(2_048),
+});
+
 export type FamilyNotification = {
   id: string;
   type: string;
@@ -1524,9 +1551,12 @@ const contactEmailSchema = z
   .transform((value) => value.toLowerCase() || null)
   .nullable()
   .optional()
-  .refine((value) => value === null || value === undefined || z.string().email().safeParse(value).success, {
-    message: 'Adresse e-mail invalide.',
-  });
+  .refine(
+    (value) => value === null || value === undefined || z.string().email().safeParse(value).success,
+    {
+      message: 'Adresse e-mail invalide.',
+    },
+  );
 
 const contactFieldsSchema = z
   .object({
@@ -1543,10 +1573,18 @@ const contactFieldsSchema = z
   })
   .superRefine((value, context) => {
     if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
-      context.addIssue({ code: 'custom', path: ['groupIds'], message: 'Sélectionnez au moins un groupe.' });
+      context.addIssue({
+        code: 'custom',
+        path: ['groupIds'],
+        message: 'Sélectionnez au moins un groupe.',
+      });
     }
     if (value.visibility === 'SELECTED_USERS' && value.memberIds.length === 0) {
-      context.addIssue({ code: 'custom', path: ['memberIds'], message: 'Sélectionnez au moins un membre.' });
+      context.addIssue({
+        code: 'custom',
+        path: ['memberIds'],
+        message: 'Sélectionnez au moins un membre.',
+      });
     }
   });
 
@@ -1605,10 +1643,18 @@ const documentFieldsSchema = z
   })
   .superRefine((value, context) => {
     if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
-      context.addIssue({ code: 'custom', path: ['groupIds'], message: 'Sélectionnez au moins un groupe.' });
+      context.addIssue({
+        code: 'custom',
+        path: ['groupIds'],
+        message: 'Sélectionnez au moins un groupe.',
+      });
     }
     if (value.visibility === 'SELECTED_USERS' && value.memberIds.length === 0) {
-      context.addIssue({ code: 'custom', path: ['memberIds'], message: 'Sélectionnez au moins un membre.' });
+      context.addIssue({
+        code: 'custom',
+        path: ['memberIds'],
+        message: 'Sélectionnez au moins un membre.',
+      });
     }
   });
 

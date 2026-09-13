@@ -43,6 +43,12 @@ adresse derrière le reverse proxy HTTPS du NAS.
 Consultez `docs/SELF_HOSTING.md` pour le contrat d'exploitation et
 `docs/TECHNICAL_DESIGN.md` pour l'architecture validée.
 
+Sauvegarde rapide : `./scripts/backup.sh /chemin/vers/les/sauvegardes` sous Linux/NAS ou
+`./scripts/backup.ps1 -OutputDirectory D:\Backups\FamilyHub` sous PowerShell. Les exports
+personnels et administrateur sont également disponibles dans l'écran Paramètres.
+Les notifications Web Push sont optionnelles ; leur activation VAPID est documentée dans
+le guide d'auto-hébergement.
+
 ## Intégration continue et images
 
 Chaque push et pull request exécute les tests, le lint, le typage et le build de production.

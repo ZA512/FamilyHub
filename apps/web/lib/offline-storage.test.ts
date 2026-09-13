@@ -1,20 +1,41 @@
 import 'fake-indexeddb/auto';
 
-import type { ShoppingItem } from '@familyhub/contracts';
+import type {
+  AgendaEntry,
+  FamilyMeal,
+  FamilyMember,
+  MealPlanEntry,
+  ShoppingItem,
+} from '@familyhub/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   applyOptimisticShoppingUpdate,
+  applyOptimisticTaskCompletion,
   clearOfflineData,
   createOptimisticShoppingItem,
+  createOptimisticTask,
+  enqueueTaskCompletion,
+  enqueueTaskCreate,
   enqueueShoppingCreate,
   enqueueShoppingUpdate,
   offlineSessionKey,
   readOfflineSession,
+  readAgendaCache,
+  readMealPlanCache,
+  readMealsCache,
   readShoppingCache,
+  readTaskCache,
   saveOfflineSession,
   shoppingMutationCounts,
   synchronizeShoppingMutations,
+  synchronizeTaskMutations,
+  taskMutationCounts,
+  writeAgendaCache,
+  writeMealPlanCache,
+  writeMealsCache,
+  writeTaskCache,
+  type TaskCreatePayload,
 } from './offline-storage';
 
 const member = {
@@ -158,6 +179,174 @@ describe('offline shopping helpers', () => {
     expect(await readShoppingCache(sessionKey)).toEqual([
       expect.objectContaining({ id: serverId, purchasedBy: member.id }),
     ]);
+  });
+
+  it('rejoue les actions de tâche dans leur ordre local', async () => {
+    const sessionKey = offlineSessionKey(member);
+    const familyMember = {
+      id: member.id,
+      firstName: member.firstName,
+      lastName: null,
+      email: 'alice@example.test',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      joinedAt: new Date().toISOString(),
+      groupIds: [],
+    } satisfies FamilyMember;
+    const createPayload = {
+      title: 'Vider le lave-vaisselle',
+      description: null,
+      kind: 'OPEN_CHORE',
+      assigneeId: null,
+      claimable: true,
+      dueAt: null,
+      periodStartAt: null,
+      periodEndAt: null,
+      recurrenceIntervalDays: null,
+      frequencyHint: 'Une fois par jour',
+      reopenPolicy: 'IMMEDIATE',
+      reopenDelayHours: null,
+      visibility: 'ALL_MEMBERS',
+      clientMutationId: '01af2bd3-0d1d-4de7-816d-d86ab0322d4e',
+    } satisfies TaskCreatePayload;
+    const created = createOptimisticTask(createPayload, member, [familyMember]);
+    await writeTaskCache(sessionKey, [], [familyMember]);
+    await enqueueTaskCreate(sessionKey, created, createPayload);
+
+    const completionPayload = {
+      comment: 'Fait avant le petit déjeuner',
+      clientMutationId: '4e61b9c1-912e-49d8-aad6-5917d0388afe',
+    };
+    const completed = applyOptimisticTaskCompletion(
+      created,
+      completionPayload,
+      member,
+    );
+    await enqueueTaskCompletion(sessionKey, completed, completionPayload);
+
+    const calls: string[] = [];
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      calls.push(url);
+      const task = url.endsWith('/complete')
+        ? completed
+        : { ...created, version: 1 };
+      return new Response(JSON.stringify({ task }), {
+        status: url.endsWith('/tasks') ? 201 : 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    expect(await taskMutationCounts(sessionKey)).toEqual({
+      pending: 2,
+      conflicts: 0,
+    });
+    const result = await synchronizeTaskMutations({
+      sessionKey,
+      csrfToken: 'csrf',
+      fetcher,
+    });
+    expect(calls).toEqual([
+      '/api/v1/tasks',
+      `/api/v1/tasks/${created.id}/complete`,
+    ]);
+    expect(result).toMatchObject({ synchronized: 2, pending: 0, conflicts: 0 });
+    expect((await readTaskCache(sessionKey))?.tasks[0]).toMatchObject({
+      id: created.id,
+      status: 'OPEN',
+      completions: [expect.objectContaining({ completedBy: member.id })],
+    });
+  });
+
+  it('retrouve une période d’agenda depuis un cache plus large', async () => {
+    const sessionKey = offlineSessionKey(member);
+    const entry = {
+      id: 'event:1:2026-09-15',
+      resourceId: '41b16605-275e-4e1b-a345-8dd4d33c3590',
+      sourceType: 'event',
+      title: 'Dentiste',
+      description: null,
+      startAt: '2026-09-15T08:00:00.000Z',
+      endAt: '2026-09-15T09:00:00.000Z',
+      seriesStartAt: '2026-09-15T08:00:00.000Z',
+      seriesEndAt: '2026-09-15T09:00:00.000Z',
+      allDay: false,
+      location: null,
+      eventType: 'APPOINTMENT',
+      visibility: 'ALL_MEMBERS',
+      createdBy: member.id,
+      createdByName: member.firstName,
+      editable: true,
+      recurrence: 'NONE',
+      recurrenceInterval: 1,
+      recurrenceUntil: null,
+      reminderMinutes: 30,
+      participants: [],
+    } satisfies AgendaEntry;
+    await writeAgendaCache(
+      sessionKey,
+      '2026-09-01T00:00:00.000Z',
+      '2026-10-01T00:00:00.000Z',
+      [entry],
+    );
+    expect(
+      await readAgendaCache(
+        sessionKey,
+        '2026-09-14T00:00:00.000Z',
+        '2026-09-21T00:00:00.000Z',
+      ),
+    ).toEqual([entry]);
+  });
+
+  it('conserve les plats et le planning hebdomadaire en lecture locale', async () => {
+    const sessionKey = offlineSessionKey(member);
+    const meal = {
+      id: '2eb3ac09-d001-44ec-aebe-8a821e991f8c',
+      name: 'Curry',
+      description: null,
+      photoUrl: null,
+      referencePortions: 4,
+      ingredients: [],
+      instructions: null,
+      tags: ['rapide'],
+      comments: null,
+      visibility: 'ALL_MEMBERS',
+      createdBy: member.id,
+      createdByName: member.firstName,
+      editable: true,
+      preferences: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } satisfies FamilyMeal;
+    const plan = {
+      id: '06a3816c-2836-429f-bfa1-ff0585351fc8',
+      mealId: meal.id,
+      mealName: meal.name,
+      date: '2026-09-15',
+      slot: 'DINNER',
+      slotLabel: null,
+      portions: 4,
+      note: null,
+      createdBy: member.id,
+      createdByName: member.firstName,
+      editable: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } satisfies MealPlanEntry;
+    await writeMealsCache(sessionKey, [meal], true);
+    await writeMealPlanCache(sessionKey, '2026-09-14', '2026-09-20', [plan]);
+    expect(await readMealsCache(sessionKey)).toEqual({
+      meals: [meal],
+      shoppingEnabled: true,
+    });
+    expect(
+      await readMealPlanCache(sessionKey, '2026-09-14', '2026-09-20'),
+    ).toEqual([plan]);
   });
 
   it('efface les données privées à la déconnexion', async () => {

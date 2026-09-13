@@ -74,6 +74,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { readAgendaCache, writeAgendaCache } from '@/lib/offline-storage';
 
 const FamilyCalendar = FullCalendar as unknown as ComponentType<
   Record<string, unknown>
@@ -81,6 +82,7 @@ const FamilyCalendar = FullCalendar as unknown as ComponentType<
 
 type AgendaViewProps = {
   currentMemberId: string;
+  instanceId: string;
   csrfToken: string;
   composerOpen: boolean;
   onComposerOpenChange: (open: boolean) => void;
@@ -110,11 +112,13 @@ const responseLabels: Record<AgendaResponse, string> = {
 
 export function AgendaView({
   currentMemberId,
+  instanceId,
   csrfToken,
   composerOpen,
   onComposerOpenChange,
   onOpenTasks,
 }: AgendaViewProps) {
+  const sessionKey = `${instanceId}:${currentMemberId}`;
   const calendarRef = useRef<CalendarRef>(null);
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [selected, setSelected] = useState<AgendaEntry | null>(null);
@@ -156,8 +160,26 @@ export function AgendaView({
       if (!response.ok) throw new Error('Impossible de charger l’agenda.');
       const payload = (await response.json()) as { entries: AgendaEntry[] };
       success(payload.entries.map(toCalendarEvent));
+      await writeAgendaCache(
+        sessionKey,
+        info.startStr,
+        info.endStr,
+        payload.entries,
+      ).catch(() => undefined);
       setError('');
     } catch (reason) {
+      const cached = await readAgendaCache(
+        sessionKey,
+        info.startStr,
+        info.endStr,
+      ).catch(() => null);
+      if (cached) {
+        success(cached.map(toCalendarEvent));
+        setError(
+          'Agenda affiché depuis cet appareil · lecture seule hors connexion.',
+        );
+        return;
+      }
       const message =
         reason instanceof Error ? reason.message : 'Agenda indisponible.';
       setError(message);

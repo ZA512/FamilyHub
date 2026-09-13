@@ -13,6 +13,7 @@ import Fastify from 'fastify';
 
 import { digest, SESSION_COOKIE } from './auth.js';
 import { registerRoutes } from './routes.js';
+import { startPushDelivery } from './push-service.js';
 import {
   DEFAULT_API_RATE_LIMIT_PER_MINUTE,
   readApiRateLimit,
@@ -91,6 +92,7 @@ export async function buildApp(config: AppConfig) {
   });
 
   await registerRoutes(app, pool, config, runtimeSettings);
+  const stopPushDelivery = await startPushDelivery(app, pool, config);
 
   const webRoot = resolve(import.meta.dirname, '../../web/dist');
   try {
@@ -120,6 +122,7 @@ export async function buildApp(config: AppConfig) {
   }
 
   app.addHook('onClose', async () => {
+    await stopPushDelivery();
     await pool.end();
   });
 

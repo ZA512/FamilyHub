@@ -11,6 +11,7 @@ import {
   primaryKey,
   smallint,
   text,
+  time,
   timestamp,
   uniqueIndex,
   uuid,
@@ -264,6 +265,61 @@ export const notifications = pgTable(
   ],
 );
 
+export const notificationPreferences = pgTable(
+  'notification_preference',
+  {
+    memberId: uuid('member_id')
+      .primaryKey()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    level: text('level').notNull().default('ALL'),
+    mutedModules: text('muted_modules').array().notNull().default([]),
+    quietStart: time('quiet_start'),
+    quietEnd: time('quiet_end'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('notification_preference_instance_idx').on(table.instanceId)],
+);
+
+export const deviceSubscriptions = pgTable(
+  'device_subscription',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+    instanceId: uuid('instance_id')
+      .notNull()
+      .references(() => instances.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('device_subscription_endpoint_uq').on(table.endpoint),
+    index('device_subscription_member_idx').on(table.memberId),
+  ],
+);
+
+export const notificationDeliveries = pgTable(
+  'notification_delivery',
+  {
+    notificationId: uuid('notification_id')
+      .notNull()
+      .references(() => notifications.id, { onDelete: 'cascade' }),
+    subscriptionId: uuid('subscription_id')
+      .notNull()
+      .references(() => deviceSubscriptions.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.notificationId, table.subscriptionId] })],
+);
+
 export const shoppingItems = pgTable(
   'shopping_item',
   {
@@ -329,10 +385,7 @@ export const familyTasks = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('family_task_instance_mutation_uq').on(
-      table.instanceId,
-      table.clientMutationId,
-    ),
+    uniqueIndex('family_task_instance_mutation_uq').on(table.instanceId, table.clientMutationId),
     index('family_task_instance_state_idx').on(
       table.instanceId,
       table.status,
@@ -359,10 +412,7 @@ export const taskCompletions = pgTable(
     clientMutationId: uuid('client_mutation_id').notNull(),
   },
   (table) => [
-    uniqueIndex('task_completion_task_mutation_uq').on(
-      table.taskId,
-      table.clientMutationId,
-    ),
+    uniqueIndex('task_completion_task_mutation_uq').on(table.taskId, table.clientMutationId),
     index('task_completion_task_date_idx').on(table.taskId, table.completedAt),
   ],
 );
@@ -394,15 +444,8 @@ export const calendarEvents = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('calendar_event_instance_mutation_uq').on(
-      table.instanceId,
-      table.clientMutationId,
-    ),
-    index('calendar_event_instance_range_idx').on(
-      table.instanceId,
-      table.startAt,
-      table.endAt,
-    ),
+    uniqueIndex('calendar_event_instance_mutation_uq').on(table.instanceId, table.clientMutationId),
+    index('calendar_event_instance_range_idx').on(table.instanceId, table.startAt, table.endAt),
     index('calendar_event_instance_recurrence_idx').on(
       table.instanceId,
       table.recurrence,
@@ -468,10 +511,7 @@ export const ingredients = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('ingredient_instance_normalized_uq').on(
-      table.instanceId,
-      table.normalizedName,
-    ),
+    uniqueIndex('ingredient_instance_normalized_uq').on(table.instanceId, table.normalizedName),
   ],
 );
 
@@ -532,10 +572,7 @@ export const mealPlanEntries = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('meal_plan_instance_mutation_uq').on(
-      table.instanceId,
-      table.clientMutationId,
-    ),
+    uniqueIndex('meal_plan_instance_mutation_uq').on(table.instanceId, table.clientMutationId),
     index('meal_plan_instance_date_idx').on(table.instanceId, table.date, table.slot),
   ],
 );
@@ -559,10 +596,7 @@ export const conversations = pgTable(
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex('conversation_instance_mutation_uq').on(
-      table.instanceId,
-      table.clientMutationId,
-    ),
+    uniqueIndex('conversation_instance_mutation_uq').on(table.instanceId, table.clientMutationId),
     uniqueIndex('conversation_direct_key_uq')
       .on(table.instanceId, table.directKey)
       .where(sql`${table.directKey} IS NOT NULL AND ${table.deletedAt} IS NULL`),
@@ -609,11 +643,7 @@ export const messages = pgTable(
       table.conversationId,
       table.clientMutationId,
     ),
-    index('message_conversation_created_idx').on(
-      table.conversationId,
-      table.createdAt,
-      table.id,
-    ),
+    index('message_conversation_created_idx').on(table.conversationId, table.createdAt, table.id),
   ],
 );
 
@@ -656,15 +686,8 @@ export const attachments = pgTable(
   },
   (table) => [
     uniqueIndex('attachment_storage_key_uq').on(table.storageKey),
-    uniqueIndex('attachment_instance_mutation_uq').on(
-      table.instanceId,
-      table.clientMutationId,
-    ),
-    index('attachment_uploader_status_idx').on(
-      table.uploadedBy,
-      table.status,
-      table.createdAt,
-    ),
+    uniqueIndex('attachment_instance_mutation_uq').on(table.instanceId, table.clientMutationId),
+    index('attachment_uploader_status_idx').on(table.uploadedBy, table.status, table.createdAt),
   ],
 );
 

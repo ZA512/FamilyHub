@@ -83,9 +83,31 @@ Un administrateur peut l'ajuster entre 300 et 10 000 dans **Paramètres → Limi
 API**. Les ressources statiques et les contrôles de santé ne consomment pas ce quota. Les
 connexions, invitations et uploads gardent toujours leurs limites de sécurité plus strictes.
 
-Configuration complémentaire prévue : quota global par foyer, SMTP, Web Push, durée de
-session, niveau de logs, UID/GID lorsque le NAS utilise des bind mounts, et backend S3
-optionnel.
+### Notifications Web Push (facultatif)
+
+FamilyHub fonctionne sans service externe de notification. Pour recevoir les alertes PWA
+même lorsque l'application est fermée, générez une paire VAPID une seule fois :
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Ajoutez ensuite les deux clés et un contact administrateur dans `.env` :
+
+```dotenv
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:admin@example.com
+```
+
+Les trois valeurs sont obligatoires ensemble. La clé privée ne quitte jamais le serveur ;
+la clé publique est transmise au navigateur lors de l'abonnement. Chaque membre active ou
+désactive ensuite Web Push sur chacun de ses appareils depuis **Paramètres → Notifications**.
+Une terminaison HTTPS est indispensable hors localhost. Les abonnements expirés sont
+supprimés automatiquement.
+
+Configuration complémentaire prévue : quota global par foyer, SMTP, UID/GID lorsque le NAS
+utilise des bind mounts, et backend S3 optionnel.
 
 ## Réseau et HTTPS
 
@@ -104,13 +126,43 @@ Une sauvegarde cohérente comprend toujours :
 - le contenu du volume de pièces jointes ;
 - un petit manifeste indiquant version de FamilyHub, version du schéma et date UTC.
 
-Le dépôt fournira des scripts qui écrivent dans un dossier choisi par l'utilisateur, sans
-supprimer automatiquement les anciennes sauvegardes. La rétention relève du NAS ou d'un
-outil explicitement configuré.
+Le dépôt fournit des scripts qui écrivent dans un dossier choisi par l'utilisateur, sans
+supprimer automatiquement les anciennes sauvegardes. Chaque sauvegarde contient
+`database.dump`, `attachments.tar.gz` et un `manifest.json` avec version de schéma, révision
+de l'image et empreintes SHA-256. La rétention relève du NAS ou d'un outil explicitement
+configuré.
 
-La restauration se fait dans une instance arrêtée et vide, puis vérifie les hashes des
-pièces jointes et la version de schéma avant remise en ligne. Un test automatisé réalisera
-un cycle sauvegarde/restauration avec des données de démonstration.
+Sous Linux/NAS :
+
+```bash
+./scripts/backup.sh /volume1/backups/familyhub
+./scripts/restore.sh /volume1/backups/familyhub/familyhub-20260913T010000Z --confirm
+```
+
+Sous Windows/PowerShell :
+
+```powershell
+./scripts/backup.ps1 -OutputDirectory D:\Backups\FamilyHub
+./scripts/restore.ps1 -BackupDirectory D:\Backups\FamilyHub\familyhub-20260913T010000Z -ConfirmRestore
+```
+
+Si Compose est lancé avec `-p`, passez le nom du projet en second argument sous Linux ou
+avec `-ProjectName` sous PowerShell.
+
+La restauration vérifie d'abord les empreintes, arrête le service applicatif, remplace la
+base et le volume de pièces jointes, puis redémarre l'application. Elle exige toujours le
+drapeau explicite `--confirm` ou `-ConfirmRestore` car les données présentes sont remplacées.
+
+## Export depuis l'application
+
+Chaque membre peut télécharger **Mes données** depuis Paramètres. Un administrateur dispose
+en plus de **Tout le foyer**. L'archive ZIP contient les données accessibles dans des formats
+ouverts : JSON, tâches et collections CSV, agenda ICS, bookmarks HTML, pages Markdown et
+fichiers originaux. Les exports sont limités à trois par heure et journalisés.
+
+L'import partiel accepte actuellement le fichier `bookmarks.json` extrait d'une archive
+FamilyHub. Les liens sont importés en privé avec leurs tags, les doublons sont ignorés et
+l'opération est transactionnelle et journalisée.
 
 ## Mise à jour et retour arrière
 

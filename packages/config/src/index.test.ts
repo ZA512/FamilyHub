@@ -41,4 +41,10 @@ describe('loadConfig', () => {
       }),
     ).toThrow(/DATABASE_URL/);
   });
+
+  it('exige une configuration VAPID complète', () => {
+    expect(() => loadConfig({ ...baseEnvironment, VAPID_PUBLIC_KEY: 'a'.repeat(50) })).toThrow(
+      /trois paramètres VAPID/,
+    );
+  });
 });

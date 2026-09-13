@@ -29,6 +29,7 @@ import { registerInvitationRoutes } from './invitation-routes.js';
 import { registerMealRoutes } from './meal-routes.js';
 import { registerHomeRoutes } from './home-routes.js';
 import { registerAgendaRoutes } from './agenda-routes.js';
+import { registerAdminRoutes } from './admin-routes.js';
 import { registerNotificationRoutes } from './notification-routes.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { registerProfileRoutes } from './profile-routes.js';
@@ -42,8 +43,10 @@ import { registerPageRoutes } from './page-routes.js';
 import { registerCollectionRoutes } from './collection-routes.js';
 import { registerPollRoutes } from './poll-routes.js';
 import { registerIdeaRoutes } from './idea-routes.js';
+import { registerImportRoutes } from './import-routes.js';
 import { registerContactRoutes } from './contact-routes.js';
 import { registerDocumentRoutes } from './document-routes.js';
+import { registerExportRoutes } from './export-routes.js';
 import type { RuntimeSettings } from './runtime-settings.js';
 
 export async function registerRoutes(
@@ -402,11 +405,12 @@ export async function registerRoutes(
   );
 
   await registerAgendaRoutes(app, pool);
+  await registerAdminRoutes(app, pool);
   await registerHomeRoutes(app, pool);
   await registerInvitationRoutes(app, pool, config);
   await registerMealRoutes(app, pool);
   await registerMemberRoutes(app, pool);
-  await registerNotificationRoutes(app, pool);
+  await registerNotificationRoutes(app, pool, config);
   await registerProfileRoutes(app, pool);
   await registerSearchRoutes(app, pool);
   await registerShoppingRoutes(app, pool);
@@ -418,6 +422,8 @@ export async function registerRoutes(
   await registerCollectionRoutes(app, pool);
   await registerPollRoutes(app, pool);
   await registerIdeaRoutes(app, pool);
+  await registerImportRoutes(app, pool);
   await registerContactRoutes(app, pool);
   await registerDocumentRoutes(app, pool);
+  await registerExportRoutes(app, pool, config);
 }

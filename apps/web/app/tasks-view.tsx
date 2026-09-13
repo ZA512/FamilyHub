@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from 'react';
 import {
   CalendarClock,
   Check,
   CirclePlay,
+  CloudOff,
   History,
   LoaderCircle,
   Lock,
@@ -41,9 +49,27 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  applyOptimisticTaskCompletion,
+  applyOptimisticTaskReopen,
+  applyOptimisticTaskStatus,
+  createOptimisticTask,
+  discardTaskConflicts,
+  enqueueTaskCompletion,
+  enqueueTaskCreate,
+  enqueueTaskReopen,
+  enqueueTaskStatus,
+  readTaskCache,
+  synchronizeTaskMutations,
+  taskMutationCounts,
+  writeTaskCache,
+  type TaskCreatePayload,
+} from '@/lib/offline-storage';
 
 type TasksViewProps = {
   currentMemberId: string;
+  currentMemberName: string;
+  instanceId: string;
   role: 'ADMIN' | 'MEMBER';
   csrfToken: string;
   composerOpen: boolean;
@@ -58,17 +84,30 @@ const kindLabels: Record<TaskKind, string> = {
 
 export function TasksView({
   currentMemberId,
+  currentMemberName,
+  instanceId,
   role,
   csrfToken,
   composerOpen,
   onComposerOpenChange,
 }: TasksViewProps) {
+  const sessionKey = `${instanceId}:${currentMemberId}`;
+  const currentMember = useMemo(
+    () => ({ id: currentMemberId, firstName: currentMemberName }),
+    [currentMemberId, currentMemberName],
+  );
   const [tasks, setTasks] = useState<FamilyTask[]>([]);
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [serverAvailable, setServerAvailable] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [conflictCount, setConflictCount] = useState(0);
+  const synchronization = useRef<Promise<void> | null>(null);
   const [kind, setKind] = useState<TaskKind>('OPEN_CHORE');
   const [assigneeId, setAssigneeId] = useState('none');
   const [visibility, setVisibility] = useState<'PRIVATE' | 'ALL_MEMBERS'>(
@@ -79,42 +118,113 @@ export function TasksView({
     useState<TaskReopenPolicy>('IMMEDIATE');
   const [taskToComplete, setTaskToComplete] = useState<FamilyTask | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    Promise.all([
-      fetch('/api/v1/tasks', { signal: controller.signal }),
-      fetch('/api/v1/members', { signal: controller.signal }),
-    ])
-      .then(async ([tasksResponse, membersResponse]) => {
+  const refreshCounts = useCallback(async () => {
+    const counts = await taskMutationCounts(sessionKey);
+    setPendingCount(counts.pending);
+    setConflictCount(counts.conflicts);
+  }, [sessionKey]);
+
+  const synchronize = useCallback(() => {
+    if (synchronization.current) return synchronization.current;
+    if (!navigator.onLine || !csrfToken) return Promise.resolve();
+    const operation = (async () => {
+      setSyncing(true);
+      try {
+        const result = await synchronizeTaskMutations({
+          sessionKey,
+          csrfToken,
+        });
+        setPendingCount(result.pending);
+        setConflictCount(result.conflicts);
+        if (result.authenticationRequired) {
+          setError(
+            'Votre session doit être renouvelée avant la synchronisation.',
+          );
+          return;
+        }
+        const [tasksResponse, membersResponse] = await Promise.all([
+          fetch('/api/v1/tasks'),
+          fetch('/api/v1/members'),
+        ]);
         if (!tasksResponse.ok)
           throw new Error('Impossible de charger les tâches.');
         if (!membersResponse.ok)
           throw new Error('Impossible de charger les membres.');
-        return Promise.all([
+        const [tasksPayload, membersPayload] = await Promise.all([
           tasksResponse.json() as Promise<{ tasks: FamilyTask[] }>,
           membersResponse.json() as Promise<{ members: FamilyMember[] }>,
         ]);
-      })
-      .then(([tasksPayload, membersPayload]) => {
+        const activeMembers = membersPayload.members.filter(
+          (member) => member.status === 'ACTIVE',
+        );
         setTasks(tasksPayload.tasks);
-        setMembers(
-          membersPayload.members.filter((member) => member.status === 'ACTIVE'),
-        );
+        setMembers(activeMembers);
+        await writeTaskCache(sessionKey, tasksPayload.tasks, activeMembers);
+        setServerAvailable(true);
         setError('');
-      })
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : 'Les tâches sont indisponibles.',
-        );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
+      } catch {
+        setServerAvailable(false);
+        const cached = await readTaskCache(sessionKey);
+        if (cached) {
+          setTasks(cached.tasks);
+          setMembers(cached.members);
+        } else {
+          setError(
+            'Le serveur est indisponible et aucune tâche locale n’est encore enregistrée.',
+          );
+        }
+      } finally {
+        setLoading(false);
+        setSyncing(false);
+      }
+    })().finally(() => {
+      synchronization.current = null;
+    });
+    synchronization.current = operation;
+    return operation;
+  }, [csrfToken, sessionKey]);
+
+  useEffect(() => {
+    let active = true;
+    async function initialize() {
+      const cached = await readTaskCache(sessionKey).catch(() => null);
+      if (!active) return;
+      if (cached) {
+        setTasks(cached.tasks);
+        setMembers(cached.members);
+      }
+      await refreshCounts();
+      if (!active) return;
+      if (navigator.onLine && csrfToken) {
+        await synchronize();
+      } else {
+        setLoading(false);
+        if (!cached)
+          setError('Aucune tâche n’est encore disponible hors connexion.');
+      }
+    }
+    void initialize();
+    return () => {
+      active = false;
+    };
+  }, [csrfToken, refreshCounts, sessionKey, synchronize]);
+
+  useEffect(() => {
+    function handleOffline() {
+      setOnline(false);
+      setServerAvailable(false);
+    }
+    function handleOnline() {
+      setOnline(true);
+      void synchronize();
+    }
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [synchronize]);
 
   const openTasks = useMemo(
     () =>
@@ -163,42 +273,65 @@ export function TasksView({
         : assigneeId === 'none'
           ? null
           : assigneeId;
+    const clientMutationId = crypto.randomUUID();
+    const text = (name: string) => {
+      const value = data.get(name);
+      return typeof value === 'string' ? value.trim() : '';
+    };
+    const payload = {
+      title: text('title'),
+      description: text('description') || null,
+      kind,
+      assigneeId: effectiveAssignee,
+      claimable: kind === 'OPEN_CHORE' ? claimable : false,
+      dueAt: kind === 'SCHEDULED' ? toIso('dueAt') : null,
+      periodStartAt: kind === 'SEASONAL' ? toIso('periodStartAt') : null,
+      periodEndAt: kind === 'SEASONAL' ? toIso('periodEndAt') : null,
+      recurrenceIntervalDays:
+        kind === 'SCHEDULED' || kind === 'SEASONAL'
+          ? numberOrNull('recurrenceIntervalDays')
+          : null,
+      frequencyHint:
+        kind === 'OPEN_CHORE' ? text('frequencyHint') || null : null,
+      reopenPolicy: kind === 'OPEN_CHORE' ? reopenPolicy : 'NONE',
+      reopenDelayHours:
+        kind === 'OPEN_CHORE' && reopenPolicy === 'AFTER_DELAY'
+          ? numberOrNull('reopenDelayHours')
+          : null,
+      visibility,
+      clientMutationId,
+    } satisfies TaskCreatePayload;
+    const optimistic = createOptimisticTask(payload, currentMember, members);
 
     try {
-      const response = await fetch('/api/v1/tasks', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({
-          title: data.get('title'),
-          description: data.get('description'),
-          kind,
-          assigneeId: effectiveAssignee,
-          claimable: kind === 'OPEN_CHORE' ? claimable : false,
-          dueAt: kind === 'SCHEDULED' ? toIso('dueAt') : null,
-          periodStartAt: kind === 'SEASONAL' ? toIso('periodStartAt') : null,
-          periodEndAt: kind === 'SEASONAL' ? toIso('periodEndAt') : null,
-          recurrenceIntervalDays:
-            kind === 'SCHEDULED' || kind === 'SEASONAL'
-              ? numberOrNull('recurrenceIntervalDays')
-              : null,
-          frequencyHint:
-            kind === 'OPEN_CHORE' ? data.get('frequencyHint') : null,
-          reopenPolicy: kind === 'OPEN_CHORE' ? reopenPolicy : 'NONE',
-          reopenDelayHours:
-            kind === 'OPEN_CHORE' && reopenPolicy === 'AFTER_DELAY'
-              ? numberOrNull('reopenDelayHours')
-              : null,
-          visibility,
-          clientMutationId: crypto.randomUUID(),
-        }),
-      });
-      if (!response.ok)
+      let response: Response | null = null;
+      if (navigator.onLine && csrfToken && pendingCount === 0) {
+        try {
+          response = await fetch('/api/v1/tasks', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-csrf-token': csrfToken,
+            },
+            body: JSON.stringify(payload),
+          });
+        } catch {
+          setServerAvailable(false);
+        }
+      }
+      if (!response || response.status === 429 || response.status >= 500) {
+        await enqueueTaskCreate(sessionKey, optimistic, payload);
+        setTasks((current) => [optimistic, ...current]);
+        await refreshCounts();
+      } else if (!response.ok) {
         throw new Error(await taskError(response, 'Création impossible.'));
-      const payload = (await response.json()) as { task: FamilyTask };
-      setTasks((current) => [payload.task, ...current]);
+      } else {
+        const result = (await response.json()) as { task: FamilyTask };
+        const next = [result.task, ...tasks];
+        setTasks(next);
+        await writeTaskCache(sessionKey, next, members);
+        setServerAvailable(true);
+      }
       form.reset();
       resetComposer();
       onComposerOpenChange(false);
@@ -217,19 +350,41 @@ export function TasksView({
   ) {
     setBusyId(task.id);
     setError('');
+    const previous = tasks;
+    const optimistic = applyOptimisticTaskStatus(task, status, currentMember);
+    const optimisticTasks = tasks.map((candidate) =>
+      candidate.id === task.id ? optimistic : candidate,
+    );
+    setTasks(optimisticTasks);
+    await writeTaskCache(sessionKey, optimisticTasks, members);
     try {
-      const response = await fetch(`/api/v1/tasks/${task.id}`, {
-        method: 'PATCH',
-        headers: {
-          'content-type': 'application/json',
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({ status }),
-      });
-      if (!response.ok)
+      let response: Response | null = null;
+      if (navigator.onLine && csrfToken && pendingCount === 0) {
+        try {
+          response = await fetch(`/api/v1/tasks/${task.id}`, {
+            method: 'PATCH',
+            headers: {
+              'content-type': 'application/json',
+              'x-csrf-token': csrfToken,
+            },
+            body: JSON.stringify({ status }),
+          });
+        } catch {
+          setServerAvailable(false);
+        }
+      }
+      if (!response || response.status === 429 || response.status >= 500) {
+        await enqueueTaskStatus(sessionKey, optimistic, status);
+        await refreshCounts();
+      } else if (!response.ok) {
+        setTasks(previous);
+        await writeTaskCache(sessionKey, previous, members);
         throw new Error(await taskError(response, 'Modification impossible.'));
-      const payload = (await response.json()) as { task: FamilyTask };
-      replaceTask(payload.task);
+      } else {
+        const payload = (await response.json()) as { task: FamilyTask };
+        replaceTask(payload.task);
+        setServerAvailable(true);
+      }
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Modification impossible.',
@@ -245,25 +400,53 @@ export function TasksView({
     setBusyId(taskToComplete.id);
     setError('');
     const data = new FormData(event.currentTarget);
+    const comment = data.get('comment');
+    const completion = {
+      comment: typeof comment === 'string' ? comment.trim() || null : null,
+      clientMutationId: crypto.randomUUID(),
+    };
+    const previous = tasks;
+    const optimistic = applyOptimisticTaskCompletion(
+      taskToComplete,
+      completion,
+      currentMember,
+    );
+    const optimisticTasks = tasks.map((candidate) =>
+      candidate.id === taskToComplete.id ? optimistic : candidate,
+    );
+    setTasks(optimisticTasks);
+    await writeTaskCache(sessionKey, optimisticTasks, members);
     try {
-      const response = await fetch(
-        `/api/v1/tasks/${taskToComplete.id}/complete`,
-        {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-csrf-token': csrfToken,
-          },
-          body: JSON.stringify({
-            comment: data.get('comment'),
-            clientMutationId: crypto.randomUUID(),
-          }),
-        },
-      );
-      if (!response.ok)
+      let response: Response | null = null;
+      if (navigator.onLine && csrfToken && pendingCount === 0) {
+        try {
+          response = await fetch(
+            `/api/v1/tasks/${taskToComplete.id}/complete`,
+            {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'x-csrf-token': csrfToken,
+              },
+              body: JSON.stringify(completion),
+            },
+          );
+        } catch {
+          setServerAvailable(false);
+        }
+      }
+      if (!response || response.status === 429 || response.status >= 500) {
+        await enqueueTaskCompletion(sessionKey, optimistic, completion);
+        await refreshCounts();
+      } else if (!response.ok) {
+        setTasks(previous);
+        await writeTaskCache(sessionKey, previous, members);
         throw new Error(await taskError(response, 'Validation impossible.'));
-      const payload = (await response.json()) as { task: FamilyTask };
-      replaceTask(payload.task);
+      } else {
+        const payload = (await response.json()) as { task: FamilyTask };
+        replaceTask(payload.task);
+        setServerAvailable(true);
+      }
       setTaskToComplete(null);
     } catch (reason) {
       setError(
@@ -277,19 +460,41 @@ export function TasksView({
   async function reopenTask(task: FamilyTask) {
     setBusyId(task.id);
     setError('');
+    const previous = tasks;
+    const optimistic = applyOptimisticTaskReopen(task);
+    const optimisticTasks = tasks.map((candidate) =>
+      candidate.id === task.id ? optimistic : candidate,
+    );
+    setTasks(optimisticTasks);
+    await writeTaskCache(sessionKey, optimisticTasks, members);
     try {
-      const response = await fetch(`/api/v1/tasks/${task.id}/reopen`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-csrf-token': csrfToken,
-        },
-        body: '{}',
-      });
-      if (!response.ok)
+      let response: Response | null = null;
+      if (navigator.onLine && csrfToken && pendingCount === 0) {
+        try {
+          response = await fetch(`/api/v1/tasks/${task.id}/reopen`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-csrf-token': csrfToken,
+            },
+            body: '{}',
+          });
+        } catch {
+          setServerAvailable(false);
+        }
+      }
+      if (!response || response.status === 429 || response.status >= 500) {
+        await enqueueTaskReopen(sessionKey, optimistic);
+        await refreshCounts();
+      } else if (!response.ok) {
+        setTasks(previous);
+        await writeTaskCache(sessionKey, previous, members);
         throw new Error(await taskError(response, 'Réouverture impossible.'));
-      const payload = (await response.json()) as { task: FamilyTask };
-      replaceTask(payload.task);
+      } else {
+        const payload = (await response.json()) as { task: FamilyTask };
+        replaceTask(payload.task);
+        setServerAvailable(true);
+      }
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Réouverture impossible.',
@@ -300,10 +505,21 @@ export function TasksView({
   }
 
   function replaceTask(task: FamilyTask) {
-    setTasks((current) =>
-      current.map((candidate) => (candidate.id === task.id ? task : candidate)),
-    );
+    setTasks((current) => {
+      const next = current.map((candidate) =>
+        candidate.id === task.id ? task : candidate,
+      );
+      void writeTaskCache(sessionKey, next, members);
+      return next;
+    });
   }
+
+  async function acceptServerVersion() {
+    await discardTaskConflicts(sessionKey);
+    await synchronize();
+  }
+
+  const connectionProblem = !online || !serverAvailable;
 
   return (
     <>
@@ -509,7 +725,7 @@ export function TasksView({
             ) : null}
             <Button
               type="submit"
-              disabled={submitting || !csrfToken}
+              disabled={submitting}
               className="w-full bg-[#087f72] hover:bg-[#076d63]"
             >
               {submitting ? (
@@ -517,7 +733,7 @@ export function TasksView({
               ) : (
                 <Plus aria-hidden="true" />
               )}
-              Créer la tâche
+              {connectionProblem ? 'Créer hors connexion' : 'Créer la tâche'}
             </Button>
           </form>
         </DialogContent>
@@ -580,6 +796,50 @@ export function TasksView({
             <Plus aria-hidden="true" /> Ajouter
           </Button>
         </div>
+
+        {connectionProblem || pendingCount || conflictCount || syncing ? (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            {syncing ? (
+              <LoaderCircle
+                className="size-4 animate-spin"
+                aria-hidden="true"
+              />
+            ) : connectionProblem ? (
+              <CloudOff className="size-4" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="size-4" aria-hidden="true" />
+            )}
+            <p className="min-w-0 flex-1">
+              {syncing
+                ? 'Synchronisation des tâches…'
+                : conflictCount
+                  ? `${conflictCount} tâche${conflictCount > 1 ? 's' : ''} à résoudre.`
+                  : pendingCount
+                    ? `${pendingCount} action${pendingCount > 1 ? 's' : ''} sera synchronisée à la reconnexion.`
+                    : 'Tâches affichées depuis cet appareil. Vous pouvez continuer à agir.'}
+            </p>
+            {conflictCount ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void acceptServerVersion()}
+              >
+                Utiliser la version du serveur
+              </Button>
+            ) : online &&
+              csrfToken &&
+              !syncing &&
+              (pendingCount || !serverAvailable) ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void synchronize()}
+              >
+                {pendingCount ? 'Synchroniser' : 'Réessayer'}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
 
         {error && !composerOpen && !taskToComplete ? (
           <p

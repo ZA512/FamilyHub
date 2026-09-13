@@ -3,6 +3,7 @@
 | Document | Contenu |
 |---|---|
 | `PRD_FamilyHub_PWA.md` | besoins fonctionnels et critères d'acceptation |
+| `IMPLEMENTATION_STATUS.md` | couverture livrée et enrichissements restant après le MVP |
 | `TECHNICAL_DESIGN.md` | architecture, données, permissions, API et plan de tests |
 | `SELF_HOSTING.md` | installation, réseau, volumes, sauvegarde et mise à jour |
 | `DECISIONS.md` | registre des décisions structurantes |

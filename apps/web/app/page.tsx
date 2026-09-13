@@ -31,6 +31,12 @@ import {
 
 import { Button } from '@/components/ui/button';
 import {
+  applyTheme,
+  parsePersonalPreferences,
+  preferencesStorageKey,
+  type PersonalPreferences,
+} from '@/lib/personal-preferences';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -230,13 +236,25 @@ export default function DashboardPage({
   const [modulesError, setModulesError] = useState('');
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [personalPreferences, setPersonalPreferences] =
+    useState<PersonalPreferences>(() =>
+      parsePersonalPreferences(
+        localStorage.getItem(preferencesStorageKey(instanceId, memberId)),
+      ),
+    );
 
   function moduleEnabled(key: ModuleKey) {
     return modules?.find((module) => module.key === key)?.enabled ?? true;
   }
 
+  function moduleVisible(key: ModuleKey) {
+    return (
+      moduleEnabled(key) && !personalPreferences.hiddenModules.includes(key)
+    );
+  }
+
   const canCreate = quickCreateOptions.some((option) =>
-    moduleEnabled(option.view),
+    moduleVisible(option.view),
   );
   function navigate(view: ViewId) {
     setActiveView(view);
@@ -277,6 +295,22 @@ export default function DashboardPage({
         ) ?? [payload.module],
     );
   }
+
+  useEffect(() => {
+    const storageKey = preferencesStorageKey(instanceId, memberId);
+    localStorage.setItem(storageKey, JSON.stringify(personalPreferences));
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const refreshTheme = () =>
+      applyTheme(
+        personalPreferences.theme,
+        media.matches,
+        document.documentElement,
+      );
+    refreshTheme();
+    media.addEventListener('change', refreshTheme);
+    return () => media.removeEventListener('change', refreshTheme);
+  }, [instanceId, memberId, personalPreferences]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -383,7 +417,7 @@ export default function DashboardPage({
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2">
             {quickCreateOptions
-              .filter((item) => moduleEnabled(item.view))
+              .filter((item) => moduleVisible(item.view))
               .map((item) => (
                 <button
                   key={item.label}
@@ -425,7 +459,7 @@ export default function DashboardPage({
               <SidebarGroupContent>
                 <SidebarMenu>
                   {primaryNavigation
-                    .filter((item) => moduleEnabled(item.id))
+                    .filter((item) => moduleVisible(item.id))
                     .map((item) => (
                       <SidebarMenuItem key={item.label}>
                         <SidebarMenuButton
@@ -451,7 +485,9 @@ export default function DashboardPage({
               <SidebarGroupContent>
                 <SidebarMenu>
                   {secondaryNavigation
-                    .filter((item) => moduleEnabled(item.id))
+                    .filter(
+                      (item) => item.id === 'members' || moduleVisible(item.id),
+                    )
                     .map((item) => (
                       <SidebarMenuItem key={item.label}>
                         <SidebarMenuButton
@@ -568,7 +604,8 @@ export default function DashboardPage({
           {!isOnline ? (
             <output className="flex items-center justify-center gap-2 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
               <WifiOff className="size-4" aria-hidden="true" />
-              Hors connexion · les courses restent disponibles
+              Hors connexion · courses et tâches modifiables, agenda et repas
+              consultables
             </output>
           ) : null}
 
@@ -580,6 +617,8 @@ export default function DashboardPage({
                 loadError={modulesError}
                 csrfToken={csrfToken}
                 onToggle={toggleModule}
+                personalPreferences={personalPreferences}
+                onPersonalPreferencesChange={setPersonalPreferences}
                 onFirstNameChange={setDisplayFirstName}
                 onLogout={onLogout}
               />
@@ -603,6 +642,7 @@ export default function DashboardPage({
               >
                 <AgendaView
                   currentMemberId={memberId}
+                  instanceId={instanceId}
                   csrfToken={csrfToken}
                   composerOpen={agendaComposerOpen}
                   onComposerOpenChange={setAgendaComposerOpen}
@@ -612,6 +652,8 @@ export default function DashboardPage({
             ) : activeView === 'tasks' ? (
               <TasksView
                 currentMemberId={memberId}
+                currentMemberName={displayFirstName}
+                instanceId={instanceId}
                 role={role}
                 csrfToken={csrfToken}
                 composerOpen={taskComposerOpen}
@@ -628,6 +670,7 @@ export default function DashboardPage({
               >
                 <MealsView
                   currentMemberId={memberId}
+                  instanceId={instanceId}
                   role={role}
                   csrfToken={csrfToken}
                   composerOpen={mealComposerOpen}
@@ -798,7 +841,7 @@ export default function DashboardPage({
           >
             <ul className="grid h-16 grid-cols-5 px-1">
               {mobileNavigation
-                .filter((item) => item.id === 'more' || moduleEnabled(item.id))
+                .filter((item) => item.id === 'more' || moduleVisible(item.id))
                 .map((item) => (
                   <li key={item.label}>
                     <button

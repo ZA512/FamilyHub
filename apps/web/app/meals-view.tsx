@@ -56,9 +56,16 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  readMealPlanCache,
+  readMealsCache,
+  writeMealPlanCache,
+  writeMealsCache,
+} from '@/lib/offline-storage';
 
 type MealsViewProps = {
   currentMemberId: string;
+  instanceId: string;
   role: 'ADMIN' | 'MEMBER';
   csrfToken: string;
   composerOpen: boolean;
@@ -87,11 +94,13 @@ const slotLabels: Record<MealSlot, string> = {
 
 export function MealsView({
   currentMemberId,
+  instanceId,
   role,
   csrfToken,
   composerOpen,
   onComposerOpenChange,
 }: MealsViewProps) {
+  const sessionKey = `${instanceId}:${currentMemberId}`;
   const [meals, setMeals] = useState<FamilyMeal[]>([]);
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [shoppingEnabled, setShoppingEnabled] = useState(true);
@@ -128,11 +137,18 @@ export function MealsView({
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([
-      fetch('/api/v1/meals', { signal: controller.signal }),
-      fetch('/api/v1/modules', { signal: controller.signal }),
-    ])
-      .then(async ([mealsResponse, modulesResponse]) => {
+    async function loadMeals() {
+      const cached = await readMealsCache(sessionKey).catch(() => null);
+      if (controller.signal.aborted) return;
+      if (cached) {
+        setMeals(cached.meals);
+        setShoppingEnabled(cached.shoppingEnabled);
+      }
+      try {
+        const [mealsResponse, modulesResponse] = await Promise.all([
+          fetch('/api/v1/meals', { signal: controller.signal }),
+          fetch('/api/v1/modules', { signal: controller.signal }),
+        ]);
         if (!mealsResponse.ok)
           throw new Error('Impossible de charger les plats.');
         const mealsPayload = (await mealsResponse.json()) as {
@@ -141,56 +157,91 @@ export function MealsView({
         const modulesPayload = modulesResponse.ok
           ? ((await modulesResponse.json()) as { modules: ModuleConfig[] })
           : { modules: [] };
-        return { mealsPayload, modulesPayload };
-      })
-      .then(({ mealsPayload, modulesPayload }) => {
-        setMeals(mealsPayload.meals);
-        setShoppingEnabled(
+        const shopping =
           modulesPayload.modules.find((module) => module.key === 'shopping')
-            ?.enabled ?? false,
+            ?.enabled ?? false;
+        setMeals(mealsPayload.meals);
+        setShoppingEnabled(shopping);
+        await writeMealsCache(sessionKey, mealsPayload.meals, shopping).catch(
+          () => undefined,
         );
         setError('');
-      })
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) {
+      } catch (reason) {
+        if (!controller.signal.aborted && !cached) {
           setError(
             reason instanceof Error
               ? reason.message
               : 'Les repas sont indisponibles.',
           );
+        } else if (!controller.signal.aborted) {
+          setError(
+            'Plats affichés depuis cet appareil · lecture seule hors connexion.',
+          );
         }
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) setLoading(false);
-      });
+      }
+    }
+    void loadMeals();
     return () => controller.abort();
-  }, []);
+  }, [sessionKey]);
 
   useEffect(() => {
     const controller = new AbortController();
     const start = toDateInput(weekStart);
     const end = toDateInput(addDays(weekStart, 6));
-    fetch(`/api/v1/meal-plan?start=${start}&end=${end}`, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
+    async function loadPlan() {
+      setPlanLoading(true);
+      const cached = await readMealPlanCache(sessionKey, start, end).catch(
+        () => null,
+      );
+      if (controller.signal.aborted) return;
+      if (cached) setEntries(cached);
+      try {
+        const response = await fetch(
+          `/api/v1/meal-plan?start=${start}&end=${end}`,
+          { signal: controller.signal },
+        );
         if (!response.ok)
           throw new Error('Impossible de charger le planning des repas.');
-        return (await response.json()) as { entries: MealPlanEntry[] };
-      })
-      .then((payload) => setEntries(payload.entries))
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) {
+        const payload = (await response.json()) as {
+          entries: MealPlanEntry[];
+        };
+        setEntries(payload.entries);
+        await writeMealPlanCache(sessionKey, start, end, payload.entries).catch(
+          () => undefined,
+        );
+      } catch (reason) {
+        if (!controller.signal.aborted && !cached) {
           setError(
             reason instanceof Error ? reason.message : 'Planning indisponible.',
           );
         }
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) setPlanLoading(false);
-      });
+      }
+    }
+    void loadPlan();
     return () => controller.abort();
-  }, [weekStart]);
+  }, [sessionKey, weekStart]);
+
+  useEffect(() => {
+    if (!loading) {
+      void writeMealsCache(sessionKey, meals, shoppingEnabled).catch(
+        () => undefined,
+      );
+    }
+  }, [loading, meals, sessionKey, shoppingEnabled]);
+
+  useEffect(() => {
+    if (!planLoading) {
+      const start = toDateInput(weekStart);
+      const end = toDateInput(addDays(weekStart, 6));
+      void writeMealPlanCache(sessionKey, start, end, entries).catch(
+        () => undefined,
+      );
+    }
+  }, [entries, planLoading, sessionKey, weekStart]);
 
   function resetMealComposer() {
     setEditingMeal(null);

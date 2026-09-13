@@ -266,6 +266,8 @@ GET    /modules                 PATCH /modules/:key
 
 GET    /home                    GET /activity
 GET    /notifications           PATCH /notifications/:id
+GET|PATCH /notification-preferences
+GET    /push/config             POST|DELETE /push/subscriptions
 GET    /search?q=...
 
 GET|POST /conversations         GET|POST /conversations/:id/messages
@@ -284,6 +286,7 @@ GET|POST /collections           POST /collections/:id/items
 GET|POST /polls                 POST /polls/:id/votes
 GET|POST /ideas                 POST /ideas/:id/convert
 GET|POST /contacts              GET|POST /documents
+GET      /exports/:scope        POST /imports/bookmarks
 
 POST /uploads/init              PUT /uploads/:id/content
 POST /uploads/:id/complete      GET /attachments/:id/content
@@ -319,6 +322,12 @@ clavier et les libellés accessibles sont présents dès le socle.
 4. Paramètres personnels et notifications.
 5. États vide, chargement, erreur, offline et accès interdit cohérents.
 
+Le thème clair, sombre ou système et les modules masqués sont conservés localement par
+appareil. Les préférences de notification (niveau, modules silencieux et plage calme) sont
+stockées côté serveur. Lorsque VAPID est configuré, un `LISTEN/NOTIFY` PostgreSQL déclenche
+la livraison Web Push sans dupliquer cette logique dans chaque module ; une table de
+livraison idempotente évite les doublons et les abonnements expirés sont purgés.
+
 Le thème visuel proposé est domestique mais net : bleu nuit pour la structure, accents
 turquoise pour l'action et ambre pour ce qui réclame de l'attention. Les surfaces restent
 denses et lisibles, sans esthétique de logiciel d'entreprise.
@@ -336,15 +345,20 @@ IndexedDB contient :
 par défaut. Le Service Worker ne met jamais en cache les réponses d'authentification ni les
 exports.
 
-La première tranche offline porte sur Courses : ajout, modification, coche et décoche. Les
-tâches suivent avec la même infrastructure. L'agenda et le planning des repas sont ensuite
-mis en lecture seule offline.
+Les tranches offline prioritaires couvrent Courses et Tâches en écriture, avec rejeu ordonné
+des mutations idempotentes. L'agenda et le planning des repas conservent des instantanés
+bornés par période et restent consultables en lecture seule sans réseau.
 
 La tranche Courses conserve dans IndexedDB une copie bornée de la liste par couple
 instance/membre et une file de mutations idempotentes. L'interface applique immédiatement
 les ajouts et changements d'état, indique ce qui reste à synchroniser, puis rejoue la file au
 retour du réseau. Une déconnexion efface les données locales privées ; si elle survient hors
 ligne, la révocation de la session serveur est finalisée à la reconnexion.
+
+Le même journal couvre la création, la prise en charge, la réalisation, l'annulation et la
+réouverture des tâches. Un ordre monotone local préserve les séquences créées dans la même
+milliseconde. Une erreur fonctionnelle 4xx devient un conflit explicite ; l'utilisateur peut
+recharger la version du serveur, tandis que les erreurs réseau, 429 et 5xx restent à rejouer.
 
 Pour Pages, une mutation avec `baseVersion` obsolète devient un conflit explicite ; le texte
 local et distant est conservé. Chat est append-only. Les champs simples de tâches/courses

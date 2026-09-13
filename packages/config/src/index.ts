@@ -5,6 +5,9 @@ const booleanFromString = z
   .default('false')
   .transform((value) => value === 'true');
 
+const optionalSecret = (minimum: number) =>
+  z.preprocess((value) => (value === '' ? undefined : value), z.string().min(minimum).optional());
+
 const configSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -19,7 +22,12 @@ const configSchema = z
     TRUST_PROXY: booleanFromString,
     MAX_UPLOAD_BYTES: z.coerce.number().int().min(1_024).max(1_073_741_824).default(26_214_400),
     ATTACHMENTS_DIR: z.string().min(1).default('/data/attachments'),
-    LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+    VAPID_PUBLIC_KEY: optionalSecret(40),
+    VAPID_PRIVATE_KEY: optionalSecret(20),
+    VAPID_SUBJECT: optionalSecret(1),
+    LOG_LEVEL: z
+      .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+      .default('info'),
   })
   .superRefine((config, context) => {
     if (config.SESSION_SECRET === config.SETUP_TOKEN) {
@@ -27,6 +35,26 @@ const configSchema = z
         code: z.ZodIssueCode.custom,
         message: 'SESSION_SECRET et SETUP_TOKEN doivent être différents.',
         path: ['SESSION_SECRET'],
+      });
+    }
+
+    const vapidValues = [config.VAPID_PUBLIC_KEY, config.VAPID_PRIVATE_KEY, config.VAPID_SUBJECT];
+    if (vapidValues.some(Boolean) && !vapidValues.every(Boolean)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Les trois paramètres VAPID doivent être fournis ensemble.',
+        path: ['VAPID_PUBLIC_KEY'],
+      });
+    }
+    if (
+      config.VAPID_SUBJECT &&
+      !config.VAPID_SUBJECT.startsWith('mailto:') &&
+      !config.VAPID_SUBJECT.startsWith('https://')
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'VAPID_SUBJECT doit être une URL HTTPS ou mailto: valide.',
+        path: ['VAPID_SUBJECT'],
       });
     }
 
@@ -42,10 +70,7 @@ const configSchema = z
       }
 
       const databasePassword = new URL(config.DATABASE_URL).password;
-      if (
-        config.DATABASE_URL.toLowerCase().includes('change-me') ||
-        databasePassword.length < 16
-      ) {
+      if (config.DATABASE_URL.toLowerCase().includes('change-me') || databasePassword.length < 16) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           message: 'DATABASE_URL doit contenir un mot de passe remplacé et suffisamment long.',
