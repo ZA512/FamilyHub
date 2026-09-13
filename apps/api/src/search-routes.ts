@@ -25,12 +25,23 @@ export async function registerSearchRoutes(app: FastifyInstance, pool: Pool) {
         `SELECT * FROM (
            SELECT m.id, 'member'::text AS type,
                   concat_ws(' ', u.first_name, u.last_name) AS title,
-                  u.email AS description, 'members'::text AS view,
+                  CASE WHEN m.id = $3 OR $4 = 'ADMIN'
+                         OR COALESCE(profile.visibility, 'ALL_MEMBERS') = 'ALL_MEMBERS'
+                    THEN u.email ELSE NULL END AS description,
+                  'members'::text AS view,
                   m.joined_at AS "updatedAt", 0 AS type_order
            FROM instance_member m
            JOIN app_user u ON u.id = m.user_id
+           LEFT JOIN member_profile_preference profile ON profile.member_id = m.id
            WHERE m.instance_id = $1 AND m.status = 'ACTIVE'
-             AND concat_ws(' ', u.first_name, u.last_name, u.email) ILIKE $2
+             AND (
+               concat_ws(' ', u.first_name, u.last_name) ILIKE $2
+               OR (
+                 (m.id = $3 OR $4 = 'ADMIN'
+                   OR COALESCE(profile.visibility, 'ALL_MEMBERS') = 'ALL_MEMBERS')
+                 AND u.email ILIKE $2
+               )
+             )
 
            UNION ALL
 
@@ -346,7 +357,7 @@ export async function registerSearchRoutes(app: FastifyInstance, pool: Pool) {
          ) matches
          ORDER BY type_order, "updatedAt" DESC
          LIMIT 30`,
-        [request.session?.instanceId, pattern, request.session?.id],
+        [request.session?.instanceId, pattern, request.session?.id, request.session?.role],
       );
 
       return {

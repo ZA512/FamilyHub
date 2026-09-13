@@ -47,7 +47,7 @@ import { registerImportRoutes } from './import-routes.js';
 import { registerContactRoutes } from './contact-routes.js';
 import { registerDocumentRoutes } from './document-routes.js';
 import { registerExportRoutes } from './export-routes.js';
-import type { RuntimeSettings } from './runtime-settings.js';
+import { readStorageQuota, type RuntimeSettings } from './runtime-settings.js';
 
 export async function registerRoutes(
   app: FastifyInstance,
@@ -344,11 +344,19 @@ export async function registerRoutes(
     },
   );
 
-  app.get('/api/v1/instance-settings', { preHandler: requireSession }, async () => ({
-    settings: {
-      apiRateLimitPerMinute: runtimeSettings.apiRateLimitPerMinute,
-    } satisfies InstanceSettings,
-  }));
+  app.get('/api/v1/instance-settings', { preHandler: requireSession }, async (request) => {
+    const stored = await pool.query<{ storageQuota: unknown }>(
+      `SELECT settings -> 'storageQuotaBytes' AS "storageQuota"
+         FROM module_config WHERE instance_id = $1 AND module_key = 'settings'`,
+      [request.session?.instanceId],
+    );
+    return {
+      settings: {
+        apiRateLimitPerMinute: runtimeSettings.apiRateLimitPerMinute,
+        storageQuotaBytes: readStorageQuota(stored.rows[0]?.storageQuota),
+      } satisfies InstanceSettings,
+    };
+  });
 
   app.patch(
     '/api/v1/instance-settings',
@@ -364,14 +372,30 @@ export async function registerRoutes(
 
       const previousLimit = runtimeSettings.apiRateLimitPerMinute;
       const client = await pool.connect();
+      let previousStorageQuota = readStorageQuota(undefined);
       try {
         await client.query('BEGIN');
+        const previous = await client.query<{ storageQuota: unknown }>(
+          `SELECT settings -> 'storageQuotaBytes' AS "storageQuota"
+           FROM module_config
+           WHERE instance_id = $1 AND module_key = 'settings'
+           FOR UPDATE`,
+          [request.session.instanceId],
+        );
+        previousStorageQuota = readStorageQuota(previous.rows[0]?.storageQuota);
         await client.query(
           `UPDATE module_config
-           SET settings = jsonb_set(settings, '{apiRateLimitPerMinute}', to_jsonb($1::integer)),
+           SET settings = jsonb_set(
+                 jsonb_set(settings, '{apiRateLimitPerMinute}', to_jsonb($1::integer)),
+                 '{storageQuotaBytes}', to_jsonb($2::bigint)
+               ),
                updated_at = now()
-           WHERE instance_id = $2 AND module_key = 'settings'`,
-          [parsed.data.apiRateLimitPerMinute, request.session.instanceId],
+           WHERE instance_id = $3 AND module_key = 'settings'`,
+          [
+            parsed.data.apiRateLimitPerMinute,
+            parsed.data.storageQuotaBytes,
+            request.session.instanceId,
+          ],
         );
         await client.query(
           `INSERT INTO admin_audit_log
@@ -384,6 +408,10 @@ export async function registerRoutes(
               apiRateLimitPerMinute: {
                 before: previousLimit,
                 after: parsed.data.apiRateLimitPerMinute,
+              },
+              storageQuotaBytes: {
+                before: previousStorageQuota,
+                after: parsed.data.storageQuotaBytes,
               },
             }),
           ],
@@ -399,6 +427,7 @@ export async function registerRoutes(
       return {
         settings: {
           apiRateLimitPerMinute: runtimeSettings.apiRateLimitPerMinute,
+          storageQuotaBytes: parsed.data.storageQuotaBytes,
         } satisfies InstanceSettings,
       };
     },

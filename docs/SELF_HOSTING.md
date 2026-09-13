@@ -79,9 +79,15 @@ CSV et JSON, les archives ZIP et les formats bureautiques DOCX, XLSX et PPTX. Le
 binaire réel est contrôlé avant publication et leur empreinte SHA-256 est conservée en base.
 
 La limite générale des appels API est fixée à 1 200 requêtes par minute et par session.
-Un administrateur peut l'ajuster entre 300 et 10 000 dans **Paramètres → Limite des appels
-API**. Les ressources statiques et les contrôles de santé ne consomment pas ce quota. Les
+Un administrateur peut l'ajuster entre 300 et 10 000 dans **Paramètres → Limites de
+l’instance**. Les ressources statiques et les contrôles de santé ne consomment pas ce quota. Les
 connexions, invitations et uploads gardent toujours leurs limites de sécurité plus strictes.
+
+Le stockage des pièces jointes est limité à **10 Gio par foyer** par défaut. Un
+administrateur voit l’espace utilisé et peut régler ce quota entre 100 Mio et 10 Tio dans
+**Paramètres → Limites de l’instance**. Les envois commencés réservent leur taille pendant
+24 heures afin que plusieurs téléversements simultanés ne puissent pas dépasser la limite.
+Une photo de profil est limitée séparément à 5 Mio.
 
 ### Notifications Web Push (facultatif)
 
@@ -106,8 +112,8 @@ désactive ensuite Web Push sur chacun de ses appareils depuis **Paramètres →
 Une terminaison HTTPS est indispensable hors localhost. Les abonnements expirés sont
 supprimés automatiquement.
 
-Configuration complémentaire prévue : quota global par foyer, SMTP, UID/GID lorsque le NAS
-utilise des bind mounts, et backend S3 optionnel.
+Configuration complémentaire prévue : SMTP, UID/GID lorsque le NAS utilise des bind mounts,
+et backend S3 optionnel.
 
 ## Réseau et HTTPS
 
@@ -184,5 +190,5 @@ compatible ; sinon la procédure documentée restaure la sauvegarde complète.
 - Endpoint de santé sans détail sensible et endpoint de diagnostic réservé aux admins.
 - Arrêt du conteneur si PostgreSQL est trop ancien, inaccessible ou si les migrations ont
   échoué.
-- Taille maximale contrôlée avant et pendant chaque écriture ; quotas globaux et contrôle
-  préventif de l'espace libre restent à ajouter.
+- Taille maximale contrôlée avant et pendant chaque écriture et quota global appliqué de
+  façon atomique ; le contrôle préventif de l'espace libre physique reste à ajouter.

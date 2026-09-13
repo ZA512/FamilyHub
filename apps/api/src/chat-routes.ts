@@ -44,7 +44,10 @@ function publish(memberIds: string[], event: ChatRealtimeEvent): void {
   }
 }
 
-async function participantIds(client: Pool | PoolClient, conversationId: string): Promise<string[]> {
+async function participantIds(
+  client: Pool | PoolClient,
+  conversationId: string,
+): Promise<string[]> {
   const result = await client.query<{ memberId: string }>(
     `SELECT member_id AS "memberId" FROM conversation_member WHERE conversation_id = $1`,
     [conversationId],
@@ -224,15 +227,15 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
       ],
     },
     (socket, request) => {
-    const memberId = request.session!.id;
-    const memberSockets = socketsByMember.get(memberId) ?? new Set<WebSocket>();
-    memberSockets.add(socket);
-    socketsByMember.set(memberId, memberSockets);
-    socket.on('close', () => {
-      memberSockets.delete(socket);
-      if (!memberSockets.size) socketsByMember.delete(memberId);
-    });
-    socket.on('error', () => memberSockets.delete(socket));
+      const memberId = request.session!.id;
+      const memberSockets = socketsByMember.get(memberId) ?? new Set<WebSocket>();
+      memberSockets.add(socket);
+      socketsByMember.set(memberId, memberSockets);
+      socket.on('close', () => {
+        memberSockets.delete(socket);
+        if (!memberSockets.size) socketsByMember.delete(memberId);
+      });
+      socket.on('error', () => memberSockets.delete(socket));
     },
   );
 
@@ -336,7 +339,9 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
             [session.instanceId, ids.join(':')],
           );
           const conversation = existing.rows[0]
-            ? (await loadConversations(pool, session.instanceId, session.id, existing.rows[0].id))[0]
+            ? (
+                await loadConversations(pool, session.instanceId, session.id, existing.rows[0].id)
+              )[0]
             : undefined;
           if (conversation) return reply.send(conversation);
         }
@@ -400,7 +405,13 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
           `INSERT INTO message (conversation_id, author_id, body, reply_to_id, client_mutation_id)
            VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (conversation_id, client_mutation_id) DO NOTHING RETURNING id`,
-          [id.data, session.id, parsed.data.body, parsed.data.replyToId ?? null, parsed.data.clientMutationId],
+          [
+            id.data,
+            session.id,
+            parsed.data.body,
+            parsed.data.replyToId ?? null,
+            parsed.data.clientMutationId,
+          ],
         );
         let messageId = inserted.rows[0]?.id;
         if (!messageId) {
@@ -417,7 +428,8 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
              FROM attachment a
              LEFT JOIN message_attachment ma ON ma.attachment_id = a.id
              WHERE a.id = ANY($1::uuid[]) AND a.instance_id = $2 AND a.uploaded_by = $3
-               AND a.status = 'READY' AND (ma.attachment_id IS NULL OR ma.message_id = $4)`,
+               AND a.status = 'READY' AND a.upload_purpose = 'RESOURCE'
+               AND (ma.attachment_id IS NULL OR ma.message_id = $4)`,
             [attachmentIds, session.instanceId, session.id, messageId],
           );
           if (allowedAttachments.rowCount !== attachmentIds.length) {
@@ -459,7 +471,11 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
         await client.query('COMMIT');
         const message = await loadMessage(pool, id.data, messageId);
         if (!message) throw new Error('Message is not readable after creation.');
-        publish(await participantIds(pool, id.data), { type: 'chat.message', conversationId: id.data, message });
+        publish(await participantIds(pool, id.data), {
+          type: 'chat.message',
+          conversationId: id.data,
+          message,
+        });
         return reply.code(inserted.rowCount ? 201 : 200).send(message);
       } catch (error) {
         await client.query('ROLLBACK');
@@ -498,7 +514,11 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
       }
       const message = await loadMessage(pool, conversationId, id.data);
       if (!message) return reply.code(404).send({ error: 'MESSAGE_NOT_FOUND' });
-      publish(await participantIds(pool, conversationId), { type: 'chat.reaction', conversationId, message });
+      publish(await participantIds(pool, conversationId), {
+        type: 'chat.reaction',
+        conversationId,
+        message,
+      });
       return message;
     },
   );

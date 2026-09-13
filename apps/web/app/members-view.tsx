@@ -15,7 +15,7 @@ import type {
   PendingInvitation,
 } from '@familyhub/contracts';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -500,6 +500,9 @@ function MemberCard({
     <Card className={member.status === 'INACTIVE' ? 'opacity-60' : ''}>
       <CardContent className="flex items-start gap-4">
         <Avatar size="lg">
+          {member.avatarUrl ? (
+            <AvatarImage src={member.avatarUrl} alt="" />
+          ) : null}
           <AvatarFallback className="bg-[#d9f4ef] font-semibold text-[#075e55]">
             {initials || member.firstName.slice(0, 2).toUpperCase()}
           </AvatarFallback>
@@ -517,9 +520,13 @@ function MemberCard({
               <Badge variant="outline">Inactif</Badge>
             ) : null}
           </div>
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">
-            {member.email}
-          </p>
+          {member.email ? (
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">
+              {member.email}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-sm text-muted-foreground">Profil privé</p>
+          )}
           <div className="mt-3 flex flex-wrap gap-1.5">
             {memberGroups.map((group) => (
               <Badge key={group.id} variant="outline">

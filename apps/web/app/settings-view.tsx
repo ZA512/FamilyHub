@@ -8,6 +8,7 @@ import {
   Download,
   FileText,
   Gauge,
+  HardDrive,
   Lightbulb,
   ListChecks,
   LoaderCircle,
@@ -26,6 +27,7 @@ import type {
   ModuleConfig,
   ModuleKey,
   NotificationPreference,
+  StorageUsage,
 } from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +41,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import {
   NativeSelect,
   NativeSelectOption,
@@ -959,6 +962,8 @@ function RateLimitSettings({
   csrfToken: string;
 }) {
   const [limit, setLimit] = useState(1_200);
+  const [quotaGiB, setQuotaGiB] = useState(10);
+  const [usage, setUsage] = useState<StorageUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -966,13 +971,23 @@ function RateLimitSettings({
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/v1/instance-settings', { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok)
+    Promise.all([
+      fetch('/api/v1/instance-settings', { signal: controller.signal }),
+      fetch('/api/v1/storage/usage', { signal: controller.signal }),
+    ])
+      .then(async ([settingsResponse, usageResponse]) => {
+        if (!settingsResponse.ok || !usageResponse.ok)
           throw new Error('Impossible de charger les limites de l’instance.');
-        return (await response.json()) as { settings: InstanceSettings };
+        return Promise.all([
+          settingsResponse.json() as Promise<{ settings: InstanceSettings }>,
+          usageResponse.json() as Promise<{ usage: StorageUsage }>,
+        ]);
       })
-      .then((payload) => setLimit(payload.settings.apiRateLimitPerMinute))
+      .then(([settingsPayload, usagePayload]) => {
+        setLimit(settingsPayload.settings.apiRateLimitPerMinute);
+        setQuotaGiB(settingsPayload.settings.storageQuotaBytes / 1_073_741_824);
+        setUsage(usagePayload.usage);
+      })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setError(
@@ -997,13 +1012,22 @@ function RateLimitSettings({
           'content-type': 'application/json',
           'x-csrf-token': csrfToken,
         },
-        body: JSON.stringify({ apiRateLimitPerMinute: limit }),
+        body: JSON.stringify({
+          apiRateLimitPerMinute: limit,
+          storageQuotaBytes: Math.round(quotaGiB * 1_073_741_824),
+        }),
       });
       if (!response.ok)
         throw new Error('La limite n’a pas pu être enregistrée.');
       const payload = (await response.json()) as { settings: InstanceSettings };
       setLimit(payload.settings.apiRateLimitPerMinute);
-      setMessage('Nouvelle limite active immédiatement.');
+      setQuotaGiB(payload.settings.storageQuotaBytes / 1_073_741_824);
+      setUsage((current) =>
+        current
+          ? { ...current, quotaBytes: payload.settings.storageQuotaBytes }
+          : current,
+      );
+      setMessage('Les nouvelles limites sont actives immédiatement.');
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Enregistrement impossible.',
@@ -1017,25 +1041,52 @@ function RateLimitSettings({
     <Card className="mb-8">
       <CardHeader className="flex-row items-start gap-4">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
-          <Gauge className="size-5" aria-hidden="true" />
+          <HardDrive className="size-5" aria-hidden="true" />
         </span>
         <div>
-          <CardTitle className="text-base">Limite des appels API</CardTitle>
+          <CardTitle className="text-base">Limites de l’instance</CardTitle>
           <CardDescription className="mt-1">
-            Protège l’instance sans ralentir la navigation du foyer. Les
-            connexions, invitations et fichiers conservent leurs propres
-            protections renforcées.
+            Contrôlez la charge API et l’espace occupé par les documents et
+            pièces jointes du foyer.
           </CardDescription>
         </div>
       </CardHeader>
       <CardContent>
+        {usage ? (
+          <div className="mb-6 rounded-xl border bg-muted/20 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="font-medium">Stockage utilisé</span>
+              <span className="text-muted-foreground">
+                {formatStorageSize(usage.usedBytes)} sur{' '}
+                {formatStorageSize(usage.quotaBytes)} · {usage.attachmentCount}{' '}
+                fichier{usage.attachmentCount > 1 ? 's' : ''}
+              </span>
+            </div>
+            <Progress
+              className="mt-3 [&_[data-slot=progress-indicator]]:bg-[#087f72] [&_[data-slot=progress-track]]:h-2"
+              value={Math.min(
+                100,
+                ((usage.usedBytes + usage.reservedBytes) / usage.quotaBytes) *
+                  100,
+              )}
+              aria-label="Espace de stockage utilisé"
+            />
+            {usage.reservedBytes > 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {formatStorageSize(usage.reservedBytes)} temporairement réservé
+                par des envois en cours.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <form
-          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end"
           onSubmit={save}
         >
-          <div className="w-full max-w-xs space-y-2">
-            <Label htmlFor="api-rate-limit">
-              Requêtes par minute et par session
+          <div className="space-y-2">
+            <Label htmlFor="api-rate-limit" className="flex items-center gap-2">
+              <Gauge className="size-4" aria-hidden="true" />
+              Requêtes/minute/session
             </Label>
             <Input
               id="api-rate-limit"
@@ -1048,12 +1099,31 @@ function RateLimitSettings({
               onChange={(event) => setLimit(Number(event.target.value))}
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="storage-quota">Quota de stockage (Gio)</Label>
+            <Input
+              id="storage-quota"
+              type="number"
+              min={0.1}
+              max={10_240}
+              step={0.1}
+              value={quotaGiB}
+              disabled={loading || role !== 'ADMIN'}
+              onChange={(event) => setQuotaGiB(Number(event.target.value))}
+            />
+          </div>
           {role === 'ADMIN' ? (
             <Button
               type="submit"
               variant="outline"
               disabled={
-                loading || saving || !csrfToken || limit < 300 || limit > 10_000
+                loading ||
+                saving ||
+                !csrfToken ||
+                limit < 300 ||
+                limit > 10_000 ||
+                quotaGiB < 0.1 ||
+                quotaGiB > 10_240
               }
             >
               {saving ? (
@@ -1081,4 +1151,10 @@ function RateLimitSettings({
       </CardContent>
     </Card>
   );
+}
+
+function formatStorageSize(bytes: number): string {
+  if (bytes < 1_048_576) return `${Math.round(bytes / 1_024)} Kio`;
+  if (bytes < 1_073_741_824) return `${(bytes / 1_048_576).toFixed(1)} Mio`;
+  return `${(bytes / 1_073_741_824).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Gio`;
 }

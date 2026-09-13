@@ -292,22 +292,21 @@ export function ChatView({
               clientMutationId: crypto.randomUUID(),
             }),
           });
+          if (initialized.status === 507)
+            throw new Error('Le quota de stockage du foyer est atteint.');
           if (!initialized.ok)
             throw new Error(`Impossible de préparer « ${file.name} ».`);
           const { uploadId } = (await initialized.json()) as {
             uploadId: string;
           };
-          const uploaded = await fetch(
-            `/api/v1/uploads/${uploadId}/content`,
-            {
-              method: 'PUT',
-              headers: {
-                'content-type': 'application/octet-stream',
-                'x-csrf-token': csrfToken,
-              },
-              body: file,
+          const uploaded = await fetch(`/api/v1/uploads/${uploadId}/content`, {
+            method: 'PUT',
+            headers: {
+              'content-type': 'application/octet-stream',
+              'x-csrf-token': csrfToken,
             },
-          );
+            body: file,
+          });
           if (!uploaded.ok)
             throw new Error(`Le format de « ${file.name} » est refusé.`);
           const completed = await fetch(

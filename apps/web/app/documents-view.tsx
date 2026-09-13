@@ -233,6 +233,8 @@ export function DocumentsView({
         clientMutationId: crypto.randomUUID(),
       }),
     });
+    if (initialized.status === 507)
+      throw new Error('Le quota de stockage du foyer est atteint.');
     if (!initialized.ok) throw new Error('Le fichier n’a pas pu être préparé.');
     const { uploadId } = (await initialized.json()) as { uploadId: string };
     setUploadingLabel('Envoi du fichier…');

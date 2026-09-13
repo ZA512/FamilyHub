@@ -34,21 +34,28 @@ export async function registerMemberRoutes(app: FastifyInstance, pool: Pool) {
       id: string;
       first_name: string;
       last_name: string | null;
-      email: string;
+      email: string | null;
+      avatar_id: string | null;
       role: 'ADMIN' | 'MEMBER';
       status: 'ACTIVE' | 'INACTIVE';
       joined_at: Date;
       group_ids: string[];
     }>(
-      `SELECT m.id, u.first_name, u.last_name, u.email, m.role, m.status, m.joined_at,
+      `SELECT m.id, u.first_name, u.last_name,
+              CASE WHEN m.id = $2 OR $3 = 'ADMIN' OR COALESCE(p.visibility, 'ALL_MEMBERS') = 'ALL_MEMBERS'
+                THEN u.email ELSE NULL END AS email,
+              CASE WHEN m.id = $2 OR $3 = 'ADMIN' OR COALESCE(p.visibility, 'ALL_MEMBERS') = 'ALL_MEMBERS'
+                THEN p.avatar_attachment_id ELSE NULL END AS avatar_id,
+              m.role, m.status, m.joined_at,
               COALESCE(array_agg(gm.group_id) FILTER (WHERE gm.group_id IS NOT NULL), '{}') AS group_ids
        FROM instance_member m
        JOIN app_user u ON u.id = m.user_id
+       LEFT JOIN member_profile_preference p ON p.member_id = m.id
        LEFT JOIN group_membership gm ON gm.member_id = m.id
        WHERE m.instance_id = $1
-       GROUP BY m.id, u.id
+       GROUP BY m.id, u.id, p.visibility, p.avatar_attachment_id
        ORDER BY (m.status = 'ACTIVE') DESC, lower(u.first_name), lower(u.email)`,
-      [request.session?.instanceId],
+      [request.session?.instanceId, request.session?.id, request.session?.role],
     );
 
     return {
@@ -58,6 +65,7 @@ export async function registerMemberRoutes(app: FastifyInstance, pool: Pool) {
           firstName: row.first_name,
           lastName: row.last_name,
           email: row.email,
+          avatarUrl: row.avatar_id ? `/api/v1/attachments/${row.avatar_id}/content` : null,
           role: row.role,
           status: row.status,
           joinedAt: row.joined_at.toISOString(),

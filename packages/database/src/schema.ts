@@ -680,6 +680,7 @@ export const attachments = pgTable(
     actualSize: integer('actual_size'),
     sha256: text('sha256'),
     status: text('status').notNull().default('PENDING'),
+    uploadPurpose: text('upload_purpose').notNull().default('RESOURCE'),
     clientMutationId: uuid('client_mutation_id').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp('completed_at', { withTimezone: true }),
@@ -707,3 +708,18 @@ export const messageAttachments = pgTable(
     uniqueIndex('message_attachment_attachment_uq').on(table.attachmentId),
   ],
 );
+
+export const memberProfilePreferences = pgTable('member_profile_preference', {
+  memberId: uuid('member_id')
+    .primaryKey()
+    .references(() => instanceMembers.id, { onDelete: 'cascade' }),
+  avatarAttachmentId: uuid('avatar_attachment_id')
+    .unique()
+    .references(() => attachments.id, { onDelete: 'set null' }),
+  birthdayEventId: uuid('birthday_event_id')
+    .unique()
+    .references(() => calendarEvents.id, { onDelete: 'set null' }),
+  locale: text('locale').notNull().default('fr'),
+  visibility: text('visibility').notNull().default('ALL_MEMBERS'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

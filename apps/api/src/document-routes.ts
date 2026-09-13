@@ -76,11 +76,7 @@ const selectDocument = `
   JOIN app_user creator ON creator.id = creator_member.user_id
 `;
 
-async function requireDocumentsModule(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  pool: Pool,
-) {
+async function requireDocumentsModule(request: FastifyRequest, reply: FastifyReply, pool: Pool) {
   if (!request.session) return false;
   const result = await pool.query(
     `SELECT 1 FROM module_config
@@ -281,13 +277,23 @@ export async function registerDocumentRoutes(app: FastifyInstance, pool: Pool) {
          ))
          AND ($7::timestamptz IS NULL OR (d.updated_at, d.id) < ($7::timestamptz, $8::uuid))
        ORDER BY d.updated_at DESC, d.id DESC LIMIT $9`,
-      [session.instanceId, session.id, parsed.data.scope, parsed.data.q || null,
-        parsed.data.category || null, parsed.data.tag || null, parsed.data.before ?? null,
-        parsed.data.beforeId ?? null, parsed.data.limit + 1],
+      [
+        session.instanceId,
+        session.id,
+        parsed.data.scope,
+        parsed.data.q || null,
+        parsed.data.category || null,
+        parsed.data.tag || null,
+        parsed.data.before ?? null,
+        parsed.data.beforeId ?? null,
+        parsed.data.limit + 1,
+      ],
     );
     const hasMore = result.rows.length > parsed.data.limit;
     return {
-      documents: result.rows.slice(0, parsed.data.limit).map((row) => serializeDocument(row, session.id)),
+      documents: result.rows
+        .slice(0, parsed.data.limit)
+        .map((row) => serializeDocument(row, session.id)),
       hasMore,
     };
   });
@@ -296,138 +302,215 @@ export async function registerDocumentRoutes(app: FastifyInstance, pool: Pool) {
     if (!(await requireDocumentsModule(request, reply, pool))) return;
     const id = idSchema.safeParse((request.params as { id?: string }).id);
     if (!id.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
-    const document = await loadDocument(pool, id.data, request.session!.instanceId, request.session!.id);
+    const document = await loadDocument(
+      pool,
+      id.data,
+      request.session!.instanceId,
+      request.session!.id,
+    );
     return document ? { document } : reply.code(404).send({ error: 'DOCUMENT_NOT_FOUND' });
   });
 
-  app.post('/api/v1/documents', { preHandler: [requireSession, requireCsrf] }, async (request, reply) => {
-    if (!(await requireDocumentsModule(request, reply, pool))) return;
-    const parsed = documentCreateSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST', details: parsed.error.flatten() });
-    const session = request.session!;
-    if (!(await validAudience(pool, session.instanceId, parsed.data.visibility, parsed.data.groupIds, parsed.data.memberIds))) {
-      return reply.code(400).send({ error: 'INVALID_AUDIENCE' });
-    }
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const existing = await client.query<{ id: string }>(
-        'SELECT id FROM document WHERE instance_id = $1 AND client_mutation_id = $2',
-        [session.instanceId, parsed.data.clientMutationId],
-      );
-      let documentId = existing.rows[0]?.id;
-      if (!documentId) {
-        const attachment = await client.query(
-          `SELECT 1 FROM attachment a LEFT JOIN document d ON d.attachment_id = a.id
+  app.post(
+    '/api/v1/documents',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      if (!(await requireDocumentsModule(request, reply, pool))) return;
+      const parsed = documentCreateSchema.safeParse(request.body);
+      if (!parsed.success)
+        return reply.code(400).send({ error: 'INVALID_REQUEST', details: parsed.error.flatten() });
+      const session = request.session!;
+      if (
+        !(await validAudience(
+          pool,
+          session.instanceId,
+          parsed.data.visibility,
+          parsed.data.groupIds,
+          parsed.data.memberIds,
+        ))
+      ) {
+        return reply.code(400).send({ error: 'INVALID_AUDIENCE' });
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const existing = await client.query<{ id: string }>(
+          'SELECT id FROM document WHERE instance_id = $1 AND client_mutation_id = $2',
+          [session.instanceId, parsed.data.clientMutationId],
+        );
+        let documentId = existing.rows[0]?.id;
+        if (!documentId) {
+          const attachment = await client.query(
+            `SELECT 1 FROM attachment a LEFT JOIN document d ON d.attachment_id = a.id
            WHERE a.id = $1 AND a.instance_id = $2 AND a.uploaded_by = $3
-             AND a.status = 'READY' AND d.id IS NULL FOR UPDATE OF a`,
-          [parsed.data.attachmentId, session.instanceId, session.id],
-        );
-        if (!attachment.rowCount) {
-          await client.query('ROLLBACK');
-          return reply.code(400).send({ error: 'INVALID_ATTACHMENT' });
-        }
-        documentId = parsed.data.clientMutationId;
-        await client.query(
-          `INSERT INTO resource (id, instance_id, resource_type, created_by, visibility)
+             AND a.status = 'READY' AND a.upload_purpose = 'RESOURCE'
+             AND d.id IS NULL FOR UPDATE OF a`,
+            [parsed.data.attachmentId, session.instanceId, session.id],
+          );
+          if (!attachment.rowCount) {
+            await client.query('ROLLBACK');
+            return reply.code(400).send({ error: 'INVALID_ATTACHMENT' });
+          }
+          documentId = parsed.data.clientMutationId;
+          await client.query(
+            `INSERT INTO resource (id, instance_id, resource_type, created_by, visibility)
            VALUES ($1, $2, 'document', $3, $4)`,
-          [documentId, session.instanceId, session.id, parsed.data.visibility],
-        );
-        await client.query(
-          `INSERT INTO document
+            [documentId, session.instanceId, session.id, parsed.data.visibility],
+          );
+          await client.query(
+            `INSERT INTO document
              (id, instance_id, title, category, comment, attachment_id, client_mutation_id)
            VALUES ($1, $2, $3, $4, $5, $6, $1)`,
-          [documentId, session.instanceId, parsed.data.title, parsed.data.category,
-            parsed.data.comment ?? null, parsed.data.attachmentId],
+            [
+              documentId,
+              session.instanceId,
+              parsed.data.title,
+              parsed.data.category,
+              parsed.data.comment ?? null,
+              parsed.data.attachmentId,
+            ],
+          );
+          await replaceAudience(
+            client,
+            documentId,
+            parsed.data.visibility,
+            parsed.data.groupIds,
+            parsed.data.memberIds,
+          );
+          await replaceTags(client, documentId, session.instanceId, session.id, parsed.data.tags);
+          await replaceShareNotifications(
+            client,
+            session.instanceId,
+            session.id,
+            session.firstName,
+            documentId,
+            parsed.data.title,
+            parsed.data.visibility,
+            parsed.data.groupIds,
+            parsed.data.memberIds,
+          );
+        }
+        const document = await loadDocument(client, documentId, session.instanceId, session.id);
+        if (!document) throw new Error('Document creation returned no readable row.');
+        await client.query('COMMIT');
+        return reply.code(existing.rowCount ? 200 : 201).send({ document });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
+
+  app.put(
+    '/api/v1/documents/:id',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      if (!(await requireDocumentsModule(request, reply, pool))) return;
+      const id = idSchema.safeParse((request.params as { id?: string }).id);
+      const parsed = documentUpdateSchema.safeParse(request.body);
+      if (!id.success || !parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
+      const session = request.session!;
+      if (
+        !(await validAudience(
+          pool,
+          session.instanceId,
+          parsed.data.visibility,
+          parsed.data.groupIds,
+          parsed.data.memberIds,
+        ))
+      ) {
+        return reply.code(400).send({ error: 'INVALID_AUDIENCE' });
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const current = await loadDocument(client, id.data, session.instanceId, session.id);
+        if (!current) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'DOCUMENT_NOT_FOUND' });
+        }
+        if (!current.editable) {
+          await client.query('ROLLBACK');
+          return reply.code(403).send({ error: 'DOCUMENT_NOT_OWNED' });
+        }
+        if (current.version !== parsed.data.version) {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({ error: 'VERSION_CONFLICT', document: current });
+        }
+        await client.query(
+          'UPDATE resource SET visibility = $2, version = version + 1, updated_at = now() WHERE id = $1',
+          [id.data, parsed.data.visibility],
         );
-        await replaceAudience(client, documentId, parsed.data.visibility, parsed.data.groupIds, parsed.data.memberIds);
-        await replaceTags(client, documentId, session.instanceId, session.id, parsed.data.tags);
-        await replaceShareNotifications(client, session.instanceId, session.id, session.firstName,
-          documentId, parsed.data.title, parsed.data.visibility, parsed.data.groupIds, parsed.data.memberIds);
-      }
-      const document = await loadDocument(client, documentId, session.instanceId, session.id);
-      if (!document) throw new Error('Document creation returned no readable row.');
-      await client.query('COMMIT');
-      return reply.code(existing.rowCount ? 200 : 201).send({ document });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  });
-
-  app.put('/api/v1/documents/:id', { preHandler: [requireSession, requireCsrf] }, async (request, reply) => {
-    if (!(await requireDocumentsModule(request, reply, pool))) return;
-    const id = idSchema.safeParse((request.params as { id?: string }).id);
-    const parsed = documentUpdateSchema.safeParse(request.body);
-    if (!id.success || !parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
-    const session = request.session!;
-    if (!(await validAudience(pool, session.instanceId, parsed.data.visibility, parsed.data.groupIds, parsed.data.memberIds))) {
-      return reply.code(400).send({ error: 'INVALID_AUDIENCE' });
-    }
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const current = await loadDocument(client, id.data, session.instanceId, session.id);
-      if (!current) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'DOCUMENT_NOT_FOUND' });
-      }
-      if (!current.editable) {
-        await client.query('ROLLBACK');
-        return reply.code(403).send({ error: 'DOCUMENT_NOT_OWNED' });
-      }
-      if (current.version !== parsed.data.version) {
-        await client.query('ROLLBACK');
-        return reply.code(409).send({ error: 'VERSION_CONFLICT', document: current });
-      }
-      await client.query('UPDATE resource SET visibility = $2, version = version + 1, updated_at = now() WHERE id = $1', [id.data, parsed.data.visibility]);
-      await client.query(
-        `UPDATE document SET title = $2, category = $3, comment = $4,
+        await client.query(
+          `UPDATE document SET title = $2, category = $3, comment = $4,
            version = version + 1, updated_at = now() WHERE id = $1`,
-        [id.data, parsed.data.title, parsed.data.category, parsed.data.comment ?? null],
-      );
-      await replaceAudience(client, id.data, parsed.data.visibility, parsed.data.groupIds, parsed.data.memberIds);
-      await replaceTags(client, id.data, session.instanceId, session.id, parsed.data.tags);
-      await replaceShareNotifications(client, session.instanceId, session.id, session.firstName,
-        id.data, parsed.data.title, parsed.data.visibility, parsed.data.groupIds, parsed.data.memberIds);
-      const document = await loadDocument(client, id.data, session.instanceId, session.id);
-      await client.query('COMMIT');
-      return { document };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  });
+          [id.data, parsed.data.title, parsed.data.category, parsed.data.comment ?? null],
+        );
+        await replaceAudience(
+          client,
+          id.data,
+          parsed.data.visibility,
+          parsed.data.groupIds,
+          parsed.data.memberIds,
+        );
+        await replaceTags(client, id.data, session.instanceId, session.id, parsed.data.tags);
+        await replaceShareNotifications(
+          client,
+          session.instanceId,
+          session.id,
+          session.firstName,
+          id.data,
+          parsed.data.title,
+          parsed.data.visibility,
+          parsed.data.groupIds,
+          parsed.data.memberIds,
+        );
+        const document = await loadDocument(client, id.data, session.instanceId, session.id);
+        await client.query('COMMIT');
+        return { document };
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
 
-  app.delete('/api/v1/documents/:id', { preHandler: [requireSession, requireCsrf] }, async (request, reply) => {
-    if (!(await requireDocumentsModule(request, reply, pool))) return;
-    const id = idSchema.safeParse((request.params as { id?: string }).id);
-    if (!id.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const result = await client.query(
-        `UPDATE resource SET deleted_at = now(), updated_at = now()
+  app.delete(
+    '/api/v1/documents/:id',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      if (!(await requireDocumentsModule(request, reply, pool))) return;
+      const id = idSchema.safeParse((request.params as { id?: string }).id);
+      if (!id.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await client.query(
+          `UPDATE resource SET deleted_at = now(), updated_at = now()
          WHERE id = $1 AND instance_id = $2 AND resource_type = 'document'
            AND created_by = $3 AND deleted_at IS NULL`,
-        [id.data, request.session!.instanceId, request.session!.id],
-      );
-      if (!result.rowCount) {
+          [id.data, request.session!.instanceId, request.session!.id],
+        );
+        if (!result.rowCount) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'DOCUMENT_NOT_FOUND' });
+        }
+        await client.query(
+          "DELETE FROM notification WHERE resource_type = 'document' AND resource_id = $1",
+          [id.data],
+        );
+        await client.query('COMMIT');
+        return reply.code(204).send();
+      } catch (error) {
         await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'DOCUMENT_NOT_FOUND' });
+        throw error;
+      } finally {
+        client.release();
       }
-      await client.query("DELETE FROM notification WHERE resource_type = 'document' AND resource_id = $1", [id.data]);
-      await client.query('COMMIT');
-      return reply.code(204).send();
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  });
+    },
+  );
 }

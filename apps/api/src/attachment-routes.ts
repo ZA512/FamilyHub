@@ -5,15 +5,17 @@ import { basename, join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-import { uploadInitSchema, type ChatAttachment } from '@familyhub/contracts';
+import { uploadInitSchema, type ChatAttachment, type StorageUsage } from '@familyhub/contracts';
 import { fileTypeFromFile } from 'file-type';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 
 import { createSessionGuard, requireCsrf } from './auth.js';
+import { readStorageQuota } from './runtime-settings.js';
 
 const idSchema = z.string().uuid();
+const MAX_AVATAR_BYTES = 5_242_880;
 const textTypes = new Set(['text/plain', 'text/csv', 'application/json']);
 const binaryTypes = new Set([
   'image/jpeg',
@@ -47,7 +49,9 @@ async function requireFileModule(
 }
 
 function cleanFilename(filename: string): string {
-  return basename(filename.replaceAll('\\', '/')).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return basename(filename.replaceAll('\\', '/'))
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .trim();
 }
 
 async function detectMime(path: string, declaredMime: string): Promise<string | null> {
@@ -65,8 +69,54 @@ async function detectMime(path: string, declaredMime: string): Promise<string | 
   return sample.subarray(0, offset).includes(0) ? null : normalizedDeclared;
 }
 
+async function removeUploadFiles(request: FastifyRequest, storageKeys: string[]): Promise<void> {
+  for (const storageKey of storageKeys) {
+    const finalPath = join(request.server.config.ATTACHMENTS_DIR, storageKey);
+    try {
+      await Promise.all([
+        rm(finalPath, { force: true }),
+        rm(`${finalPath}.uploading`, { force: true }),
+      ]);
+    } catch (error) {
+      request.log.warn({ error }, 'Could not remove an expired upload file.');
+    }
+  }
+}
+
 export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool) {
   const requireSession = createSessionGuard(pool);
+
+  app.get('/api/v1/storage/usage', { preHandler: requireSession }, async (request) => {
+    const [stored, usage] = await Promise.all([
+      pool.query<{ storageQuota: unknown }>(
+        `SELECT settings -> 'storageQuotaBytes' AS "storageQuota"
+         FROM module_config WHERE instance_id = $1 AND module_key = 'settings'`,
+        [request.session?.instanceId],
+      ),
+      pool.query<{
+        usedBytes: number;
+        reservedBytes: number;
+        attachmentCount: number;
+      }>(
+        `SELECT
+           COALESCE(sum(actual_size) FILTER (WHERE status = 'READY'), 0)::bigint::float8 AS "usedBytes",
+           COALESCE(sum(expected_size) FILTER (
+             WHERE status <> 'READY' AND created_at > now() - interval '24 hours'
+           ), 0)::bigint::float8 AS "reservedBytes",
+           count(*) FILTER (WHERE status = 'READY')::int AS "attachmentCount"
+         FROM attachment WHERE instance_id = $1`,
+        [request.session?.instanceId],
+      ),
+    ]);
+    return {
+      usage: {
+        usedBytes: usage.rows[0]?.usedBytes ?? 0,
+        reservedBytes: usage.rows[0]?.reservedBytes ?? 0,
+        attachmentCount: usage.rows[0]?.attachmentCount ?? 0,
+        quotaBytes: readStorageQuota(stored.rows[0]?.storageQuota),
+      } satisfies StorageUsage,
+    };
+  });
 
   app.get('/api/v1/uploads/config', { preHandler: requireSession }, async (request, reply) => {
     if (!(await requireFileModule(request, reply, pool))) return;
@@ -83,35 +133,110 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
       config: { rateLimit: { max: 30, timeWindow: '1 hour' } },
     },
     async (request, reply) => {
-      if (!(await requireFileModule(request, reply, pool))) return;
       const parsed = uploadInitSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
-      if (parsed.data.size > request.server.config.MAX_UPLOAD_BYTES) {
+      if (parsed.data.purpose === 'RESOURCE' && !(await requireFileModule(request, reply, pool)))
+        return;
+      if (
+        parsed.data.purpose === 'AVATAR' &&
+        !parsed.data.contentType.toLowerCase().startsWith('image/')
+      ) {
+        return reply.code(400).send({ error: 'INVALID_AVATAR_TYPE' });
+      }
+      const uploadLimit =
+        parsed.data.purpose === 'AVATAR'
+          ? MAX_AVATAR_BYTES
+          : request.server.config.MAX_UPLOAD_BYTES;
+      if (parsed.data.size > uploadLimit) {
         return reply.code(413).send({ error: 'FILE_TOO_LARGE' });
       }
       const filename = cleanFilename(parsed.data.filename);
       if (!filename) return reply.code(400).send({ error: 'INVALID_FILENAME' });
-      const result = await pool.query<{ id: string }>(
-        `INSERT INTO attachment
-           (instance_id, uploaded_by, original_filename, declared_mime,
-            expected_size, client_mutation_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (instance_id, client_mutation_id) DO UPDATE
-           SET client_mutation_id = EXCLUDED.client_mutation_id
-           WHERE attachment.uploaded_by = EXCLUDED.uploaded_by
-             AND attachment.original_filename = EXCLUDED.original_filename
-             AND attachment.expected_size = EXCLUDED.expected_size
-         RETURNING id`,
-        [
+      const client = await pool.connect();
+      let uploadId: string | undefined;
+      let staleStorageKeys: string[] = [];
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
           request.session!.instanceId,
-          request.session!.id,
-          filename,
-          parsed.data.contentType,
-          parsed.data.size,
-          parsed.data.clientMutationId,
-        ],
-      );
-      const uploadId = result.rows[0]?.id;
+        ]);
+        const staleUploads = await client.query<{ storage_key: string }>(
+          `DELETE FROM attachment
+           WHERE instance_id = $1 AND status <> 'READY'
+             AND created_at <= now() - interval '24 hours'
+           RETURNING storage_key`,
+          [request.session!.instanceId],
+        );
+        staleStorageKeys = staleUploads.rows.map((row) => row.storage_key);
+        const existing = await client.query<{ id: string }>(
+          `SELECT id FROM attachment
+           WHERE instance_id = $1 AND client_mutation_id = $2
+             AND uploaded_by = $3 AND original_filename = $4 AND expected_size = $5
+             AND upload_purpose = $6`,
+          [
+            request.session!.instanceId,
+            parsed.data.clientMutationId,
+            request.session!.id,
+            filename,
+            parsed.data.size,
+            parsed.data.purpose,
+          ],
+        );
+        uploadId = existing.rows[0]?.id;
+        if (!uploadId) {
+          const capacity = await client.query<{
+            quota: unknown;
+            allocated: number;
+          }>(
+            `SELECT
+               mc.settings -> 'storageQuotaBytes' AS quota,
+               COALESCE((
+                 SELECT sum(CASE WHEN a.status = 'READY' THEN a.actual_size ELSE a.expected_size END)
+                 FROM attachment a
+                 WHERE a.instance_id = mc.instance_id
+                   AND (a.status = 'READY' OR a.created_at > now() - interval '24 hours')
+               ), 0)::bigint::float8 AS allocated
+             FROM module_config mc
+             WHERE mc.instance_id = $1 AND mc.module_key = 'settings'`,
+            [request.session!.instanceId],
+          );
+          const quota = readStorageQuota(capacity.rows[0]?.quota);
+          const allocated = capacity.rows[0]?.allocated ?? 0;
+          if (allocated + parsed.data.size > quota) {
+            await client.query('COMMIT');
+            await removeUploadFiles(request, staleStorageKeys);
+            return reply.code(507).send({
+              error: 'STORAGE_QUOTA_EXCEEDED',
+              usedBytes: allocated,
+              quotaBytes: quota,
+            });
+          }
+          const result = await client.query<{ id: string }>(
+            `INSERT INTO attachment
+               (instance_id, uploaded_by, original_filename, declared_mime,
+                expected_size, client_mutation_id, upload_purpose)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id`,
+            [
+              request.session!.instanceId,
+              request.session!.id,
+              filename,
+              parsed.data.contentType,
+              parsed.data.size,
+              parsed.data.clientMutationId,
+              parsed.data.purpose,
+            ],
+          );
+          uploadId = result.rows[0]?.id;
+        }
+        await client.query('COMMIT');
+        await removeUploadFiles(request, staleStorageKeys);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
       if (!uploadId) return reply.code(409).send({ error: 'UPLOAD_CONFLICT' });
       return reply.code(201).send({ uploadId });
     },
@@ -125,7 +250,6 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
       config: { rateLimit: { max: 60, timeWindow: '1 hour' } },
     },
     async (request, reply) => {
-      if (!(await requireFileModule(request, reply, pool))) return;
       const id = idSchema.safeParse((request.params as { id?: string }).id);
       if (!id.success || !(request.body instanceof Readable)) {
         return reply.code(400).send({ error: 'INVALID_UPLOAD' });
@@ -134,11 +258,12 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
         storageKey: string;
         expectedSize: number;
         declaredMime: string;
+        uploadPurpose: 'RESOURCE' | 'AVATAR';
       }>(
         `UPDATE attachment SET status = 'UPLOADING'
          WHERE id = $1 AND instance_id = $2 AND uploaded_by = $3 AND status = 'PENDING'
          RETURNING storage_key AS "storageKey", expected_size AS "expectedSize",
-                   declared_mime AS "declaredMime"`,
+                   declared_mime AS "declaredMime", upload_purpose AS "uploadPurpose"`,
         [id.data, request.session!.instanceId, request.session!.id],
       );
       const upload = claimed.rows[0];
@@ -159,7 +284,10 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
           actualSize += chunk.length;
           if (
             actualSize > upload.expectedSize ||
-            actualSize > request.server.config.MAX_UPLOAD_BYTES
+            actualSize >
+              (upload.uploadPurpose === 'AVATAR'
+                ? MAX_AVATAR_BYTES
+                : request.server.config.MAX_UPLOAD_BYTES)
           ) {
             callback(new Error('FILE_TOO_LARGE'));
             return;
@@ -198,7 +326,6 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
     '/api/v1/uploads/:id/complete',
     { preHandler: [requireSession, requireCsrf] },
     async (request, reply) => {
-      if (!(await requireFileModule(request, reply, pool))) return;
       const id = idSchema.safeParse((request.params as { id?: string }).id);
       if (!id.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
       const result = await pool.query<{
@@ -228,7 +355,6 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
     '/api/v1/attachments/:id/content',
     { preHandler: requireSession },
     async (request, reply) => {
-      if (!(await requireFileModule(request, reply, pool))) return;
       const id = idSchema.safeParse((request.params as { id?: string }).id);
       if (!id.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
       const result = await pool.query<{
@@ -269,8 +395,19 @@ export async function registerAttachmentRoutes(app: FastifyInstance, pool: Pool)
                    )
                  )
              )
+             OR EXISTS (
+               SELECT 1
+               FROM member_profile_preference mpp
+               JOIN instance_member profile_member ON profile_member.id = mpp.member_id
+               WHERE mpp.avatar_attachment_id = a.id
+                 AND profile_member.instance_id = a.instance_id
+                 AND (
+                   mpp.member_id = $3 OR $4 = 'ADMIN'
+                   OR mpp.visibility = 'ALL_MEMBERS'
+                 )
+             )
            )`,
-        [id.data, request.session!.instanceId, request.session!.id],
+        [id.data, request.session!.instanceId, request.session!.id, request.session!.role],
       );
       const attachment = result.rows[0];
       if (!attachment) return reply.code(404).send({ error: 'ATTACHMENT_NOT_FOUND' });

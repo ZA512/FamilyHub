@@ -68,9 +68,17 @@ export type ModuleConfig = { key: ModuleKey; enabled: boolean };
 
 export const instanceSettingsUpdateSchema = z.object({
   apiRateLimitPerMinute: z.number().int().min(300).max(10_000),
+  storageQuotaBytes: z.number().int().min(104_857_600).max(10_995_116_277_760),
 });
 
 export type InstanceSettings = z.infer<typeof instanceSettingsUpdateSchema>;
+
+export type StorageUsage = {
+  usedBytes: number;
+  reservedBytes: number;
+  quotaBytes: number;
+  attachmentCount: number;
+};
 
 const groupFields = z.object({
   name: z.string().trim().min(1).max(80),
@@ -99,7 +107,8 @@ export type FamilyMember = {
   id: string;
   firstName: string;
   lastName: string | null;
-  email: string;
+  email: string | null;
+  avatarUrl?: string | null;
   role: 'ADMIN' | 'MEMBER';
   status: 'ACTIVE' | 'INACTIVE';
   joinedAt: string;
@@ -197,10 +206,14 @@ export const profileUpdateSchema = z.object({
         return false;
       }
     }),
+  locale: z.enum(['fr', 'en']).default('fr'),
+  profileVisibility: z.enum(['ALL_MEMBERS', 'PRIVATE']).default('ALL_MEMBERS'),
+  avatarAttachmentId: z.string().uuid().nullable().default(null),
 });
 
 export type MemberProfile = z.infer<typeof profileUpdateSchema> & {
   email: string;
+  avatarUrl: string | null;
 };
 
 export const notificationReadSchema = z.object({ read: z.boolean() });
@@ -390,7 +403,10 @@ export const taskCreateSchema = taskFields
       value.periodEndAt &&
       new Date(value.periodEndAt).getTime() < new Date(value.periodStartAt).getTime()
     ) {
-      context.addIssue({ code: 'custom', message: 'La période de fin doit suivre le début.' });
+      context.addIssue({
+        code: 'custom',
+        message: 'La période de fin doit suivre le début.',
+      });
     }
   });
 
@@ -517,13 +533,19 @@ const agendaEventFields = z
   })
   .superRefine((value, context) => {
     if (new Date(value.endAt).getTime() <= new Date(value.startAt).getTime()) {
-      context.addIssue({ code: 'custom', message: 'La fin doit suivre le début.' });
+      context.addIssue({
+        code: 'custom',
+        message: 'La fin doit suivre le début.',
+      });
     }
     if (
       value.recurrenceUntil &&
       new Date(value.recurrenceUntil).getTime() < new Date(value.startAt).getTime()
     ) {
-      context.addIssue({ code: 'custom', message: 'La récurrence doit finir après le début.' });
+      context.addIssue({
+        code: 'custom',
+        message: 'La récurrence doit finir après le début.',
+      });
     }
     if (value.recurrence === 'NONE' && value.recurrenceUntil) {
       context.addIssue({
@@ -537,7 +559,9 @@ export const agendaEventCreateSchema = agendaEventFields.and(
   z.object({ clientMutationId: z.string().uuid() }),
 );
 export const agendaEventUpdateSchema = agendaEventFields;
-export const agendaResponseUpdateSchema = z.object({ response: agendaResponseSchema });
+export const agendaResponseUpdateSchema = z.object({
+  response: agendaResponseSchema,
+});
 
 export type AgendaEventType = z.infer<typeof agendaEventTypeSchema>;
 export type AgendaRecurrence = z.infer<typeof agendaRecurrenceSchema>;
@@ -604,9 +628,13 @@ const mealFields = z.object({
   visibility: taskVisibilitySchema.default('ALL_MEMBERS'),
 });
 
-export const mealCreateSchema = mealFields.extend({ clientMutationId: z.string().uuid() });
+export const mealCreateSchema = mealFields.extend({
+  clientMutationId: z.string().uuid(),
+});
 export const mealUpdateSchema = mealFields;
-export const mealPreferenceUpdateSchema = z.object({ value: mealPreferenceSchema });
+export const mealPreferenceUpdateSchema = z.object({
+  value: mealPreferenceSchema,
+});
 
 export const mealPlanRangeSchema = z
   .object({
@@ -737,6 +765,7 @@ export const uploadInitSchema = z.object({
   contentType: z.string().trim().min(1).max(150),
   size: z.number().int().positive(),
   clientMutationId: z.string().uuid(),
+  purpose: z.enum(['RESOURCE', 'AVATAR']).default('RESOURCE'),
 });
 
 export const chatMessagesQuerySchema = z
@@ -808,7 +837,11 @@ export type ChatMessage = {
 export type ChatRealtimeEvent =
   | { type: 'chat.message'; conversationId: string; message: ChatMessage }
   | { type: 'chat.reaction'; conversationId: string; message: ChatMessage }
-  | { type: 'chat.message.deleted'; conversationId: string; message: ChatMessage }
+  | {
+      type: 'chat.message.deleted';
+      conversationId: string;
+      message: ChatMessage;
+    }
   | { type: 'chat.conversation'; conversation: ConversationSummary };
 
 export const bookmarkVisibilitySchema = z.enum([
@@ -1471,7 +1504,9 @@ export const ideaCommentCreateSchema = z.object({
   clientMutationId: z.string().uuid(),
 });
 
-const ideaConversionMutationSchema = z.object({ clientMutationId: z.string().uuid() });
+const ideaConversionMutationSchema = z.object({
+  clientMutationId: z.string().uuid(),
+});
 
 export const ideaConvertSchema = z
   .discriminatedUnion('target', [
@@ -1659,7 +1694,10 @@ const documentFieldsSchema = z
   });
 
 export const documentCreateSchema = documentFieldsSchema.and(
-  z.object({ attachmentId: z.string().uuid(), clientMutationId: z.string().uuid() }),
+  z.object({
+    attachmentId: z.string().uuid(),
+    clientMutationId: z.string().uuid(),
+  }),
 );
 export const documentUpdateSchema = documentFieldsSchema.and(
   z.object({ version: z.number().int().positive() }),
