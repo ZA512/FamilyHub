@@ -23,6 +23,7 @@ import type { SearchResult } from '@familyhub/contracts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { t } from '@/lib/i18n';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -147,7 +148,7 @@ export function SearchView({ onNavigate }: SearchViewProps) {
             role="alert"
             className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
           >
-            {currentError}
+            {t(currentError)}
           </p>
         ) : !searchComplete ? (
           <Card>

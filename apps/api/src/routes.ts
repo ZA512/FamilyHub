@@ -169,6 +169,7 @@ export async function registerRoutes(
             firstName: parsed.data.firstName,
             email: parsed.data.email,
             role: 'ADMIN',
+            locale: 'fr',
           },
           csrfToken: session.csrfToken,
         });
@@ -199,12 +200,15 @@ export async function registerRoutes(
         first_name: string;
         password_hash: string;
         role: 'ADMIN' | 'MEMBER';
+        locale: 'fr' | 'en';
       }>(
         `SELECT u.id AS user_id, m.id AS member_id, m.instance_id, i.name AS instance_name, u.email,
-              u.first_name, u.password_hash, m.role
+              u.first_name, u.password_hash, m.role,
+              COALESCE(p.locale, i.locale, 'fr') AS locale
        FROM app_user u
        JOIN instance_member m ON m.user_id = u.id
        JOIN instance i ON i.id = m.instance_id
+       LEFT JOIN member_profile_preference p ON p.member_id = m.id
        WHERE u.email = $1 AND m.status = 'ACTIVE'
        LIMIT 1`,
         [parsed.data.email],
@@ -230,6 +234,7 @@ export async function registerRoutes(
           firstName: row.first_name,
           email: row.email,
           role: row.role,
+          locale: row.locale,
         },
         csrfToken: session.csrfToken,
       };
@@ -257,6 +262,7 @@ export async function registerRoutes(
         firstName: session.firstName,
         email: session.email,
         role: session.role,
+        locale: session.locale,
       },
       csrfToken,
     };

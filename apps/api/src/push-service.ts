@@ -4,6 +4,7 @@ import type { Pool } from 'pg';
 import webPush from 'web-push';
 
 import { importantNotificationTypes, isImportantNotification } from './notification-policy.js';
+import { localizeNotification } from './notification-copy.js';
 
 type PushTarget = {
   subscriptionId: string;
@@ -13,6 +14,7 @@ type PushTarget = {
   type: string;
   title: string;
   body: string | null;
+  locale: 'fr' | 'en';
 };
 
 export async function startPushDelivery(app: FastifyInstance, pool: Pool, config: AppConfig) {
@@ -28,13 +30,14 @@ export async function startPushDelivery(app: FastifyInstance, pool: Pool, config
   async function deliver(notificationId: string) {
     const targets = await pool.query<PushTarget>(
       `SELECT ds.id AS "subscriptionId", ds.endpoint, ds.p256dh, ds.auth,
-              n.type, n.title, n.body
+              n.type, n.title, n.body, COALESCE(mp.locale, m.locale, 'fr') AS locale
        FROM notification n
        JOIN device_subscription ds
          ON ds.member_id = n.recipient_member_id AND ds.instance_id = n.instance_id
        JOIN instance_member m ON m.id = n.recipient_member_id
        JOIN app_user u ON u.id = m.user_id
        LEFT JOIN notification_preference np ON np.member_id = n.recipient_member_id
+       LEFT JOIN member_profile_preference mp ON mp.member_id = n.recipient_member_id
        WHERE n.id = $1
          AND NOT COALESCE(n.module_key = ANY(COALESCE(np.muted_modules, ARRAY[]::text[])), false)
          AND (COALESCE(np.level, 'ALL') = 'ALL' OR n.type = ANY($2::text[]))
@@ -53,6 +56,7 @@ export async function startPushDelivery(app: FastifyInstance, pool: Pool, config
 
     await Promise.all(
       targets.rows.map(async (target) => {
+        const localized = localizeNotification(target.locale, target);
         const reservation = await pool.query(
           `INSERT INTO notification_delivery (notification_id, subscription_id)
            VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING notification_id`,
@@ -66,8 +70,8 @@ export async function startPushDelivery(app: FastifyInstance, pool: Pool, config
               keys: { p256dh: target.p256dh, auth: target.auth },
             },
             JSON.stringify({
-              title: target.title,
-              body: target.body,
+              title: localized.title,
+              body: localized.body,
               tag: `familyhub-${target.type.toLowerCase()}`,
               url: '/',
             }),

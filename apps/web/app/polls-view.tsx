@@ -1,4 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
+import { localeTag } from '@/lib/i18n';
 import {
   ChartBar,
   Check,
@@ -783,7 +784,9 @@ function PollEditorDialog({
             <div className="flex items-start gap-3 rounded-xl border p-3 text-sm">
               <Checkbox id="poll-multiple" name="allowMultiple" />
               <span>
-                <Label htmlFor="poll-multiple" className="block font-medium">Choix multiples</Label>
+                <Label htmlFor="poll-multiple" className="block font-medium">
+                  Choix multiples
+                </Label>
                 <span className="text-muted-foreground">
                   Plusieurs réponses possibles
                 </span>
@@ -792,7 +795,9 @@ function PollEditorDialog({
             <div className="flex items-start gap-3 rounded-xl border p-3 text-sm">
               <Checkbox id="poll-anonymous" name="anonymous" />
               <span>
-                <Label htmlFor="poll-anonymous" className="block font-medium">Vote anonyme</Label>
+                <Label htmlFor="poll-anonymous" className="block font-medium">
+                  Vote anonyme
+                </Label>
                 <span className="text-muted-foreground">
                   Les noms restent masqués
                 </span>
@@ -943,7 +948,7 @@ function AudienceFields({
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat(localeTag(), {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));

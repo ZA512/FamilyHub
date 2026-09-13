@@ -1,4 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
+import { formatBinarySize, localeTag, t } from '@/lib/i18n';
 import {
   Download,
   FileArchive,
@@ -380,10 +381,10 @@ export function DocumentsView({
 
   const availableCategories = [
     ...new Set(documents.map((document) => document.category)),
-  ].sort((left, right) => left.localeCompare(right, 'fr'));
+  ].sort((left, right) => left.localeCompare(right, localeTag()));
   const availableTags = [
     ...new Set(documents.flatMap((document) => document.tags)),
-  ].sort((left, right) => left.localeCompare(right, 'fr'));
+  ].sort((left, right) => left.localeCompare(right, localeTag()));
 
   return (
     <section>
@@ -904,7 +905,11 @@ function DocumentEditor({
               ) : (
                 <Upload />
               )}
-              {uploadingLabel || (document ? 'Enregistrer' : 'Déposer')}
+              {uploadingLabel
+                ? t(uploadingLabel)
+                : document
+                  ? 'Enregistrer'
+                  : 'Déposer'}
             </Button>
           </DialogFooter>
         </form>
@@ -936,7 +941,5 @@ function DocumentFileIcon({ contentType }: { contentType: string }) {
 }
 
 function formatFileSize(size: number) {
-  if (size < 1024) return `${size} o`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} Ko`;
-  return `${(size / (1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`;
+  return formatBinarySize(size);
 }

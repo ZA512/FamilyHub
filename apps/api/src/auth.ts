@@ -88,13 +88,16 @@ export function createSessionGuard(pool: Pool) {
       first_name: string;
       email: string;
       role: 'ADMIN' | 'MEMBER';
+      locale: 'fr' | 'en';
     }>(
       `SELECT s.id AS session_id, s.csrf_hash, m.id AS member_id, m.user_id,
-              m.instance_id, i.name AS instance_name, u.first_name, u.email, m.role
+              m.instance_id, i.name AS instance_name, u.first_name, u.email, m.role,
+              COALESCE(p.locale, i.locale, 'fr') AS locale
        FROM session s
        JOIN instance_member m ON m.id = s.member_id
        JOIN instance i ON i.id = m.instance_id
        JOIN app_user u ON u.id = m.user_id
+       LEFT JOIN member_profile_preference p ON p.member_id = m.id
        WHERE s.token_hash = $1
          AND s.revoked_at IS NULL
          AND s.expires_at > now()
@@ -119,6 +122,7 @@ export function createSessionGuard(pool: Pool) {
       firstName: row.first_name,
       email: row.email,
       role: row.role,
+      locale: row.locale,
     };
   };
 }

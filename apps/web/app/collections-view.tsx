@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
+import { localeTag } from '@/lib/i18n';
 import {
   ArrowLeft,
   BookOpen,
@@ -253,7 +254,7 @@ export function CollectionsView({
   const availableTags = useMemo(
     () =>
       [...new Set(collections.flatMap((collection) => collection.tags))].sort(
-        (a, b) => a.localeCompare(b, 'fr'),
+        (a, b) => a.localeCompare(b, localeTag()),
       ),
     [collections],
   );
@@ -1742,7 +1743,7 @@ function ItemDetailDialog({
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-medium">{comment.authorName}</span>
                     <span className="text-xs text-muted-foreground">
-                      {new Intl.DateTimeFormat('fr-FR', {
+                      {new Intl.DateTimeFormat(localeTag(), {
                         dateStyle: 'medium',
                       }).format(new Date(comment.createdAt))}
                     </span>

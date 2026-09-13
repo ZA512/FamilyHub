@@ -1,6 +1,6 @@
 # État d'implémentation du PRD
 
-Mise à jour : 13 septembre 2026.
+Mise à jour : 14 septembre 2026.
 
 ## MVP fonctionnel
 
@@ -43,11 +43,14 @@ accepte désormais les exports HTML Netscape et les arborescences JSON des navig
 plus des archives FamilyHub, avec normalisation et déduplication des liens.
 Un relais SMTP peut être configuré pour envoyer les invitations automatiquement, sans
 supprimer le parcours autonome par lien copiable si le relais est absent ou indisponible.
+L’interface complète, les messages de validation, les notifications in-app et Web Push,
+les dates, les nombres et le calendrier sont disponibles en français et en anglais. Le
+choix enregistré dans le profil s’applique immédiatement et suit la session sur les autres
+appareils.
 
 ## Enrichissements restant hors critères globaux
 
 Le PRD contient aussi des extensions qui ne bloquent pas le MVP et pourront constituer une
-suite : interface entièrement traduite, fichiers attachés à tous les types d'objet et
-backend S3.
+suite : fichiers attachés à tous les types d'objet et backend S3.
 Une matrice manuelle iPhone/Android et plusieurs reverse proxies NAS reste recommandée avant
 une version déclarée stable.

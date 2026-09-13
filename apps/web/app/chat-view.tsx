@@ -6,6 +6,7 @@ import {
   useState,
   type SyntheticEvent,
 } from 'react';
+import { formatBinarySize, localeTag, t } from '@/lib/i18n';
 import {
   ArrowLeft,
   Bell,
@@ -877,7 +878,7 @@ export function ChatView({
                     </div>
                     {uploadingLabel ? (
                       <output className="mt-1 block text-xs text-muted-foreground">
-                        {uploadingLabel}
+                        {t(uploadingLabel)}
                       </output>
                     ) : null}
                   </form>
@@ -948,7 +949,7 @@ function MessageBubble({
           <time
             className={`mt-1 block text-right text-[10px] ${mine ? 'text-white/70' : 'text-muted-foreground'}`}
           >
-            {new Intl.DateTimeFormat('fr-FR', {
+            {new Intl.DateTimeFormat(localeTag(), {
               hour: '2-digit',
               minute: '2-digit',
             }).format(new Date(message.createdAt))}
@@ -1143,9 +1144,7 @@ function compareMessages(left: ChatMessage, right: ChatMessage): number {
 }
 
 function formatFileSize(bytes: number): string {
-  if (bytes < 1_024) return `${bytes} o`;
-  if (bytes < 1_048_576) return `${Math.round(bytes / 1_024)} Ko`;
-  return `${(bytes / 1_048_576).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`;
+  return formatBinarySize(bytes);
 }
 
 function ConversationDialog({

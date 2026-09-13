@@ -13,6 +13,7 @@ import FullCalendar, {
 import dayGridPlugin from '@fullcalendar/react/daygrid';
 import interactionPlugin from '@fullcalendar/react/interaction';
 import listPlugin from '@fullcalendar/react/list';
+import enGbLocale from '@fullcalendar/react/locales/en-gb';
 import frLocale from '@fullcalendar/react/locales/fr';
 import timeGridPlugin from '@fullcalendar/react/timegrid';
 import formaTheme from '@fullcalendar/react/themes/forma';
@@ -75,6 +76,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { readAgendaCache, writeAgendaCache } from '@/lib/offline-storage';
+import { localeTag, useLocale } from '@/lib/i18n';
 
 const FamilyCalendar = FullCalendar as unknown as ComponentType<
   Record<string, unknown>
@@ -118,6 +120,7 @@ export function AgendaView({
   onComposerOpenChange,
   onOpenTasks,
 }: AgendaViewProps) {
+  const locale = useLocale();
   const sessionKey = `${instanceId}:${currentMemberId}`;
   const calendarRef = useRef<CalendarRef>(null);
   const [members, setMembers] = useState<FamilyMember[]>([]);
@@ -365,7 +368,7 @@ export function AgendaView({
               interactionPlugin,
             ]}
             themeSystem="forma"
-            locale={frLocale}
+            locale={locale === 'en' ? enGbLocale : frLocale}
             initialView={initialView}
             headerToolbar={{
               start: 'prev,next today',
@@ -961,12 +964,12 @@ function formatEntryDate(entry: AgendaEntry) {
     const inclusiveEnd = end
       ? new Date(end.getTime() - 24 * 60 * 60 * 1000)
       : null;
-    const day = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'full' });
+    const day = new Intl.DateTimeFormat(localeTag(), { dateStyle: 'full' });
     return inclusiveEnd && inclusiveEnd.toDateString() !== start.toDateString()
       ? `Du ${day.format(start)} au ${day.format(inclusiveEnd)}`
       : day.format(start);
   }
-  const dateTime = new Intl.DateTimeFormat('fr-FR', {
+  const dateTime = new Intl.DateTimeFormat(localeTag(), {
     dateStyle: 'full',
     timeStyle: 'short',
   });

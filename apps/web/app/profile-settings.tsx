@@ -25,6 +25,7 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from '@/components/ui/native-select';
+import { setLocale } from '@/lib/i18n';
 
 type ProfileSettingsProps = {
   csrfToken: string;
@@ -56,7 +57,7 @@ export function ProfileSettings({
       })
       .then((payload) => {
         setProfile(payload.profile);
-        document.documentElement.lang = payload.profile.locale;
+        setLocale(payload.profile.locale);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
@@ -105,7 +106,7 @@ export function ProfileSettings({
         throw new Error('Votre profil n’a pas pu être enregistré.');
       const payload = (await response.json()) as { profile: MemberProfile };
       setProfile(payload.profile);
-      document.documentElement.lang = payload.profile.locale;
+      setLocale(payload.profile.locale);
       setAvatarFile(null);
       setRemoveAvatar(false);
       onFirstNameChange(payload.profile.firstName);

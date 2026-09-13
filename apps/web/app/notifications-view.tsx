@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { localeTag } from '@/lib/i18n';
 import {
   Bell,
   Bookmark,
@@ -265,7 +266,7 @@ function NotificationRow({
           </p>
         ) : null}
         <p className="mt-1 text-xs text-muted-foreground">
-          {new Intl.DateTimeFormat('fr-FR', {
+          {new Intl.DateTimeFormat(localeTag(), {
             dateStyle: 'medium',
             timeStyle: 'short',
           }).format(new Date(notification.createdAt))}

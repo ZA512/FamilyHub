@@ -27,6 +27,7 @@ type InvitationRow = {
   instance_id: string;
   instance_name: string;
   timezone: string;
+  locale: 'fr' | 'en';
   email: string;
   role: 'ADMIN' | 'MEMBER';
   expires_at: Date;
@@ -287,7 +288,7 @@ export async function registerInvitationRoutes(
       try {
         await client.query('BEGIN');
         const locked = await client.query<InvitationRow>(
-          `SELECT inv.id, inv.instance_id, i.name AS instance_name, i.timezone,
+          `SELECT inv.id, inv.instance_id, i.name AS instance_name, i.timezone, i.locale,
                   inv.email, inv.role, inv.expires_at
            FROM invite inv
            JOIN instance i ON i.id = inv.instance_id
@@ -357,6 +358,7 @@ export async function registerInvitationRoutes(
             firstName: parsed.data.firstName,
             email: invitation.email,
             role: invitation.role,
+            locale: invitation.locale,
           },
           csrfToken: session.csrfToken,
         });
@@ -375,7 +377,7 @@ export async function registerInvitationRoutes(
 
 async function findInvitation(pool: Pool, token: string): Promise<InvitationRow | null> {
   const result = await pool.query<InvitationRow>(
-    `SELECT inv.id, inv.instance_id, i.name AS instance_name, i.timezone,
+    `SELECT inv.id, inv.instance_id, i.name AS instance_name, i.timezone, i.locale,
             inv.email, inv.role, inv.expires_at
      FROM invite inv
      JOIN instance i ON i.id = inv.instance_id

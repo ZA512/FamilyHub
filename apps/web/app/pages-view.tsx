@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
+import { localeTag } from '@/lib/i18n';
 import { EditorContent, useEditor } from '@tiptap/react';
 import Image from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
@@ -253,13 +254,13 @@ export function PagesView({
             .map((page) => page.folder)
             .filter((value): value is string => Boolean(value)),
         ),
-      ].sort((left, right) => left.localeCompare(right, 'fr')),
+      ].sort((left, right) => left.localeCompare(right, localeTag())),
     [pages],
   );
   const tags = useMemo(
     () =>
       [...new Set(pages.flatMap((page) => page.tags))].sort((left, right) =>
-        left.localeCompare(right, 'fr'),
+        left.localeCompare(right, localeTag()),
       ),
     [pages],
   );
@@ -1484,7 +1485,7 @@ function HistoryDialog({
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat(localeTag(), {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));

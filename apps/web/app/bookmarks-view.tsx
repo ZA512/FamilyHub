@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
+import { localeTag } from '@/lib/i18n';
 import {
   Bookmark,
   ExternalLink,
@@ -172,7 +173,7 @@ export function BookmarksView({
   const availableTags = useMemo(
     () =>
       [...new Set(bookmarks.flatMap((bookmark) => bookmark.tags))].sort(
-        (left, right) => left.localeCompare(right, 'fr'),
+        (left, right) => left.localeCompare(right, localeTag()),
       ),
     [bookmarks],
   );

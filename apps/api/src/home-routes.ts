@@ -428,13 +428,16 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
     const activeTaskCount = taskResult.rows[0]?.count ?? 0;
     const todayMealCount = mealResult.rows[0]?.count ?? 0;
     const attention: HomeAttention[] = [];
+    const english = request.session?.locale === 'en';
 
     if (unreadConversationCount) {
       attention.push({
         id: 'chat',
         count: unreadConversationCount,
         title: 'Messages',
-        detail: `${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} avec de nouveaux messages`,
+        detail: english
+          ? `${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} with new messages`
+          : `${unreadConversationCount} conversation${unreadConversationCount > 1 ? 's' : ''} avec de nouveaux messages`,
         view: 'chat',
       });
     }
@@ -444,7 +447,9 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
         id: 'notifications',
         count: unreadNotificationCount,
         title: 'Notifications',
-        detail: `${unreadNotificationCount} nouvelle${unreadNotificationCount > 1 ? 's' : ''} à consulter`,
+        detail: english
+          ? `${unreadNotificationCount} new notification${unreadNotificationCount > 1 ? 's' : ''}`
+          : `${unreadNotificationCount} nouvelle${unreadNotificationCount > 1 ? 's' : ''} à consulter`,
         view: 'notifications',
       });
     }
@@ -452,8 +457,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
       attention.push({
         id: 'shopping',
         count: pendingShoppingCount,
-        title: 'Liste de courses',
-        detail: `${pendingShoppingCount} article${pendingShoppingCount > 1 ? 's' : ''} à acheter`,
+        title: english ? 'Shopping list' : 'Liste de courses',
+        detail: english
+          ? `${pendingShoppingCount} item${pendingShoppingCount > 1 ? 's' : ''} to buy`
+          : `${pendingShoppingCount} article${pendingShoppingCount > 1 ? 's' : ''} à acheter`,
         view: 'shopping',
       });
     }
@@ -461,8 +468,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
       attention.push({
         id: 'tasks',
         count: activeTaskCount,
-        title: 'Tâches et corvées',
-        detail: `${activeTaskCount} élément${activeTaskCount > 1 ? 's' : ''} à faire`,
+        title: english ? 'Tasks and chores' : 'Tâches et corvées',
+        detail: english
+          ? `${activeTaskCount} item${activeTaskCount > 1 ? 's' : ''} to do`
+          : `${activeTaskCount} élément${activeTaskCount > 1 ? 's' : ''} à faire`,
         view: 'tasks',
       });
     }
@@ -470,8 +479,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
       attention.push({
         id: 'meals',
         count: todayMealCount,
-        title: 'Repas du jour',
-        detail: `${todayMealCount} repas${todayMealCount > 1 ? ' planifiés' : ' planifié'} aujourd’hui`,
+        title: english ? "Today's meals" : 'Repas du jour',
+        detail: english
+          ? `${todayMealCount} meal${todayMealCount > 1 ? 's' : ''} planned today`
+          : `${todayMealCount} repas${todayMealCount > 1 ? ' planifiés' : ' planifié'} aujourd’hui`,
         view: 'meals',
       });
     }

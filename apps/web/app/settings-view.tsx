@@ -1,4 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
+import { formatBinarySize, localeTag, t } from '@/lib/i18n';
 import {
   Bookmark,
   BellRing,
@@ -254,7 +255,7 @@ export function SettingsView({
           role="alert"
           className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
         >
-          {error || loadError}
+          {t(error || loadError)}
         </p>
       ) : null}
 
@@ -420,7 +421,9 @@ function BookmarkImport({ csrfToken }: { csrfToken: string }) {
         </Button>
       </div>
       {message ? (
-        <output className="mt-3 block text-sm text-[#087f72]">{message}</output>
+        <output className="mt-3 block text-sm text-[#087f72]">
+          {t(message)}
+        </output>
       ) : null}
       {error ? (
         <p role="alert" className="mt-3 text-sm text-destructive">
@@ -830,7 +833,9 @@ function NotificationSettings({ csrfToken }: { csrfToken: string }) {
             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
               <div>
                 {message ? (
-                  <output className="text-sm text-[#087f72]">{message}</output>
+                  <output className="text-sm text-[#087f72]">
+                    {t(message)}
+                  </output>
                 ) : null}
                 {error ? (
                   <p role="alert" className="text-sm text-destructive">
@@ -930,7 +935,7 @@ function AuditLogSettings() {
                     className="ml-auto text-xs text-muted-foreground"
                     dateTime={entry.createdAt}
                   >
-                    {new Intl.DateTimeFormat('fr-FR', {
+                    {new Intl.DateTimeFormat(localeTag(), {
                       dateStyle: 'short',
                       timeStyle: 'short',
                     }).format(new Date(entry.createdAt))}
@@ -1146,7 +1151,7 @@ function RateLimitSettings({
         ) : null}
         {message ? (
           <output className="mt-3 block text-sm text-[#087f72]">
-            {message}
+            {t(message)}
           </output>
         ) : null}
         {error ? (
@@ -1160,7 +1165,5 @@ function RateLimitSettings({
 }
 
 function formatStorageSize(bytes: number): string {
-  if (bytes < 1_048_576) return `${Math.round(bytes / 1_024)} Kio`;
-  if (bytes < 1_073_741_824) return `${(bytes / 1_048_576).toFixed(1)} Mio`;
-  return `${(bytes / 1_073_741_824).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Gio`;
+  return formatBinarySize(bytes);
 }

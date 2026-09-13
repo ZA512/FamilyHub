@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
+import { localeTag } from '@/lib/i18n';
 import {
   CalendarPlus,
   ChefHat,
@@ -315,7 +316,7 @@ export function MealsView({
               meal.id === result.meal.id ? result.meal : meal,
             )
           : [...current, result.meal].sort((a, b) =>
-              a.name.localeCompare(b.name, 'fr'),
+              a.name.localeCompare(b.name, localeTag()),
             ),
       );
       onComposerOpenChange(false);
@@ -1533,7 +1534,7 @@ function parseDate(value: string): Date {
 
 function formatDay(date: Date, long = false): string {
   return new Intl.DateTimeFormat(
-    'fr-FR',
+    localeTag(),
     long
       ? { day: 'numeric', month: 'long', year: 'numeric' }
       : { day: 'numeric', month: 'short' },
@@ -1541,13 +1542,15 @@ function formatDay(date: Date, long = false): string {
 }
 
 function formatWeekday(date: Date): string {
-  return new Intl.DateTimeFormat('fr-FR', { weekday: 'short' }).format(date);
+  return new Intl.DateTimeFormat(localeTag(), { weekday: 'short' }).format(
+    date,
+  );
 }
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 }).format(
-    value,
-  );
+  return new Intl.NumberFormat(localeTag(), {
+    maximumFractionDigits: 3,
+  }).format(value);
 }
 
 async function mealError(

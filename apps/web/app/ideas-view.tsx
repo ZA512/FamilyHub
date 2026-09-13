@@ -1,4 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
+import { localeTag } from '@/lib/i18n';
 import {
   CalendarDays,
   CheckCircle2,
@@ -1354,7 +1355,7 @@ function AudienceFields({
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(
+  return new Intl.DateTimeFormat(localeTag(), { dateStyle: 'medium' }).format(
     new Date(value),
   );
 }

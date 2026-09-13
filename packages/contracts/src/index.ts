@@ -34,6 +34,7 @@ export type CurrentMember = {
   firstName: string;
   email: string;
   role: 'ADMIN' | 'MEMBER';
+  locale?: 'fr' | 'en';
 };
 
 export const essentialModuleKeys = [

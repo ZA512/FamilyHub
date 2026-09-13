@@ -1,4 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
+import { localeTag, t } from '@/lib/i18n';
 import {
   LoaderCircle,
   LockKeyhole,
@@ -117,7 +118,13 @@ export function MembersView({
   }
 
   async function revokeInvitation(invitation: PendingInvitation) {
-    if (!window.confirm(`Annuler l’invitation envoyée à ${invitation.email} ?`))
+    if (
+      !window.confirm(
+        t("Annuler l’invitation envoyée à {0} ?", {
+          0: invitation.email,
+        }),
+      )
+    )
       return;
     setBusyInvitationId(invitation.id);
     setError('');
@@ -232,7 +239,7 @@ export function MembersView({
               group.id === payload.group.id ? payload.group : group,
             )
           : [...current, payload.group].sort((left, right) =>
-              left.name.localeCompare(right.name, 'fr'),
+              left.name.localeCompare(right.name, localeTag()),
             ),
       );
       form.reset();
@@ -247,7 +254,8 @@ export function MembersView({
   }
 
   async function deleteGroup(group: FamilyGroup) {
-    if (!window.confirm(`Supprimer le groupe « ${group.name} » ?`)) return;
+    if (!window.confirm(t('Supprimer le groupe « {0} » ?', { 0: group.name })))
+      return;
     setBusyGroupId(group.id);
     setError('');
     try {
@@ -488,7 +496,7 @@ export function MembersView({
                         </Badge>
                         <span className="text-xs text-muted-foreground">
                           expire le{' '}
-                          {new Intl.DateTimeFormat('fr-FR', {
+                          {new Intl.DateTimeFormat(localeTag(), {
                             day: 'numeric',
                             month: 'short',
                           }).format(new Date(invitation.expiresAt))}
@@ -737,7 +745,10 @@ function MemberCard({
                   if (
                     member.status === 'ACTIVE' &&
                     !window.confirm(
-                      `Désactiver ${displayName} ? Ses sessions seront immédiatement fermées.`,
+                      t(
+                        'Désactiver {0} ? Ses sessions seront immédiatement fermées.',
+                        { 0: displayName },
+                      ),
                     )
                   ) {
                     return;

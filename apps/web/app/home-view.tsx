@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { localeTag } from '@/lib/i18n';
 import {
   Bell,
   CheckCircle2,
@@ -48,7 +49,7 @@ export function HomeView({
   const [summary, setSummary] = useState<HomeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const todayLabel = new Intl.DateTimeFormat('fr-FR', {
+  const todayLabel = new Intl.DateTimeFormat(localeTag(), {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -280,7 +281,9 @@ function ActivitySection({
 function formatRelativeDate(value: string) {
   const date = new Date(value);
   const elapsedMinutes = Math.round((date.getTime() - Date.now()) / 60_000);
-  const formatter = new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' });
+  const formatter = new Intl.RelativeTimeFormat(localeTag(), {
+    numeric: 'auto',
+  });
   if (Math.abs(elapsedMinutes) < 60)
     return formatter.format(elapsedMinutes, 'minute');
   const elapsedHours = Math.round(elapsedMinutes / 60);

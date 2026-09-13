@@ -25,6 +25,7 @@ import {
   readOfflineSession,
   saveOfflineSession,
 } from '../lib/offline-storage';
+import { getLocale, setLocale, useLocale } from '../lib/i18n';
 
 type View = 'loading' | 'setup' | 'login' | 'invite' | 'dashboard';
 const PENDING_LOGOUT_KEY = 'familyhub-pending-logout';
@@ -46,6 +47,7 @@ async function persistAuthenticatedSession(member: CurrentMember) {
 }
 
 export function App() {
+  const locale = useLocale();
   const [view, setView] = useState<View>('loading');
   const [member, setMember] = useState<CurrentMember | null>(null);
   const [csrfToken, setCsrfToken] = useState('');
@@ -102,6 +104,7 @@ export function App() {
             csrfToken: string;
           };
           setMember(payload.member);
+          setLocale(payload.member.locale ?? getLocale());
           setCsrfToken(payload.csrfToken);
           await persistAuthenticatedSession(payload.member);
           setView('dashboard');
@@ -113,6 +116,7 @@ export function App() {
         const cachedMember = await readOfflineSession().catch(() => null);
         if (cachedMember) {
           setMember(cachedMember);
+          setLocale(cachedMember.locale ?? getLocale());
           setCsrfToken('');
           setError('');
           setView('dashboard');
@@ -152,6 +156,7 @@ export function App() {
       const payload = await readJson(response);
       if (!response.ok) throw new Error(setupError(payload.error));
       setMember(payload.member as CurrentMember);
+      setLocale((payload.member as CurrentMember).locale ?? 'fr');
       setCsrfToken(
         typeof payload.csrfToken === 'string' ? payload.csrfToken : '',
       );
@@ -186,6 +191,7 @@ export function App() {
       const payload = await readJson(response);
       if (!response.ok) throw new Error('Email ou mot de passe incorrect.');
       setMember(payload.member as CurrentMember);
+      setLocale((payload.member as CurrentMember).locale ?? getLocale());
       setCsrfToken(
         typeof payload.csrfToken === 'string' ? payload.csrfToken : '',
       );
@@ -233,6 +239,7 @@ export function App() {
         );
       }
       setMember(payload.member as CurrentMember);
+      setLocale((payload.member as CurrentMember).locale ?? getLocale());
       setCsrfToken(
         typeof payload.csrfToken === 'string' ? payload.csrfToken : '',
       );
@@ -303,6 +310,7 @@ export function App() {
           csrfToken: string;
         };
         setMember(payload.member);
+        setLocale(payload.member.locale ?? getLocale());
         setCsrfToken(payload.csrfToken);
         await persistAuthenticatedSession(payload.member);
       } catch {
@@ -356,6 +364,22 @@ export function App() {
     return () => window.removeEventListener('online', onOnline);
   }, [view]);
 
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.title =
+      locale === 'en'
+        ? 'FamilyHub — Your household'
+        : 'FamilyHub — Votre foyer';
+    document
+      .querySelector('meta[name="description"]')
+      ?.setAttribute(
+        'content',
+        locale === 'en'
+          ? 'The private space for organising household life.'
+          : "L’espace privé pour organiser la vie du foyer.",
+      );
+  }, [locale]);
+
   if (view === 'loading') return <LoadingScreen />;
   if (view === 'dashboard' && member) {
     return (
@@ -374,6 +398,29 @@ export function App() {
   return (
     <main className="grid min-h-svh place-items-center bg-[radial-gradient(circle_at_top_left,#daf4ef_0,transparent_34%),linear-gradient(150deg,#f9fcfc_0%,#eef4f7_100%)] px-4 py-10">
       <div className="w-full max-w-md">
+        <fieldset
+          className="mb-4 flex justify-end gap-1 border-0 p-0"
+          aria-label="Langue"
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant={locale === 'fr' ? 'secondary' : 'ghost'}
+            aria-pressed={locale === 'fr'}
+            onClick={() => setLocale('fr')}
+          >
+            Français
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={locale === 'en' ? 'secondary' : 'ghost'}
+            aria-pressed={locale === 'en'}
+            onClick={() => setLocale('en')}
+          >
+            English
+          </Button>
+        </fieldset>
         <div className="mb-6 flex items-center justify-center gap-3">
           <div className="grid size-11 place-items-center rounded-2xl bg-[#102b3f] text-white shadow-lg">
             <Sparkles className="size-5" aria-hidden="true" />

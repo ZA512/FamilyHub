@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import { createSessionGuard, requireCsrf } from './auth.js';
 import { importantNotificationTypes } from './notification-policy.js';
+import { localizeNotification } from './notification-copy.js';
 
 const notificationIdSchema = z.string().uuid();
 
@@ -47,9 +48,13 @@ const selectNotification = `
   LEFT JOIN notification_preference np ON np.member_id = n.recipient_member_id
 `;
 
-function serializeNotification(row: NotificationRow): FamilyNotification {
+function serializeNotification(
+  row: NotificationRow,
+  locale: 'fr' | 'en' | undefined,
+): FamilyNotification {
+  const localized = localizeNotification(locale, row);
   return {
-    ...row,
+    ...localized,
     readAt: row.readAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
@@ -190,7 +195,9 @@ export async function registerNotificationRoutes(
     ]);
 
     return {
-      notifications: notifications.rows.map(serializeNotification),
+      notifications: notifications.rows.map((row) =>
+        serializeNotification(row, request.session?.locale),
+      ),
       unreadCount: count.rows[0]?.unreadCount ?? 0,
     };
   });
@@ -222,7 +229,9 @@ export async function registerNotificationRoutes(
       );
       const row = result.rows[0];
       if (!row) return reply.code(404).send({ error: 'NOTIFICATION_NOT_FOUND' });
-      return { notification: serializeNotification(row) };
+      return {
+        notification: serializeNotification(row, request.session?.locale),
+      };
     },
   );
 

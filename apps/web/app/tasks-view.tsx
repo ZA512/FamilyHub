@@ -6,6 +6,7 @@ import {
   useState,
   type SyntheticEvent,
 } from 'react';
+import { localeTag } from '@/lib/i18n';
 import {
   CalendarClock,
   Check,
@@ -1105,7 +1106,7 @@ function Field({
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat(localeTag(), {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));

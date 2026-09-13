@@ -1,4 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
+import { localeTag } from '@/lib/i18n';
 import {
   ContactRound,
   Globe2,
@@ -329,7 +330,7 @@ export function ContactsView({
 
   const availableTags = [
     ...new Set(contacts.flatMap((contact) => contact.tags)),
-  ].sort((left, right) => left.localeCompare(right, 'fr'));
+  ].sort((left, right) => left.localeCompare(right, localeTag()));
 
   return (
     <section>
