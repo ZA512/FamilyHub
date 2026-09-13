@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { loadConfig } from '@familyhub/config';
+import { loadConfig } from '../../../packages/config/src/index.js';
 
 const { createTransport, sendMail } = vi.hoisted(() => ({
   createTransport: vi.fn(),
