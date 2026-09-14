@@ -9,7 +9,6 @@ import {
   Download,
   FileText,
   Gauge,
-  HardDrive,
   Lightbulb,
   ListChecks,
   LoaderCircle,
@@ -233,7 +232,7 @@ export function SettingsView({
         </CardContent>
       </Card>
 
-      <RateLimitSettings role={role} csrfToken={csrfToken} />
+      <HouseholdSettings role={role} csrfToken={csrfToken} />
 
       {role === 'ADMIN' ? <AuditLogSettings /> : null}
 
@@ -959,7 +958,7 @@ function AuditLogSettings() {
   );
 }
 
-function RateLimitSettings({
+function HouseholdSettings({
   role,
   csrfToken,
 }: {
@@ -968,6 +967,7 @@ function RateLimitSettings({
 }) {
   const [limit, setLimit] = useState(1_200);
   const [quotaGiB, setQuotaGiB] = useState(10);
+  const [mealPlanWeekStartsOn, setMealPlanWeekStartsOn] = useState(1);
   const [usage, setUsage] = useState<StorageUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -982,7 +982,7 @@ function RateLimitSettings({
     ])
       .then(async ([settingsResponse, usageResponse]) => {
         if (!settingsResponse.ok || !usageResponse.ok)
-          throw new Error('Impossible de charger les limites de l’instance.');
+          throw new Error('Impossible de charger la configuration du foyer.');
         return Promise.all([
           settingsResponse.json() as Promise<{ settings: InstanceSettings }>,
           usageResponse.json() as Promise<{ usage: StorageUsage }>,
@@ -991,12 +991,15 @@ function RateLimitSettings({
       .then(([settingsPayload, usagePayload]) => {
         setLimit(settingsPayload.settings.apiRateLimitPerMinute);
         setQuotaGiB(settingsPayload.settings.storageQuotaBytes / 1_073_741_824);
+        setMealPlanWeekStartsOn(settingsPayload.settings.mealPlanWeekStartsOn);
         setUsage(usagePayload.usage);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         setError(
-          reason instanceof Error ? reason.message : 'Limites indisponibles.',
+          reason instanceof Error
+            ? reason.message
+            : 'Configuration indisponible.',
         );
       })
       .finally(() => {
@@ -1020,19 +1023,21 @@ function RateLimitSettings({
         body: JSON.stringify({
           apiRateLimitPerMinute: limit,
           storageQuotaBytes: Math.round(quotaGiB * 1_073_741_824),
+          mealPlanWeekStartsOn,
         }),
       });
       if (!response.ok)
-        throw new Error('La limite n’a pas pu être enregistrée.');
+        throw new Error('La configuration n’a pas pu être enregistrée.');
       const payload = (await response.json()) as { settings: InstanceSettings };
       setLimit(payload.settings.apiRateLimitPerMinute);
       setQuotaGiB(payload.settings.storageQuotaBytes / 1_073_741_824);
+      setMealPlanWeekStartsOn(payload.settings.mealPlanWeekStartsOn);
       setUsage((current) =>
         current
           ? { ...current, quotaBytes: payload.settings.storageQuotaBytes }
           : current,
       );
-      setMessage('Les nouvelles limites sont actives immédiatement.');
+      setMessage('La configuration du foyer est enregistrée.');
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Enregistrement impossible.',
@@ -1046,13 +1051,12 @@ function RateLimitSettings({
     <Card className="mb-8">
       <CardHeader className="flex-row items-start gap-4">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
-          <HardDrive className="size-5" aria-hidden="true" />
+          <CalendarDays className="size-5" aria-hidden="true" />
         </span>
         <div>
-          <CardTitle className="text-base">Limites de l’instance</CardTitle>
+          <CardTitle className="text-base">Configuration du foyer</CardTitle>
           <CardDescription className="mt-1">
-            Contrôlez la charge API et l’espace occupé par les documents et
-            pièces jointes du foyer.
+            Adaptez le planning des repas et les ressources de cette instance.
           </CardDescription>
         </div>
       </CardHeader>
@@ -1090,63 +1094,95 @@ function RateLimitSettings({
             ) : null}
           </div>
         ) : null}
-        <form
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end"
-          onSubmit={save}
-        >
-          <div className="space-y-2">
-            <Label htmlFor="api-rate-limit" className="flex items-center gap-2">
-              <Gauge className="size-4" aria-hidden="true" />
-              Requêtes/minute/session
+        <form className="space-y-5" onSubmit={save}>
+          <div className="max-w-sm space-y-2">
+            <Label
+              htmlFor="meal-plan-week-start"
+              className="flex items-center gap-2"
+            >
+              <Utensils className="size-4" aria-hidden="true" />
+              Premier jour du planning des repas
             </Label>
-            <Input
-              id="api-rate-limit"
-              type="number"
-              min={300}
-              max={10_000}
-              step={100}
-              value={limit}
+            <NativeSelect
+              id="meal-plan-week-start"
+              className="w-full"
+              value={mealPlanWeekStartsOn}
               disabled={loading || role !== 'ADMIN'}
-              onChange={(event) => setLimit(Number(event.target.value))}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="storage-quota">Quota de stockage (Gio)</Label>
-            <Input
-              id="storage-quota"
-              type="number"
-              min={0.1}
-              max={10_240}
-              step={0.1}
-              value={quotaGiB}
-              disabled={loading || role !== 'ADMIN'}
-              onChange={(event) => setQuotaGiB(Number(event.target.value))}
-            />
-          </div>
-          {role === 'ADMIN' ? (
-            <Button
-              type="submit"
-              variant="outline"
-              disabled={
-                loading ||
-                saving ||
-                !csrfToken ||
-                limit < 300 ||
-                limit > 10_000 ||
-                quotaGiB < 0.1 ||
-                quotaGiB > 10_240
+              onChange={(event) =>
+                setMealPlanWeekStartsOn(Number(event.target.value))
               }
             >
-              {saving ? (
-                <LoaderCircle className="animate-spin" aria-hidden="true" />
-              ) : null}
-              Enregistrer
-            </Button>
-          ) : null}
+              <NativeSelectOption value={1}>Lundi</NativeSelectOption>
+              <NativeSelectOption value={2}>Mardi</NativeSelectOption>
+              <NativeSelectOption value={3}>Mercredi</NativeSelectOption>
+              <NativeSelectOption value={4}>Jeudi</NativeSelectOption>
+              <NativeSelectOption value={5}>Vendredi</NativeSelectOption>
+              <NativeSelectOption value={6}>Samedi</NativeSelectOption>
+              <NativeSelectOption value={0}>Dimanche</NativeSelectOption>
+            </NativeSelect>
+            <p className="text-xs text-muted-foreground">
+              La vue Repas affichera sept jours à partir de ce jour pour tous
+              les membres du foyer.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+            <div className="space-y-2">
+              <Label
+                htmlFor="api-rate-limit"
+                className="flex items-center gap-2"
+              >
+                <Gauge className="size-4" aria-hidden="true" />
+                Requêtes/minute/session
+              </Label>
+              <Input
+                id="api-rate-limit"
+                type="number"
+                min={300}
+                max={10_000}
+                step={100}
+                value={limit}
+                disabled={loading || role !== 'ADMIN'}
+                onChange={(event) => setLimit(Number(event.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="storage-quota">Quota de stockage (Gio)</Label>
+              <Input
+                id="storage-quota"
+                type="number"
+                min={0.1}
+                max={10_240}
+                step={0.1}
+                value={quotaGiB}
+                disabled={loading || role !== 'ADMIN'}
+                onChange={(event) => setQuotaGiB(Number(event.target.value))}
+              />
+            </div>
+            {role === 'ADMIN' ? (
+              <Button
+                type="submit"
+                variant="outline"
+                disabled={
+                  loading ||
+                  saving ||
+                  !csrfToken ||
+                  limit < 300 ||
+                  limit > 10_000 ||
+                  quotaGiB < 0.1 ||
+                  quotaGiB > 10_240
+                }
+              >
+                {saving ? (
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                ) : null}
+                Enregistrer
+              </Button>
+            ) : null}
+          </div>
         </form>
         {role !== 'ADMIN' ? (
           <p className="mt-3 text-sm text-muted-foreground">
-            Seul un administrateur peut modifier cette limite.
+            Seul un administrateur peut modifier la configuration du foyer.
           </p>
         ) : null}
         {message ? (

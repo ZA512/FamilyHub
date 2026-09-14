@@ -700,9 +700,24 @@ export const englishMessages: Record<string, string> = {
   'Les 30 dernières actions sensibles de l’instance, réservées aux administrateurs.':
     'The last 30 sensitive instance actions, visible to administrators only.',
   'Aucune action enregistrée.': 'No recorded actions.',
-  'Limites de l’instance': 'Instance limits',
-  'Contrôlez la charge API et l’espace occupé par les documents et pièces jointes du foyer.':
-    'Control API load and the space used by household documents and attachments.',
+  'Configuration du foyer': 'Household settings',
+  'Adaptez le planning des repas et les ressources de cette instance.':
+    'Adjust the meal plan and resources for this instance.',
+  'Impossible de charger la configuration du foyer.':
+    'Unable to load household settings.',
+  'Configuration indisponible.': 'Settings unavailable.',
+  'La configuration n’a pas pu être enregistrée.':
+    'The settings could not be saved.',
+  'Premier jour du planning des repas': 'First day of the meal plan',
+  Lundi: 'Monday',
+  Mardi: 'Tuesday',
+  Mercredi: 'Wednesday',
+  Jeudi: 'Thursday',
+  Vendredi: 'Friday',
+  Samedi: 'Saturday',
+  Dimanche: 'Sunday',
+  'La vue Repas affichera sept jours à partir de ce jour pour tous les membres du foyer.':
+    'The Meals view will show seven days starting on this day for every household member.',
   'Stockage utilisé': 'Storage used',
   sur: 'of',
   fichier: 'file',
@@ -712,8 +727,8 @@ export const englishMessages: Record<string, string> = {
   'libres sur le volume physique.': 'free on the physical volume.',
   'Requêtes/minute/session': 'Requests/minute/session',
   'Quota de stockage (Gio)': 'Storage quota (GiB)',
-  'Seul un administrateur peut modifier cette limite.':
-    'Only an administrator can change this limit.',
+  'Seul un administrateur peut modifier la configuration du foyer.':
+    'Only an administrator can change household settings.',
   'Lien d’invitation': 'Invitation link',
   'Adresse email': 'Email address',
   Rôle: 'Role',
@@ -766,8 +781,7 @@ export const englishTemplateMessages: Record<string, string> = {
   '{0} {1} {2} groupe {3}': '{0} {1} {2} group {3}',
   'Désactiver {0} ? Ses sessions seront immédiatement fermées.':
     'Deactivate {0}? Their sessions will be closed immediately.',
-  "Annuler l’invitation envoyée à {0} ?":
-    'Cancel the invitation sent to {0}?',
+  'Annuler l’invitation envoyée à {0} ?': 'Cancel the invitation sent to {0}?',
   'Supprimer le groupe « {0} » ?': 'Delete the group “{0}”?',
   'Planifier le {0}': 'Schedule on {0}',
   'Présentation de {0}': 'Photo of {0}',
@@ -947,9 +961,9 @@ Object.assign(englishMessages, {
   'Liens utiles partagés avec le foyer.':
     'Useful links shared with the household.',
   Lieux: 'Places',
-  'Liste commune et demandes de courses.':
-    'Shared list and shopping requests.',
-  "Listes d’idées et de recommandations.": 'Lists of ideas and recommendations.',
+  'Liste commune et demandes de courses.': 'Shared list and shopping requests.',
+  'Listes d’idées et de recommandations.':
+    'Lists of ideas and recommendations.',
   Livres: 'Books',
   Musiques: 'Music',
   Non: 'No',
@@ -1239,12 +1253,12 @@ Object.assign(englishMessages, {
     'Your response could not be saved.',
   'Indiquez le début et la fin.': 'Enter a start and end.',
   'Ce foyer est déjà configuré.': 'This household is already configured.',
-  "Le jeton d’installation est incorrect.": 'The setup token is incorrect.',
+  'Le jeton d’installation est incorrect.': 'The setup token is incorrect.',
   'Vérifiez les informations saisies.': 'Check the information entered.',
-  "Cette action ne correspond plus à l’état de la tâche.":
+  'Cette action ne correspond plus à l’état de la tâche.':
     'This action no longer matches the task state.',
   'Cette tâche est déjà terminée.': 'This task is already completed.',
-  "Le responsable sélectionné n’est plus disponible.":
+  'Le responsable sélectionné n’est plus disponible.':
     'The selected assignee is no longer available.',
   'Le groupe sélectionné n’est plus disponible.':
     'The selected group is no longer available.',
@@ -1253,26 +1267,23 @@ Object.assign(englishMessages, {
   'Une tâche privée ne peut être attribuée qu’à vous.':
     'A private task can only be assigned to you.',
   'Vérifiez les informations de la tâche.': 'Check the task information.',
-  'Vous ne pouvez pas modifier cette tâche.':
-    'You cannot edit this task.',
+  'Vous ne pouvez pas modifier cette tâche.': 'You cannot edit this task.',
   'Un événement privé ne peut inviter que vous.':
     'A private event can only invite you.',
-  "Un participant sélectionné n’est plus disponible.":
+  'Un participant sélectionné n’est plus disponible.':
     'A selected participant is no longer available.',
   'Vérifiez les dates et les informations saisies.':
     'Check the dates and information entered.',
-  'Vous ne pouvez pas modifier cet événement.':
-    'You cannot edit this event.',
+  'Vous ne pouvez pas modifier cet événement.': 'You cannot edit this event.',
   'Un ingrédient apparaît plusieurs fois.':
     'An ingredient appears more than once.',
-  'Vérifiez le plat et ses ingrédients.':
-    'Check the dish and its ingredients.',
+  'Vérifiez le plat et ses ingrédients.': 'Check the dish and its ingredients.',
   'Vous ne pouvez pas modifier ce plat.': 'You cannot edit this dish.',
   'Notifications Web Push désactivées sur cet appareil.':
     'Web Push notifications disabled on this device.',
   'Notifications Web Push activées sur cet appareil.':
     'Web Push notifications enabled on this device.',
   'Préférences enregistrées.': 'Preferences saved.',
-  'Les nouvelles limites sont actives immédiatement.':
-    'The new limits are effective immediately.',
+  'La configuration du foyer est enregistrée.':
+    'Household settings have been saved.',
 });

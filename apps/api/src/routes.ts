@@ -47,7 +47,11 @@ import { registerImportRoutes } from './import-routes.js';
 import { registerContactRoutes } from './contact-routes.js';
 import { registerDocumentRoutes } from './document-routes.js';
 import { registerExportRoutes } from './export-routes.js';
-import { readStorageQuota, type RuntimeSettings } from './runtime-settings.js';
+import {
+  readMealPlanWeekStartsOn,
+  readStorageQuota,
+  type RuntimeSettings,
+} from './runtime-settings.js';
 
 export async function registerRoutes(
   app: FastifyInstance,
@@ -351,8 +355,12 @@ export async function registerRoutes(
   );
 
   app.get('/api/v1/instance-settings', { preHandler: requireSession }, async (request) => {
-    const stored = await pool.query<{ storageQuota: unknown }>(
-      `SELECT settings -> 'storageQuotaBytes' AS "storageQuota"
+    const stored = await pool.query<{
+      storageQuota: unknown;
+      mealPlanWeekStartsOn: unknown;
+    }>(
+      `SELECT settings -> 'storageQuotaBytes' AS "storageQuota",
+              settings -> 'mealPlanWeekStartsOn' AS "mealPlanWeekStartsOn"
          FROM module_config WHERE instance_id = $1 AND module_key = 'settings'`,
       [request.session?.instanceId],
     );
@@ -360,6 +368,7 @@ export async function registerRoutes(
       settings: {
         apiRateLimitPerMinute: runtimeSettings.apiRateLimitPerMinute,
         storageQuotaBytes: readStorageQuota(stored.rows[0]?.storageQuota),
+        mealPlanWeekStartsOn: readMealPlanWeekStartsOn(stored.rows[0]?.mealPlanWeekStartsOn),
       } satisfies InstanceSettings,
     };
   });
@@ -379,27 +388,39 @@ export async function registerRoutes(
       const previousLimit = runtimeSettings.apiRateLimitPerMinute;
       const client = await pool.connect();
       let previousStorageQuota = readStorageQuota(undefined);
+      let previousMealPlanWeekStartsOn = 1;
       try {
         await client.query('BEGIN');
-        const previous = await client.query<{ storageQuota: unknown }>(
-          `SELECT settings -> 'storageQuotaBytes' AS "storageQuota"
+        const previous = await client.query<{
+          storageQuota: unknown;
+          mealPlanWeekStartsOn: unknown;
+        }>(
+          `SELECT settings -> 'storageQuotaBytes' AS "storageQuota",
+                  settings -> 'mealPlanWeekStartsOn' AS "mealPlanWeekStartsOn"
            FROM module_config
            WHERE instance_id = $1 AND module_key = 'settings'
            FOR UPDATE`,
           [request.session.instanceId],
         );
         previousStorageQuota = readStorageQuota(previous.rows[0]?.storageQuota);
+        previousMealPlanWeekStartsOn = readMealPlanWeekStartsOn(
+          previous.rows[0]?.mealPlanWeekStartsOn,
+        );
         await client.query(
           `UPDATE module_config
            SET settings = jsonb_set(
-                 jsonb_set(settings, '{apiRateLimitPerMinute}', to_jsonb($1::integer)),
-                 '{storageQuotaBytes}', to_jsonb($2::bigint)
+                 jsonb_set(
+                   jsonb_set(settings, '{apiRateLimitPerMinute}', to_jsonb($1::integer)),
+                   '{storageQuotaBytes}', to_jsonb($2::bigint)
+                 ),
+                 '{mealPlanWeekStartsOn}', to_jsonb($3::integer)
                ),
                updated_at = now()
-           WHERE instance_id = $3 AND module_key = 'settings'`,
+           WHERE instance_id = $4 AND module_key = 'settings'`,
           [
             parsed.data.apiRateLimitPerMinute,
             parsed.data.storageQuotaBytes,
+            parsed.data.mealPlanWeekStartsOn,
             request.session.instanceId,
           ],
         );
@@ -419,6 +440,10 @@ export async function registerRoutes(
                 before: previousStorageQuota,
                 after: parsed.data.storageQuotaBytes,
               },
+              mealPlanWeekStartsOn: {
+                before: previousMealPlanWeekStartsOn,
+                after: parsed.data.mealPlanWeekStartsOn,
+              },
             }),
           ],
         );
@@ -434,6 +459,7 @@ export async function registerRoutes(
         settings: {
           apiRateLimitPerMinute: runtimeSettings.apiRateLimitPerMinute,
           storageQuotaBytes: parsed.data.storageQuotaBytes,
+          mealPlanWeekStartsOn: parsed.data.mealPlanWeekStartsOn,
         } satisfies InstanceSettings,
       };
     },

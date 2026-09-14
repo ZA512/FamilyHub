@@ -503,6 +503,10 @@ Permet d'affecter un plat à :
 - dîner ;
 - autre créneau facultatif.
 
+Le foyer peut choisir le premier jour de sa semaine de planning (lundi par défaut). La vue
+affiche toujours les sept jours consécutifs de cette semaine, par exemple du samedi au
+vendredi lorsque les courses sont préparées le samedi.
+
 ## 10.4. Génération des courses
 
 Depuis un plat ou une période du planning :

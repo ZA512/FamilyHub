@@ -19,10 +19,12 @@ import {
 
 import type {
   FamilyMeal,
+  InstanceSettings,
   MealPlanEntry,
   MealPreference,
   MealSlot,
   ModuleConfig,
+  WeekStartsOn,
 } from '@familyhub/contracts';
 
 import {
@@ -63,6 +65,7 @@ import {
   writeMealPlanCache,
   writeMealsCache,
 } from '@/lib/offline-storage';
+import { normalizeWeekStartsOn, startOfMealWeek } from '@/lib/meal-week';
 
 type MealsViewProps = {
   currentMemberId: string;
@@ -105,7 +108,11 @@ export function MealsView({
   const [meals, setMeals] = useState<FamilyMeal[]>([]);
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [shoppingEnabled, setShoppingEnabled] = useState(true);
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [weekStartsOn, setWeekStartsOn] = useState<WeekStartsOn>(1);
+  const [weekStart, setWeekStart] = useState(() =>
+    startOfMealWeek(new Date(), 1),
+  );
+  const [weekSettingsLoaded, setWeekSettingsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [planLoading, setPlanLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -146,10 +153,20 @@ export function MealsView({
         setShoppingEnabled(cached.shoppingEnabled);
       }
       try {
-        const [mealsResponse, modulesResponse] = await Promise.all([
-          fetch('/api/v1/meals', { signal: controller.signal }),
-          fetch('/api/v1/modules', { signal: controller.signal }),
-        ]);
+        const [mealsResponse, modulesResponse, settingsResponse] =
+          await Promise.all([
+            fetch('/api/v1/meals', { signal: controller.signal }),
+            fetch('/api/v1/modules', { signal: controller.signal }),
+            fetch('/api/v1/instance-settings', { signal: controller.signal }),
+          ]);
+        const settingsPayload = settingsResponse.ok
+          ? ((await settingsResponse.json()) as { settings: InstanceSettings })
+          : null;
+        const firstDay = normalizeWeekStartsOn(
+          settingsPayload?.settings.mealPlanWeekStartsOn,
+        );
+        setWeekStartsOn(firstDay);
+        setWeekStart(startOfMealWeek(new Date(), firstDay));
         if (!mealsResponse.ok)
           throw new Error('Impossible de charger les plats.');
         const mealsPayload = (await mealsResponse.json()) as {
@@ -180,7 +197,10 @@ export function MealsView({
           );
         }
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          setWeekSettingsLoaded(true);
+        }
       }
     }
     void loadMeals();
@@ -188,6 +208,7 @@ export function MealsView({
   }, [sessionKey]);
 
   useEffect(() => {
+    if (!weekSettingsLoaded) return;
     const controller = new AbortController();
     const start = toDateInput(weekStart);
     const end = toDateInput(addDays(weekStart, 6));
@@ -224,7 +245,7 @@ export function MealsView({
     }
     void loadPlan();
     return () => controller.abort();
-  }, [sessionKey, weekStart]);
+  }, [sessionKey, weekSettingsLoaded, weekStart]);
 
   useEffect(() => {
     if (!loading) {
@@ -645,7 +666,9 @@ export function MealsView({
               shoppingEnabled={shoppingEnabled}
               onPrevious={() => setWeekStart(addDays(weekStart, -7))}
               onNext={() => setWeekStart(addDays(weekStart, 7))}
-              onToday={() => setWeekStart(startOfWeek(new Date()))}
+              onToday={() =>
+                setWeekStart(startOfMealWeek(new Date(), weekStartsOn))
+              }
               onAdd={openPlan}
               onEdit={(entry) => openPlan(parseDate(entry.date), entry)}
               onShopping={(entry) => {
@@ -1507,13 +1530,6 @@ function TextField({
       <Textarea id={id} {...props} />
     </div>
   );
-}
-
-function startOfWeek(date: Date): Date {
-  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = result.getDay() || 7;
-  result.setDate(result.getDate() - day + 1);
-  return result;
 }
 
 function addDays(date: Date, amount: number): Date {

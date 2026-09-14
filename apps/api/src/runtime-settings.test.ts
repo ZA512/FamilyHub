@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_API_RATE_LIMIT_PER_MINUTE,
+  DEFAULT_MEAL_PLAN_WEEK_STARTS_ON,
   DEFAULT_STORAGE_QUOTA_BYTES,
   readApiRateLimit,
+  readMealPlanWeekStartsOn,
   readStorageQuota,
 } from './runtime-settings.js';
 
@@ -18,6 +20,16 @@ describe('runtime settings', () => {
       expect(readApiRateLimit(value)).toBe(DEFAULT_API_RATE_LIMIT_PER_MINUTE);
     },
   );
+});
+
+describe('readMealPlanWeekStartsOn', () => {
+  it.each([0, 1, 6])('accepte le jour %s', (value) => {
+    expect(readMealPlanWeekStartsOn(value)).toBe(value);
+  });
+
+  it.each([undefined, null, '6', -1, 7, 1.5])('utilise le lundi pour %s', (value) => {
+    expect(readMealPlanWeekStartsOn(value)).toBe(DEFAULT_MEAL_PLAN_WEEK_STARTS_ON);
+  });
 });
 
 describe('readStorageQuota', () => {

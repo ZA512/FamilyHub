@@ -8,10 +8,12 @@ describe('instance settings contracts', () => {
       instanceSettingsUpdateSchema.parse({
         apiRateLimitPerMinute: 2_500,
         storageQuotaBytes: 5_368_709_120,
+        mealPlanWeekStartsOn: 6,
       }),
     ).toEqual({
       apiRateLimitPerMinute: 2_500,
       storageQuotaBytes: 5_368_709_120,
+      mealPlanWeekStartsOn: 6,
     });
   });
 
@@ -20,6 +22,7 @@ describe('instance settings contracts', () => {
       instanceSettingsUpdateSchema.parse({
         apiRateLimitPerMinute,
         storageQuotaBytes: 5_368_709_120,
+        mealPlanWeekStartsOn: 1,
       }),
     ).toThrow();
   });
@@ -31,8 +34,19 @@ describe('instance settings contracts', () => {
         instanceSettingsUpdateSchema.parse({
           apiRateLimitPerMinute: 1_200,
           storageQuotaBytes,
+          mealPlanWeekStartsOn: 1,
         }),
       ).toThrow();
     },
   );
+
+  it.each([-1, 7, 1.5])('refuse le premier jour de semaine %s', (mealPlanWeekStartsOn) => {
+    expect(() =>
+      instanceSettingsUpdateSchema.parse({
+        apiRateLimitPerMinute: 1_200,
+        storageQuotaBytes: 5_368_709_120,
+        mealPlanWeekStartsOn,
+      }),
+    ).toThrow();
+  });
 });

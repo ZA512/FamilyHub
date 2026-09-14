@@ -67,12 +67,16 @@ export const moduleUpdateSchema = z.object({ enabled: z.boolean() });
 export type ModuleKey = z.infer<typeof moduleKeySchema>;
 export type ModuleConfig = { key: ModuleKey; enabled: boolean };
 
+export const weekStartsOnSchema = z.number().int().min(0).max(6);
+
 export const instanceSettingsUpdateSchema = z.object({
   apiRateLimitPerMinute: z.number().int().min(300).max(10_000),
   storageQuotaBytes: z.number().int().min(104_857_600).max(10_995_116_277_760),
+  mealPlanWeekStartsOn: weekStartsOnSchema,
 });
 
 export type InstanceSettings = z.infer<typeof instanceSettingsUpdateSchema>;
+export type WeekStartsOn = z.infer<typeof weekStartsOnSchema>;
 
 export type StorageUsage = {
   usedBytes: number;

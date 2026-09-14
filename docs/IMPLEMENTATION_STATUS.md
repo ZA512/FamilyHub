@@ -48,6 +48,10 @@ les dates, les nombres et le calendrier sont disponibles en français et en angl
 choix enregistré dans le profil s’applique immédiatement et suit la session sur les autres
 appareils.
 
+Le premier jour du planning des repas est configurable par un administrateur pour tout le
+foyer. La navigation hebdomadaire et le retour à la semaine courante respectent ce choix,
+avec le lundi comme valeur compatible pour les installations existantes.
+
 Le module Tâches distingue désormais les tâches à terminer des routines permanentes sans
 multiplier les entrées de navigation. Une création peut cibler soi-même, une personne, un
 groupe ou tout le foyer, avec visibilité déduite automatiquement. Les tâches personnelles
