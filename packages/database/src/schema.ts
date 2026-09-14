@@ -414,6 +414,7 @@ export const taskCompletions = pgTable(
   (table) => [
     uniqueIndex('task_completion_task_mutation_uq').on(table.taskId, table.clientMutationId),
     index('task_completion_task_date_idx').on(table.taskId, table.completedAt),
+    index('task_completion_member_date_idx').on(table.completedBy, table.completedAt),
   ],
 );
 

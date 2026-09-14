@@ -16,6 +16,7 @@ silencieuse de l'historique.
 | D-008 | ACL transversales centralisées et filtrage SQL avant recherche/pagination | Acceptée |
 | D-009 | IndexedDB et journal de mutations idempotentes pour l'offline | Acceptée |
 | D-010 | Redis, moteur de recherche et MinIO non requis au MVP | Acceptée |
+| D-011 | Le module Tâches garde une seule destination et expose deux concepts UX, Tâche et Routine ; destinataire et planification restent des dimensions indépendantes | Acceptée |
 
 ## Conséquences connues
 

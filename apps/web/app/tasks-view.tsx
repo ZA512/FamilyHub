@@ -6,9 +6,10 @@ import {
   useState,
   type SyntheticEvent,
 } from 'react';
-import { localeTag } from '@/lib/i18n';
+import { localeTag, t } from '@/lib/i18n';
 import {
   CalendarClock,
+  ChartNoAxesColumn,
   Check,
   CirclePlay,
   CloudOff,
@@ -18,14 +19,18 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  UserRound,
   Users,
 } from 'lucide-react';
 
 import type {
   FamilyMember,
+  FamilyGroup,
   FamilyTask,
+  TaskActivityEntry,
   TaskKind,
   TaskReopenPolicy,
+  TaskStatistics,
 } from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
@@ -44,7 +49,10 @@ import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -78,10 +86,13 @@ type TasksViewProps = {
 };
 
 const kindLabels: Record<TaskKind, string> = {
-  SCHEDULED: 'Tâche planifiée',
-  OPEN_CHORE: 'Corvée ouverte',
-  SEASONAL: 'Ponctuelle ou saisonnière',
+  SCHEDULED: 'Tâche',
+  OPEN_CHORE: 'Routine',
+  SEASONAL: 'Tâche',
 };
+
+type TaskFormMode = 'TASK' | 'ROUTINE';
+type TaskDateMode = 'NONE' | 'DUE' | 'PERIOD';
 
 export function TasksView({
   currentMemberId,
@@ -99,6 +110,11 @@ export function TasksView({
   );
   const [tasks, setTasks] = useState<FamilyTask[]>([]);
   const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [groups, setGroups] = useState<FamilyGroup[]>([]);
+  const [activity, setActivity] = useState<TaskActivityEntry[]>([]);
+  const [statistics, setStatistics] = useState<TaskStatistics | null>(null);
+  const [statsDays, setStatsDays] = useState('30');
+  const [visibleMemberIds, setVisibleMemberIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -109,12 +125,10 @@ export function TasksView({
   const [pendingCount, setPendingCount] = useState(0);
   const [conflictCount, setConflictCount] = useState(0);
   const synchronization = useRef<Promise<void> | null>(null);
-  const [kind, setKind] = useState<TaskKind>('OPEN_CHORE');
-  const [assigneeId, setAssigneeId] = useState('none');
-  const [visibility, setVisibility] = useState<'PRIVATE' | 'ALL_MEMBERS'>(
-    'ALL_MEMBERS',
-  );
-  const [claimable, setClaimable] = useState(true);
+  const visibleMemberSelectionInitialized = useRef(false);
+  const [formMode, setFormMode] = useState<TaskFormMode>('ROUTINE');
+  const [dateMode, setDateMode] = useState<TaskDateMode>('NONE');
+  const [recipient, setRecipient] = useState('household');
   const [reopenPolicy, setReopenPolicy] =
     useState<TaskReopenPolicy>('IMMEDIATE');
   const [taskToComplete, setTaskToComplete] = useState<FamilyTask | null>(null);
@@ -143,24 +157,58 @@ export function TasksView({
           );
           return;
         }
-        const [tasksResponse, membersResponse] = await Promise.all([
+        const [
+          tasksResponse,
+          membersResponse,
+          groupsResponse,
+          activityResponse,
+          statisticsResponse,
+        ] = await Promise.all([
           fetch('/api/v1/tasks'),
           fetch('/api/v1/members'),
+          fetch('/api/v1/groups'),
+          fetch('/api/v1/tasks/activity?limit=100'),
+          fetch(taskStatisticsUrl(Number(statsDays))),
         ]);
         if (!tasksResponse.ok)
           throw new Error('Impossible de charger les tâches.');
         if (!membersResponse.ok)
           throw new Error('Impossible de charger les membres.');
-        const [tasksPayload, membersPayload] = await Promise.all([
+        if (!groupsResponse.ok)
+          throw new Error('Impossible de charger les groupes.');
+        if (!activityResponse.ok || !statisticsResponse.ok)
+          throw new Error('Impossible de charger l’activité des tâches.');
+        const [
+          tasksPayload,
+          membersPayload,
+          groupsPayload,
+          activityPayload,
+          statisticsPayload,
+        ] = await Promise.all([
           tasksResponse.json() as Promise<{ tasks: FamilyTask[] }>,
           membersResponse.json() as Promise<{ members: FamilyMember[] }>,
+          groupsResponse.json() as Promise<{ groups: FamilyGroup[] }>,
+          activityResponse.json() as Promise<{ activity: TaskActivityEntry[] }>,
+          statisticsResponse.json() as Promise<{ statistics: TaskStatistics }>,
         ]);
         const activeMembers = membersPayload.members.filter(
           (member) => member.status === 'ACTIVE',
         );
         setTasks(tasksPayload.tasks);
         setMembers(activeMembers);
-        await writeTaskCache(sessionKey, tasksPayload.tasks, activeMembers);
+        setGroups(groupsPayload.groups);
+        setActivity(activityPayload.activity ?? []);
+        setStatistics(statisticsPayload.statistics ?? null);
+        if (!visibleMemberSelectionInitialized.current) {
+          setVisibleMemberIds(activeMembers.map((member) => member.id));
+          visibleMemberSelectionInitialized.current = true;
+        }
+        await writeTaskCache(
+          sessionKey,
+          tasksPayload.tasks,
+          activeMembers,
+          groupsPayload.groups,
+        );
         setServerAvailable(true);
         setError('');
       } catch {
@@ -169,6 +217,7 @@ export function TasksView({
         if (cached) {
           setTasks(cached.tasks);
           setMembers(cached.members);
+          setGroups(cached.groups);
         } else {
           setError(
             'Le serveur est indisponible et aucune tâche locale n’est encore enregistrée.',
@@ -183,7 +232,7 @@ export function TasksView({
     });
     synchronization.current = operation;
     return operation;
-  }, [csrfToken, sessionKey]);
+  }, [csrfToken, sessionKey, statsDays]);
 
   useEffect(() => {
     let active = true;
@@ -193,6 +242,11 @@ export function TasksView({
       if (cached) {
         setTasks(cached.tasks);
         setMembers(cached.members);
+        setGroups(cached.groups);
+        if (!visibleMemberSelectionInitialized.current) {
+          setVisibleMemberIds(cached.members.map((member) => member.id));
+          visibleMemberSelectionInitialized.current = true;
+        }
       }
       await refreshCounts();
       if (!active) return;
@@ -241,12 +295,71 @@ export function TasksView({
       ),
     [tasks],
   );
+  const personalTasks = useMemo(
+    () => openTasks.filter((task) => task.visibility === 'PRIVATE'),
+    [openTasks],
+  );
+  const sharedTasksForMe = useMemo(
+    () =>
+      openTasks.filter(
+        (task) =>
+          task.visibility !== 'PRIVATE' &&
+          (task.assigneeId === currentMemberId ||
+            task.actionable ||
+            taskActionableFromCache(task, currentMemberId, members)),
+      ),
+    [currentMemberId, members, openTasks],
+  );
+  const householdTasks = useMemo(
+    () => openTasks.filter((task) => task.visibility !== 'PRIVATE'),
+    [openTasks],
+  );
+  const statisticRows = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const entry of statistics?.entries ?? []) {
+      totals.set(
+        entry.memberId,
+        (totals.get(entry.memberId) ?? 0) + entry.count,
+      );
+    }
+    return members
+      .filter((member) => visibleMemberIds.includes(member.id))
+      .map((member) => ({
+        member,
+        total: totals.get(member.id) ?? 0,
+      }))
+      .sort((left, right) => right.total - left.total);
+  }, [members, statistics, visibleMemberIds]);
+  const maximumStatistic = Math.max(
+    1,
+    ...statisticRows.map((row) => row.total),
+  );
+  const statisticTasks = useMemo(() => {
+    const tasksById = new Map<string, string>();
+    for (const entry of statistics?.entries ?? []) {
+      if (visibleMemberIds.includes(entry.memberId)) {
+        tasksById.set(entry.taskId, entry.taskTitle);
+      }
+    }
+    return [...tasksById].sort((left, right) =>
+      left[1].localeCompare(right[1]),
+    );
+  }, [statistics, visibleMemberIds]);
+  const statisticCounts = useMemo(
+    () =>
+      new Map(
+        (statistics?.entries ?? []).map((entry) => [
+          `${entry.memberId}:${entry.taskId}`,
+          entry.count,
+        ]),
+      ),
+    [statistics],
+  );
 
   function resetComposer() {
-    setKind('OPEN_CHORE');
-    setAssigneeId('none');
-    setVisibility('ALL_MEMBERS');
-    setClaimable(true);
+    setFormMode('ROUTINE');
+    setDateMode('NONE');
+    setRecipient('household');
     setReopenPolicy('IMMEDIATE');
   }
 
@@ -266,14 +379,28 @@ export function TasksView({
       const value = typeof entry === 'string' ? entry : '';
       return value ? Number(value) : null;
     };
+    const recipientMemberId = recipient.startsWith('member:')
+      ? recipient.slice('member:'.length)
+      : null;
+    const recipientGroupId = recipient.startsWith('group:')
+      ? recipient.slice('group:'.length)
+      : null;
     const effectiveAssignee =
-      visibility === 'PRIVATE'
-        ? kind === 'SCHEDULED'
-          ? currentMemberId
-          : null
-        : assigneeId === 'none'
-          ? null
-          : assigneeId;
+      recipient === 'self' ? currentMemberId : recipientMemberId;
+    const visibility =
+      recipient === 'self'
+        ? 'PRIVATE'
+        : recipientMemberId
+          ? 'SELECTED_USERS'
+          : recipientGroupId
+            ? 'GROUPS'
+            : 'ALL_MEMBERS';
+    const kind: TaskKind =
+      formMode === 'ROUTINE'
+        ? 'OPEN_CHORE'
+        : dateMode === 'PERIOD'
+          ? 'SEASONAL'
+          : 'SCHEDULED';
     const clientMutationId = crypto.randomUUID();
     const text = (name: string) => {
       const value = data.get(name);
@@ -284,22 +411,30 @@ export function TasksView({
       description: text('description') || null,
       kind,
       assigneeId: effectiveAssignee,
-      claimable: kind === 'OPEN_CHORE' ? claimable : false,
-      dueAt: kind === 'SCHEDULED' ? toIso('dueAt') : null,
-      periodStartAt: kind === 'SEASONAL' ? toIso('periodStartAt') : null,
-      periodEndAt: kind === 'SEASONAL' ? toIso('periodEndAt') : null,
+      claimable: recipient === 'household' || Boolean(recipientGroupId),
+      dueAt: formMode === 'TASK' && dateMode === 'DUE' ? toIso('dueAt') : null,
+      periodStartAt:
+        formMode === 'TASK' && dateMode === 'PERIOD'
+          ? toIso('periodStartAt')
+          : null,
+      periodEndAt:
+        formMode === 'TASK' && dateMode === 'PERIOD'
+          ? toIso('periodEndAt')
+          : null,
       recurrenceIntervalDays:
-        kind === 'SCHEDULED' || kind === 'SEASONAL'
+        formMode === 'TASK' && dateMode !== 'NONE'
           ? numberOrNull('recurrenceIntervalDays')
           : null,
       frequencyHint:
-        kind === 'OPEN_CHORE' ? text('frequencyHint') || null : null,
-      reopenPolicy: kind === 'OPEN_CHORE' ? reopenPolicy : 'NONE',
+        formMode === 'ROUTINE' ? text('frequencyHint') || null : null,
+      reopenPolicy: formMode === 'ROUTINE' ? reopenPolicy : 'NONE',
       reopenDelayHours:
-        kind === 'OPEN_CHORE' && reopenPolicy === 'AFTER_DELAY'
+        formMode === 'ROUTINE' && reopenPolicy === 'AFTER_DELAY'
           ? numberOrNull('reopenDelayHours')
           : null,
       visibility,
+      groupIds: recipientGroupId ? [recipientGroupId] : [],
+      userIds: recipientMemberId ? [recipientMemberId] : [],
       clientMutationId,
     } satisfies TaskCreatePayload;
     const optimistic = createOptimisticTask(payload, currentMember, members);
@@ -330,7 +465,7 @@ export function TasksView({
         const result = (await response.json()) as { task: FamilyTask };
         const next = [result.task, ...tasks];
         setTasks(next);
-        await writeTaskCache(sessionKey, next, members);
+        await writeTaskCache(sessionKey, next, members, groups);
         setServerAvailable(true);
       }
       form.reset();
@@ -357,7 +492,7 @@ export function TasksView({
       candidate.id === task.id ? optimistic : candidate,
     );
     setTasks(optimisticTasks);
-    await writeTaskCache(sessionKey, optimisticTasks, members);
+    await writeTaskCache(sessionKey, optimisticTasks, members, groups);
     try {
       let response: Response | null = null;
       if (navigator.onLine && csrfToken && pendingCount === 0) {
@@ -379,7 +514,7 @@ export function TasksView({
         await refreshCounts();
       } else if (!response.ok) {
         setTasks(previous);
-        await writeTaskCache(sessionKey, previous, members);
+        await writeTaskCache(sessionKey, previous, members, groups);
         throw new Error(await taskError(response, 'Modification impossible.'));
       } else {
         const payload = (await response.json()) as { task: FamilyTask };
@@ -416,7 +551,7 @@ export function TasksView({
       candidate.id === taskToComplete.id ? optimistic : candidate,
     );
     setTasks(optimisticTasks);
-    await writeTaskCache(sessionKey, optimisticTasks, members);
+    await writeTaskCache(sessionKey, optimisticTasks, members, groups);
     try {
       let response: Response | null = null;
       if (navigator.onLine && csrfToken && pendingCount === 0) {
@@ -441,7 +576,7 @@ export function TasksView({
         await refreshCounts();
       } else if (!response.ok) {
         setTasks(previous);
-        await writeTaskCache(sessionKey, previous, members);
+        await writeTaskCache(sessionKey, previous, members, groups);
         throw new Error(await taskError(response, 'Validation impossible.'));
       } else {
         const payload = (await response.json()) as { task: FamilyTask };
@@ -449,6 +584,7 @@ export function TasksView({
         setServerAvailable(true);
       }
       setTaskToComplete(null);
+      if (response?.ok) void synchronize();
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Validation impossible.',
@@ -467,7 +603,7 @@ export function TasksView({
       candidate.id === task.id ? optimistic : candidate,
     );
     setTasks(optimisticTasks);
-    await writeTaskCache(sessionKey, optimisticTasks, members);
+    await writeTaskCache(sessionKey, optimisticTasks, members, groups);
     try {
       let response: Response | null = null;
       if (navigator.onLine && csrfToken && pendingCount === 0) {
@@ -489,7 +625,7 @@ export function TasksView({
         await refreshCounts();
       } else if (!response.ok) {
         setTasks(previous);
-        await writeTaskCache(sessionKey, previous, members);
+        await writeTaskCache(sessionKey, previous, members, groups);
         throw new Error(await taskError(response, 'Réouverture impossible.'));
       } else {
         const payload = (await response.json()) as { task: FamilyTask };
@@ -510,7 +646,7 @@ export function TasksView({
       const next = current.map((candidate) =>
         candidate.id === task.id ? task : candidate,
       );
-      void writeTaskCache(sessionKey, next, members);
+      void writeTaskCache(sessionKey, next, members, groups);
       return next;
     });
   }
@@ -535,7 +671,8 @@ export function TasksView({
           <DialogHeader>
             <DialogTitle>Nouvelle tâche</DialogTitle>
             <DialogDescription>
-              Planifiez une tâche ou laissez une corvée ouverte au foyer.
+              Créez une tâche à terminer ou une routine disponible dans la
+              durée.
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={createTask}>
@@ -547,79 +684,141 @@ export function TasksView({
               placeholder="Vider le lave-vaisselle"
             />
             <div className="space-y-2">
-              <Label>Type</Label>
+              <Label>Nature</Label>
               <Select
-                value={kind}
-                onValueChange={(value) => setKind(value as TaskKind)}
+                value={formMode}
+                onValueChange={(value) => {
+                  const mode = value as TaskFormMode;
+                  setFormMode(mode);
+                  setRecipient(mode === 'ROUTINE' ? 'household' : 'self');
+                  if (mode === 'ROUTINE') setDateMode('NONE');
+                }}
               >
                 <SelectTrigger className="h-11 w-full rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="OPEN_CHORE">Corvée ouverte</SelectItem>
-                  <SelectItem value="SCHEDULED">Tâche planifiée</SelectItem>
-                  <SelectItem value="SEASONAL">
-                    Ponctuelle ou saisonnière
+                  <SelectItem value="TASK">Tâche — à terminer</SelectItem>
+                  <SelectItem value="ROUTINE">
+                    Routine — disponible indéfiniment
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {kind === 'SCHEDULED' ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Responsable</Label>
-                  <Select
-                    value={
-                      visibility === 'PRIVATE' ? currentMemberId : assigneeId
-                    }
-                    onValueChange={(value) => setAssigneeId(value ?? 'none')}
-                    disabled={visibility === 'PRIVATE'}
-                  >
-                    <SelectTrigger className="h-11 w-full rounded-xl">
-                      <SelectValue placeholder="Choisir" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Choisir un membre</SelectItem>
-                      {members.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.firstName}
+            <div className="space-y-2">
+              <Label>Pour qui ?</Label>
+              <Select
+                value={recipient}
+                onValueChange={(value) => setRecipient(value ?? 'self')}
+              >
+                <SelectTrigger className="h-11 w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="household">Tout le foyer</SelectItem>
+                  <SelectItem value="self">Moi</SelectItem>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Personnes</SelectLabel>
+                    {members
+                      .filter((member) => member.id !== currentMemberId)
+                      .map((member) => (
+                        <SelectItem
+                          key={member.id}
+                          value={`member:${member.id}`}
+                        >
+                          <UserRound aria-hidden="true" /> {member.firstName}
                         </SelectItem>
                       ))}
+                  </SelectGroup>
+                  {groups.some((group) => !group.isSystem) ? (
+                    <SelectSeparator />
+                  ) : null}
+                  {groups.some((group) => !group.isSystem) ? (
+                    <SelectGroup>
+                      <SelectLabel>Groupes</SelectLabel>
+                      {groups
+                        .filter((group) => !group.isSystem)
+                        .map((group) => (
+                          <SelectItem
+                            key={group.id}
+                            value={`group:${group.id}`}
+                          >
+                            <Users aria-hidden="true" /> {group.name}
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  ) : null}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Un groupe ou le foyer laisse chacun de ses membres s’en charger.
+              </p>
+            </div>
+
+            {formMode === 'TASK' ? (
+              <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
+                <div className="space-y-2">
+                  <Label>Quand ?</Label>
+                  <Select
+                    value={dateMode}
+                    onValueChange={(value) =>
+                      setDateMode(value as TaskDateMode)
+                    }
+                  >
+                    <SelectTrigger className="h-11 w-full rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">Sans date</SelectItem>
+                      <SelectItem value="DUE">À une date</SelectItem>
+                      <SelectItem value="PERIOD">
+                        Pendant une période
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <Field
-                  label="Échéance"
-                  name="dueAt"
-                  type="datetime-local"
-                  required
-                />
-                <Field
-                  label="Répéter tous les… jours"
-                  name="recurrenceIntervalDays"
-                  type="number"
-                  min={1}
-                  max={365}
-                  placeholder="7"
-                  required={false}
-                />
+                {dateMode === 'DUE' ? (
+                  <Field
+                    label="Échéance"
+                    name="dueAt"
+                    type="datetime-local"
+                    required
+                  />
+                ) : null}
+                {dateMode === 'PERIOD' ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Début de période"
+                      name="periodStartAt"
+                      type="datetime-local"
+                      required
+                    />
+                    <Field
+                      label="Fin de période"
+                      name="periodEndAt"
+                      type="datetime-local"
+                      required={false}
+                    />
+                  </div>
+                ) : null}
+                {dateMode !== 'NONE' ? (
+                  <Field
+                    label="Répéter tous les… jours"
+                    name="recurrenceIntervalDays"
+                    type="number"
+                    min={1}
+                    max={365}
+                    placeholder="7"
+                    required={false}
+                  />
+                ) : null}
               </div>
             ) : null}
 
-            {kind === 'OPEN_CHORE' ? (
+            {formMode === 'ROUTINE' ? (
               <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
-                <Label
-                  htmlFor="task-claimable"
-                  className="flex items-center gap-3 text-sm font-medium"
-                >
-                  <Checkbox
-                    id="task-claimable"
-                    checked={claimable}
-                    onCheckedChange={setClaimable}
-                  />
-                  N’importe quel membre peut s’en charger
-                </Label>
                 <Field
                   label="Fréquence indicative"
                   name="frequencyHint"
@@ -640,16 +839,13 @@ export function TasksView({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="IMMEDIATE">
-                        Rouvrir immédiatement
+                        Toujours disponible
                       </SelectItem>
                       <SelectItem value="AFTER_DELAY">
-                        Rouvrir après un délai
+                        Disponible de nouveau après un délai
                       </SelectItem>
                       <SelectItem value="MANUAL">
-                        Rouvrir manuellement
-                      </SelectItem>
-                      <SelectItem value="NONE">
-                        Terminer définitivement
+                        Réactivation manuelle
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -667,49 +863,6 @@ export function TasksView({
               </div>
             ) : null}
 
-            {kind === 'SEASONAL' ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Début de période"
-                  name="periodStartAt"
-                  type="datetime-local"
-                  required={false}
-                />
-                <Field
-                  label="Fin de période"
-                  name="periodEndAt"
-                  type="datetime-local"
-                  required={false}
-                />
-                <Field
-                  label="Répéter tous les… jours"
-                  name="recurrenceIntervalDays"
-                  type="number"
-                  min={1}
-                  max={365}
-                  placeholder="365"
-                  required={false}
-                />
-              </div>
-            ) : null}
-
-            <div className="space-y-2">
-              <Label>Visibilité</Label>
-              <Select
-                value={visibility}
-                onValueChange={(value) =>
-                  setVisibility(value as 'PRIVATE' | 'ALL_MEMBERS')
-                }
-              >
-                <SelectTrigger className="h-11 w-full rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL_MEMBERS">Tout le foyer</SelectItem>
-                  <SelectItem value="PRIVATE">Moi uniquement</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <div className="space-y-2">
               <Label htmlFor="task-description">Précisions</Label>
               <Textarea
@@ -782,7 +935,7 @@ export function TasksView({
               Organisation du foyer
             </p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
-              Tâches et corvées
+              Tâches et routines
             </h1>
             <p className="mt-1 text-base text-muted-foreground">
               {openTasks.length
@@ -859,22 +1012,81 @@ export function TasksView({
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue="open">
-            <TabsList className="mb-4 h-10 rounded-xl">
-              <TabsTrigger value="open" className="px-4">
-                À faire ({openTasks.length})
+          <Tabs defaultValue="mine">
+            <TabsList className="mb-4 h-auto w-full flex-wrap rounded-xl sm:w-auto">
+              <TabsTrigger value="mine" className="px-3 sm:px-4">
+                À faire ({personalTasks.length + sharedTasksForMe.length})
               </TabsTrigger>
-              <TabsTrigger value="history" className="px-4">
-                Historique ({closedTasks.length})
+              <TabsTrigger value="household" className="px-3 sm:px-4">
+                Foyer ({householdTasks.length})
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="px-3 sm:px-4">
+                Activité
+              </TabsTrigger>
+              <TabsTrigger value="statistics" className="px-3 sm:px-4">
+                Statistiques
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="open">
-              {openTasks.length ? (
+            <TabsContent value="mine" className="space-y-6">
+              {personalTasks.length ? (
+                <div>
+                  <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
+                    Mes tâches personnelles
+                  </h2>
+                  <div className="grid gap-3">
+                    {personalTasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        members={members}
+                        groups={groups}
+                        currentMemberId={currentMemberId}
+                        role={role}
+                        busy={busyId === task.id}
+                        onStart={() => updateStatus(task, 'IN_PROGRESS')}
+                        onComplete={() => setTaskToComplete(task)}
+                        onCancel={() => updateStatus(task, 'CANCELLED')}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {sharedTasksForMe.length ? (
+                <div>
+                  <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
+                    Pour moi et mes groupes
+                  </h2>
+                  <div className="grid gap-3">
+                    {sharedTasksForMe.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        members={members}
+                        groups={groups}
+                        currentMemberId={currentMemberId}
+                        role={role}
+                        busy={busyId === task.id}
+                        onStart={() => updateStatus(task, 'IN_PROGRESS')}
+                        onComplete={() => setTaskToComplete(task)}
+                        onCancel={() => updateStatus(task, 'CANCELLED')}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {!personalTasks.length && !sharedTasksForMe.length ? (
+                <EmptyTasks />
+              ) : null}
+            </TabsContent>
+            <TabsContent value="household">
+              {householdTasks.length ? (
                 <div className="grid gap-3">
-                  {openTasks.map((task) => (
+                  {householdTasks.map((task) => (
                     <TaskCard
                       key={task.id}
                       task={task}
+                      members={members}
+                      groups={groups}
                       currentMemberId={currentMemberId}
                       role={role}
                       busy={busyId === task.id}
@@ -888,30 +1100,190 @@ export function TasksView({
                 <EmptyTasks />
               )}
             </TabsContent>
-            <TabsContent value="history">
-              {closedTasks.length ? (
-                <div className="grid gap-3">
-                  {closedTasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      currentMemberId={currentMemberId}
-                      role={role}
-                      busy={busyId === task.id}
-                      onStart={() => undefined}
-                      onComplete={() => undefined}
-                      onCancel={() => undefined}
-                      onReopen={() => reopenTask(task)}
-                    />
-                  ))}
-                </div>
+            <TabsContent value="activity" className="space-y-6">
+              {activity.length ? (
+                <Card className="py-2">
+                  <CardContent className="divide-y px-4 sm:px-5">
+                    {activity.map((entry) => (
+                      <div key={entry.id} className="flex gap-3 py-3">
+                        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-[#e7f5f2] text-[#087f72]">
+                          <Check className="size-4" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm">
+                            <strong>{entry.completedByName}</strong> a réalisé{' '}
+                            <strong>{entry.taskTitle}</strong>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(entry.completedAt)}
+                            {entry.comment ? ` · ${entry.comment}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
               ) : (
                 <Card className="border-dashed bg-muted/20">
                   <CardContent className="py-10 text-center text-muted-foreground">
-                    L’historique se remplira après les premières réalisations.
+                    L’activité se remplira après les premières réalisations.
                   </CardContent>
                 </Card>
               )}
+              {closedTasks.length ? (
+                <div>
+                  <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
+                    Terminées ou archivées
+                  </h2>
+                  <div className="grid gap-3">
+                    {closedTasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        members={members}
+                        groups={groups}
+                        currentMemberId={currentMemberId}
+                        role={role}
+                        busy={busyId === task.id}
+                        onStart={() => undefined}
+                        onComplete={() => undefined}
+                        onCancel={() => undefined}
+                        onReopen={() => reopenTask(task)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </TabsContent>
+            <TabsContent value="statistics" className="space-y-4">
+              <Card>
+                <CardContent className="space-y-5 px-4 py-5 sm:px-5">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <h2 className="flex items-center gap-2 font-semibold">
+                        <ChartNoAxesColumn
+                          className="size-5 text-[#087f72]"
+                          aria-hidden="true"
+                        />
+                        Participation aux routines
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Nombre de réalisations enregistrées, sans points ni
+                        classement.
+                      </p>
+                    </div>
+                    <div className="w-40 space-y-2">
+                      <Label>Période</Label>
+                      <Select
+                        value={statsDays}
+                        onValueChange={(value) => setStatsDays(value ?? '30')}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="7">7 jours</SelectItem>
+                          <SelectItem value="30">30 jours</SelectItem>
+                          <SelectItem value="90">3 mois</SelectItem>
+                          <SelectItem value="365">1 an</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-sm font-medium">
+                      Personnes affichées
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {members.map((member) => {
+                        const checked = visibleMemberIds.includes(member.id);
+                        return (
+                          <Label
+                            key={member.id}
+                            className="flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(next) =>
+                                setVisibleMemberIds((current) =>
+                                  next
+                                    ? [...new Set([...current, member.id])]
+                                    : current.filter((id) => id !== member.id),
+                                )
+                              }
+                            />
+                            {member.firstName}
+                          </Label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {statisticRows.map(({ member, total }) => (
+                      <div key={member.id}>
+                        <div className="mb-1.5 flex justify-between text-sm">
+                          <span>{member.firstName}</span>
+                          <strong>{total}</strong>
+                        </div>
+                        <div className="h-3 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-[#087f72] transition-[width]"
+                            style={{
+                              width: `${(total / maximumStatistic) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    {!statisticRows.length ? (
+                      <p className="py-6 text-center text-sm text-muted-foreground">
+                        Sélectionnez au moins une personne.
+                      </p>
+                    ) : null}
+                  </div>
+                  {statisticTasks.length ? (
+                    <div>
+                      <h3 className="mb-2 text-sm font-medium">
+                        Détail par routine
+                      </h3>
+                      <div className="overflow-x-auto rounded-xl border">
+                        <table className="w-full min-w-md text-sm">
+                          <thead className="bg-muted/60 text-left">
+                            <tr>
+                              <th className="px-3 py-2 font-medium">Routine</th>
+                              {statisticRows.map(({ member }) => (
+                                <th
+                                  key={member.id}
+                                  className="px-3 py-2 text-center font-medium"
+                                >
+                                  {member.firstName}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {statisticTasks.map(([taskId, title]) => (
+                              <tr key={taskId}>
+                                <td className="px-3 py-2">{title}</td>
+                                {statisticRows.map(({ member }) => (
+                                  <td
+                                    key={member.id}
+                                    className="px-3 py-2 text-center tabular-nums"
+                                  >
+                                    {statisticCounts.get(
+                                      `${member.id}:${taskId}`,
+                                    ) ?? 0}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         )}
@@ -922,6 +1294,8 @@ export function TasksView({
 
 function TaskCard({
   task,
+  members,
+  groups,
   currentMemberId,
   role,
   busy,
@@ -931,6 +1305,8 @@ function TaskCard({
   onReopen,
 }: {
   task: FamilyTask;
+  members: FamilyMember[];
+  groups: FamilyGroup[];
   currentMemberId: string;
   role: 'ADMIN' | 'MEMBER';
   busy: boolean;
@@ -941,11 +1317,11 @@ function TaskCard({
 }) {
   const canAct =
     role === 'ADMIN' ||
-    task.createdBy === currentMemberId ||
-    task.assigneeId === currentMemberId ||
-    (task.kind === 'OPEN_CHORE' && task.claimable);
+    task.actionable ||
+    taskActionableFromCache(task, currentMemberId, members);
   const canManage = role === 'ADMIN' || task.createdBy === currentMemberId;
   const latestCompletion = task.completions[0];
+  const audience = taskAudience(task, members, groups);
 
   return (
     <Card className="gap-3 py-4">
@@ -973,7 +1349,9 @@ function TaskCard({
                 <Badge className="bg-amber-100 text-amber-800">En cours</Badge>
               ) : null}
               {task.status === 'CANCELLED' ? (
-                <Badge variant="destructive">Annulée</Badge>
+                <Badge variant="destructive">
+                  {task.kind === 'OPEN_CHORE' ? 'Archivée' : 'Annulée'}
+                </Badge>
               ) : null}
             </div>
             {task.description ? (
@@ -989,7 +1367,10 @@ function TaskCard({
                 </span>
               ) : null}
               {task.claimable && !task.assigneeName ? (
-                <span>Ouverte à tous</span>
+                <span>
+                  <Users className="mr-1 inline size-4" aria-hidden="true" />
+                  {t(audience)}
+                </span>
               ) : null}
               {task.dueAt ? (
                 <span>Pour le {formatDate(task.dueAt)}</span>
@@ -1047,7 +1428,7 @@ function TaskCard({
                 disabled={busy}
                 onClick={onCancel}
               >
-                Annuler
+                {task.kind === 'OPEN_CHORE' ? 'Archiver' : 'Annuler'}
               </Button>
             ) : null}
             {(task.status === 'DONE' || task.status === 'CANCELLED') &&
@@ -1078,8 +1459,8 @@ function EmptyTasks() {
         </span>
         <h2 className="font-semibold">Rien à faire pour le moment</h2>
         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-          Ajoutez une tâche datée ou une corvée que chacun pourra prendre en
-          charge.
+          Ajoutez une tâche personnelle ou une routine que chacun pourra prendre
+          en charge.
         </p>
       </CardContent>
     </Card>
@@ -1118,6 +1499,58 @@ function formatPeriod(start: string, end: string | null) {
     : `À partir du ${formatDate(start)}`;
 }
 
+function taskAudience(
+  task: FamilyTask,
+  members: FamilyMember[],
+  groups: FamilyGroup[],
+) {
+  if (task.visibility === 'PRIVATE') return 'Moi uniquement';
+  if (task.visibility === 'ALL_MEMBERS') return 'Tout le foyer';
+  if (task.visibility === 'GROUPS') {
+    return (
+      (task.groupIds ?? [])
+        .map((id) => groups.find((group) => group.id === id)?.name)
+        .filter(Boolean)
+        .join(', ') || 'Groupe'
+    );
+  }
+  return (
+    (task.userIds ?? [])
+      .map((id) => members.find((member) => member.id === id)?.firstName)
+      .filter(Boolean)
+      .join(', ') || 'Personnes sélectionnées'
+  );
+}
+
+function taskActionableFromCache(
+  task: FamilyTask,
+  memberId: string,
+  members: FamilyMember[],
+) {
+  if (task.assigneeId === memberId) return true;
+  if (!task.claimable) return !task.assigneeId && task.createdBy === memberId;
+  if (task.visibility === 'ALL_MEMBERS') return true;
+  if (task.visibility === 'SELECTED_USERS') {
+    return (task.userIds ?? []).includes(memberId);
+  }
+  if (task.visibility === 'GROUPS') {
+    const membership =
+      members.find((member) => member.id === memberId)?.groupIds ?? [];
+    return (task.groupIds ?? []).some((id) => membership.includes(id));
+  }
+  return false;
+}
+
+function taskStatisticsUrl(days: number) {
+  const to = new Date();
+  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+  const query = new URLSearchParams({
+    from: from.toISOString(),
+    to: to.toISOString(),
+  });
+  return `/api/v1/tasks/statistics?${query.toString()}`;
+}
+
 async function taskError(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => ({}))) as {
     error?: string;
@@ -1128,6 +1561,10 @@ async function taskError(response: Response, fallback: string) {
     return 'Une tâche privée ne peut être attribuée qu’à vous.';
   if (payload.error === 'ASSIGNEE_INVALID')
     return 'Le responsable sélectionné n’est plus disponible.';
+  if (payload.error === 'GROUP_INVALID')
+    return 'Le groupe sélectionné n’est plus disponible.';
+  if (payload.error === 'RECIPIENT_INVALID')
+    return 'La personne sélectionnée n’est plus disponible.';
   if (payload.error === 'TASK_ALREADY_DONE')
     return 'Cette tâche est déjà terminée.';
   if (payload.error === 'TASK_STATE_INVALID')

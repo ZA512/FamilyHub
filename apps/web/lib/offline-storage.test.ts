@@ -207,6 +207,8 @@ describe('offline shopping helpers', () => {
       reopenPolicy: 'IMMEDIATE',
       reopenDelayHours: null,
       visibility: 'ALL_MEMBERS',
+      groupIds: [],
+      userIds: [],
       clientMutationId: '01af2bd3-0d1d-4de7-816d-d86ab0322d4e',
     } satisfies TaskCreatePayload;
     const created = createOptimisticTask(createPayload, member, [familyMember]);

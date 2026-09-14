@@ -354,7 +354,7 @@ export type HomeSummary = {
 
 export const taskKindSchema = z.enum(['SCHEDULED', 'OPEN_CHORE', 'SEASONAL']);
 export const taskStatusSchema = z.enum(['OPEN', 'IN_PROGRESS', 'DONE', 'CANCELLED']);
-export const taskVisibilitySchema = z.enum(['PRIVATE', 'ALL_MEMBERS']);
+export const taskVisibilitySchema = z.enum(['PRIVATE', 'ALL_MEMBERS', 'GROUPS', 'SELECTED_USERS']);
 export const taskReopenPolicySchema = z.enum(['NONE', 'IMMEDIATE', 'AFTER_DELAY', 'MANUAL']);
 
 const taskOptionalText = (maximum: number) =>
@@ -380,15 +380,17 @@ const taskFields = z.object({
   reopenPolicy: taskReopenPolicySchema.default('NONE'),
   reopenDelayHours: z.number().int().min(1).max(8760).nullable().optional(),
   visibility: taskVisibilitySchema.default('ALL_MEMBERS'),
+  groupIds: z.array(z.string().uuid()).max(50).default([]),
+  userIds: z.array(z.string().uuid()).max(50).default([]),
 });
 
 export const taskCreateSchema = taskFields
   .extend({ clientMutationId: z.string().uuid() })
   .superRefine((value, context) => {
-    if (value.kind === 'SCHEDULED' && (!value.assigneeId || !value.dueAt)) {
+    if (value.recurrenceIntervalDays && !value.dueAt && !value.periodStartAt) {
       context.addIssue({
         code: 'custom',
-        message: 'Une tâche planifiée nécessite une échéance et un responsable.',
+        message: 'Une répétition planifiée nécessite une date ou une période de départ.',
       });
     }
     if (value.kind === 'OPEN_CHORE' && (value.dueAt || value.periodStartAt || value.periodEndAt)) {
@@ -407,6 +409,31 @@ export const taskCreateSchema = taskFields
       context.addIssue({
         code: 'custom',
         message: 'Un délai de réouverture est requis.',
+      });
+    }
+    if (value.visibility === 'GROUPS' && value.groupIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['groupIds'],
+        message: 'Sélectionnez au moins un groupe.',
+      });
+    }
+    if (value.visibility === 'SELECTED_USERS' && value.userIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['userIds'],
+        message: 'Sélectionnez au moins une personne.',
+      });
+    }
+    if (
+      value.visibility === 'SELECTED_USERS' &&
+      value.assigneeId &&
+      !value.userIds.includes(value.assigneeId)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['assigneeId'],
+        message: 'Le responsable doit faire partie des personnes autorisées.',
       });
     }
     if (
@@ -451,6 +478,7 @@ export type FamilyTask = {
   createdBy: string;
   createdByName: string;
   claimable: boolean;
+  actionable: boolean;
   dueAt: string | null;
   periodStartAt: string | null;
   periodEndAt: string | null;
@@ -459,11 +487,33 @@ export type FamilyTask = {
   reopenPolicy: TaskReopenPolicy;
   reopenDelayHours: number | null;
   nextAvailableAt: string | null;
-  visibility: 'PRIVATE' | 'ALL_MEMBERS';
+  visibility: z.infer<typeof taskVisibilitySchema>;
+  groupIds: string[];
+  userIds: string[];
   version: number;
   createdAt: string;
   updatedAt: string;
   completions: TaskCompletion[];
+};
+
+export type TaskActivityEntry = TaskCompletion & {
+  taskId: string;
+  taskTitle: string;
+  taskKind: TaskKind;
+};
+
+export type TaskStatisticEntry = {
+  memberId: string;
+  memberName: string;
+  taskId: string;
+  taskTitle: string;
+  count: number;
+};
+
+export type TaskStatistics = {
+  from: string;
+  to: string;
+  entries: TaskStatisticEntry[];
 };
 
 const optionalText = (maximum: number) =>

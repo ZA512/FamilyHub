@@ -36,11 +36,50 @@ describe('task contracts', () => {
     expect(parsed.reopenDelayHours).toBe(8);
   });
 
-  it('rejects a scheduled task without an assignee and due date', () => {
+  it('accepts a one-off personal task without a date', () => {
     expect(
       taskCreateSchema.safeParse({
-        title: 'Sortir les poubelles',
+        title: 'Appeler le médecin',
         kind: 'SCHEDULED',
+        assigneeId,
+        visibility: 'PRIVATE',
+        clientMutationId: mutationId,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('accepts a task opened to a family group', () => {
+    expect(
+      taskCreateSchema.safeParse({
+        title: 'Ranger la salle de jeux',
+        kind: 'SCHEDULED',
+        claimable: true,
+        visibility: 'GROUPS',
+        groupIds: [assigneeId],
+        clientMutationId: mutationId,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects an empty group audience', () => {
+    expect(
+      taskCreateSchema.safeParse({
+        title: 'Ranger la salle de jeux',
+        kind: 'SCHEDULED',
+        visibility: 'GROUPS',
+        clientMutationId: mutationId,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an assignee who cannot see the selected-users task', () => {
+    expect(
+      taskCreateSchema.safeParse({
+        title: 'Préparer les valises',
+        kind: 'SCHEDULED',
+        assigneeId,
+        visibility: 'SELECTED_USERS',
+        userIds: ['33333333-3333-4333-8333-333333333333'],
         clientMutationId: mutationId,
       }).success,
     ).toBe(false);

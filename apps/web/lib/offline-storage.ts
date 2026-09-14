@@ -1,6 +1,7 @@
 import type {
   AgendaEntry,
   CurrentMember,
+  FamilyGroup,
   FamilyMeal,
   FamilyMember,
   FamilyTask,
@@ -38,6 +39,7 @@ type TaskCache = {
   sessionKey: string;
   items: FamilyTask[];
   members: FamilyMember[];
+  groups?: FamilyGroup[];
   updatedAt: string;
 };
 
@@ -54,7 +56,9 @@ export type TaskCreatePayload = {
   frequencyHint: string | null;
   reopenPolicy: TaskReopenPolicy;
   reopenDelayHours: number | null;
-  visibility: 'PRIVATE' | 'ALL_MEMBERS';
+  visibility: 'PRIVATE' | 'ALL_MEMBERS' | 'GROUPS' | 'SELECTED_USERS';
+  groupIds: string[];
+  userIds: string[];
   clientMutationId: string;
 };
 
@@ -585,6 +589,7 @@ export async function synchronizeShoppingMutations({
 export type OfflineTaskSnapshot = {
   tasks: FamilyTask[];
   members: FamilyMember[];
+  groups: FamilyGroup[];
 };
 
 export type TaskMutationCounts = {
@@ -601,13 +606,20 @@ export async function readTaskCache(
   sessionKey: string,
 ): Promise<OfflineTaskSnapshot | null> {
   const cached = await (await database()).get('tasks', sessionKey);
-  return cached ? { tasks: cached.items, members: cached.members } : null;
+  return cached
+    ? {
+        tasks: cached.items,
+        members: cached.members,
+        groups: cached.groups ?? [],
+      }
+    : null;
 }
 
 export async function writeTaskCache(
   sessionKey: string,
   tasks: FamilyTask[],
   members?: FamilyMember[],
+  groups?: FamilyGroup[],
 ): Promise<void> {
   const db = await database();
   const current = await db.get('tasks', sessionKey);
@@ -615,6 +627,7 @@ export async function writeTaskCache(
     sessionKey,
     items: tasks.slice(0, MAX_CACHED_TASKS),
     members: members ?? current?.members ?? [],
+    groups: groups ?? current?.groups ?? [],
     updatedAt: new Date().toISOString(),
   });
 }
@@ -626,6 +639,9 @@ export function createOptimisticTask(
 ): FamilyTask {
   const now = new Date().toISOString();
   const assignee = members.find((member) => member.id === payload.assigneeId);
+  const currentFamilyMember = members.find(
+    (member) => member.id === currentMember.id,
+  );
   return {
     id: payload.clientMutationId,
     title: payload.title,
@@ -640,6 +656,14 @@ export function createOptimisticTask(
     createdBy: currentMember.id,
     createdByName: currentMember.firstName,
     claimable: payload.claimable,
+    actionable:
+      payload.assigneeId === currentMember.id ||
+      (payload.claimable &&
+        (payload.visibility === 'ALL_MEMBERS' ||
+          (payload.visibility === 'GROUPS' &&
+            payload.groupIds.some((id) =>
+              currentFamilyMember?.groupIds.includes(id),
+            )))),
     dueAt: payload.dueAt,
     periodStartAt: payload.periodStartAt,
     periodEndAt: payload.periodEndAt,
@@ -649,6 +673,8 @@ export function createOptimisticTask(
     reopenDelayHours: payload.reopenDelayHours,
     nextAvailableAt: null,
     visibility: payload.visibility,
+    groupIds: payload.groupIds,
+    userIds: payload.userIds,
     version: 0,
     createdAt: now,
     updatedAt: now,
@@ -788,6 +814,7 @@ async function enqueueTaskMutation(
       : [optimisticTask, ...current]
     ).slice(0, MAX_CACHED_TASKS),
     members: cached?.members ?? [],
+    groups: cached?.groups ?? [],
     updatedAt: new Date().toISOString(),
   });
   await transaction.objectStore('taskMutations').put(mutation);
@@ -904,6 +931,7 @@ async function acknowledgeTaskMutation(
       candidate.id === mutation.taskId ? task : candidate,
     ),
     members: cached?.members ?? [],
+    groups: cached?.groups ?? [],
     updatedAt: new Date().toISOString(),
   });
   await transaction.objectStore('taskMutations').delete(mutation.id);

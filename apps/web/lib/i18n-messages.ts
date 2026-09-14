@@ -103,6 +103,7 @@ export const englishMessages: Record<string, string> = {
   Aucune: 'None',
   'Tout le foyer': 'Whole household',
   'Moi uniquement': 'Only me',
+  'Personnes sélectionnées': 'Selected people',
   '(facultatif)': '(optional)',
   '(séparés par des virgules)': '(comma-separated)',
   'Aucun choix disponible.': 'No options available.',
@@ -175,6 +176,22 @@ export const englishMessages: Record<string, string> = {
 
   // Tasks and shopping
   'Nouvelle tâche': 'New task',
+  'Créez une tâche à terminer ou une routine disponible dans la durée.':
+    'Create a task to complete or a routine that remains available.',
+  Nature: 'Type',
+  'Tâche — à terminer': 'Task — complete once',
+  'Routine — disponible indéfiniment': 'Routine — always available',
+  'Pour qui ?': 'For whom?',
+  Personnes: 'People',
+  'Un groupe ou le foyer laisse chacun de ses membres s’en charger.':
+    'Any member of the selected group or household can take it.',
+  'Quand ?': 'When?',
+  'Sans date': 'No date',
+  'À une date': 'On a date',
+  'Pendant une période': 'During a period',
+  'Toujours disponible': 'Always available',
+  'Disponible de nouveau après un délai': 'Available again after a delay',
+  'Réactivation manuelle': 'Manual reactivation',
   'Planifiez une tâche ou laissez une corvée ouverte au foyer.':
     'Schedule a task or leave a chore open to the household.',
   'Vider le lave-vaisselle': 'Empty the dishwasher',
@@ -200,14 +217,37 @@ export const englishMessages: Record<string, string> = {
   'Commentaire facultatif': 'Optional comment',
   'Organisation du foyer': 'Household organisation',
   'Tâches et corvées': 'Tasks and chores',
+  'Tâches et routines': 'Tasks and routines',
   'Utiliser la version du serveur': 'Use server version',
   'Chargement des tâches…': 'Loading tasks…',
   'À faire (': 'To do (',
+  'Foyer (': 'Household (',
+  Activité: 'Activity',
+  'a réalisé': 'completed',
+  Statistiques: 'Statistics',
+  'Mes tâches personnelles': 'My personal tasks',
+  'Pour moi et mes groupes': 'For me and my groups',
+  'L’activité se remplira après les premières réalisations.':
+    'Activity will appear after the first completions.',
+  'Terminées ou archivées': 'Completed or archived',
+  'Participation aux routines': 'Routine participation',
+  'Nombre de réalisations enregistrées, sans points ni classement.':
+    'Recorded completions, without points or ranking.',
+  Période: 'Period',
+  '7 jours': '7 days',
+  '30 jours': '30 days',
+  '3 mois': '3 months',
+  '1 an': '1 year',
+  'Personnes affichées': 'People shown',
+  'Sélectionnez au moins une personne.': 'Select at least one person.',
+  'Détail par routine': 'Breakdown by routine',
+  Routine: 'Routine',
   'Historique (': 'History (',
   'L’historique se remplira après les premières réalisations.':
     'History will fill up after the first completions.',
   'En cours': 'In progress',
   Annulée: 'Cancelled',
+  Archivée: 'Archived',
   'Ouverte à tous': 'Open to everyone',
   'Pour le': 'Due',
   'Tous les': 'Every',
@@ -218,9 +258,12 @@ export const englishMessages: Record<string, string> = {
   Commencer: 'Start',
   Fait: 'Done',
   Rouvrir: 'Reopen',
+  Archiver: 'Archive',
   'Rien à faire pour le moment': 'Nothing to do right now',
   'Ajoutez une tâche datée ou une corvée que chacun pourra prendre en charge.':
     'Add a dated task or a chore that anyone can take.',
+  'Ajoutez une tâche personnelle ou une routine que chacun pourra prendre en charge.':
+    'Add a personal task or a routine that anyone can take.',
   'Ajouter aux courses': 'Add to shopping',
   'Ajoutez la quantité ou une précision si nécessaire.':
     'Add a quantity or detail if needed.',
@@ -1203,6 +1246,10 @@ Object.assign(englishMessages, {
   'Cette tâche est déjà terminée.': 'This task is already completed.',
   "Le responsable sélectionné n’est plus disponible.":
     'The selected assignee is no longer available.',
+  'Le groupe sélectionné n’est plus disponible.':
+    'The selected group is no longer available.',
+  'La personne sélectionnée n’est plus disponible.':
+    'The selected person is no longer available.',
   'Une tâche privée ne peut être attribuée qu’à vous.':
     'A private task can only be assigned to you.',
   'Vérifiez les informations de la tâche.': 'Check the task information.',

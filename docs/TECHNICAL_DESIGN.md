@@ -159,12 +159,21 @@ sont centralisées et référencent une ressource existante de la même instance
 - `due_at`, `period_start`, `period_end`, tous optionnels et cohérents avec `kind` ;
 - `recurrence_rule_id` pour une vraie récurrence temporelle ;
 - `indicative_frequency_value/unit` pour une fréquence non planifiée ;
-- `reopen_policy`: `NONE`, `MANUAL`, `AFTER_DELAY`, `SCHEDULED` ;
+- `reopen_policy`: `NONE`, `MANUAL`, `AFTER_DELAY`, `IMMEDIATE` ;
 - `reopen_after_seconds` si nécessaire.
+
+Ces champs restent une représentation interne. L'interface expose seulement `Tâche` et
+`Routine`, puis déduit `kind`, `assignee_id`, `claimable` et les ACL à partir de la date et
+du champ `Pour qui ?`. Une tâche `SCHEDULED` peut être sans date ; ce nom interne ne doit
+pas contraindre le vocabulaire produit.
 
 `task_occurrence` représente une fenêtre ou échéance concrète, sans créer de
 `calendar_event`. L'agenda effectue une union paginée entre événements et projections de
 tâches. `task_completion` conserve l'auteur, la date, le commentaire et l'occurrence.
+
+Les écrans d'activité et de statistiques lisent `task_completion` via des routes dédiées.
+Les agrégats sont calculés en base sur une période bornée et après application de la portée
+ACL ; ils ne dépendent pas de l'historique abrégé renvoyé avec chaque carte de tâche.
 
 ### Contraintes essentielles
 
@@ -278,6 +287,7 @@ GET|POST /events                PATCH /events/:id
 PUT      /events/:id/response
 GET|POST /tasks                 PATCH /tasks/:id
 POST     /tasks/:id/complete    POST /tasks/:id/reopen
+GET      /tasks/activity        GET /tasks/statistics?from=...&to=...
 GET|POST /meals                 GET|POST /meal-plan
 POST     /meals/:id/to-shopping-list
 GET|POST /shopping-lists        POST /shopping-lists/:id/items

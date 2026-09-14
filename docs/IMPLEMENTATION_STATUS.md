@@ -48,6 +48,12 @@ les dates, les nombres et le calendrier sont disponibles en français et en angl
 choix enregistré dans le profil s’applique immédiatement et suit la session sur les autres
 appareils.
 
+Le module Tâches distingue désormais les tâches à terminer des routines permanentes sans
+multiplier les entrées de navigation. Une création peut cibler soi-même, une personne, un
+groupe ou tout le foyer, avec visibilité déduite automatiquement. Les tâches personnelles
+sans date, les tâches ouvertes ponctuelles, le journal réel des réalisations et les
+statistiques de routines filtrables par période et par personne sont couverts.
+
 ## Enrichissements restant hors critères globaux
 
 Le PRD contient aussi des extensions qui ne bloquent pas le MVP et pourront constituer une

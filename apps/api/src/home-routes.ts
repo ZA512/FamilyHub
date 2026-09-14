@@ -55,7 +55,28 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
          JOIN resource r ON r.id = t.id
          WHERE r.instance_id = $1 AND r.deleted_at IS NULL
            AND t.status IN ('OPEN', 'IN_PROGRESS')
-           AND (t.assignee_id = $2 OR t.claimable = true OR r.created_by = $2)
+           AND (
+             t.assignee_id = $2
+             OR (t.claimable = false AND t.assignee_id IS NULL AND r.created_by = $2)
+             OR (
+               t.claimable = true AND (
+                 r.visibility = 'ALL_MEMBERS'
+                 OR EXISTS (
+                   SELECT 1 FROM resource_acl_user actionable_user
+                   WHERE actionable_user.resource_id = r.id
+                     AND actionable_user.member_id = $2
+                 )
+                 OR EXISTS (
+                   SELECT 1
+                   FROM resource_acl_group actionable_group
+                   JOIN group_membership actionable_membership
+                     ON actionable_membership.group_id = actionable_group.group_id
+                   WHERE actionable_group.resource_id = r.id
+                     AND actionable_membership.member_id = $2
+                 )
+               )
+             )
+           )
            AND (
              r.visibility = 'ALL_MEMBERS' OR r.created_by = $2
              OR EXISTS (

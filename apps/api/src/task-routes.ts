@@ -3,10 +3,12 @@ import {
   taskCreateSchema,
   taskStatusUpdateSchema,
   type FamilyTask,
+  type TaskActivityEntry,
   type TaskCompletion,
   type TaskKind,
   type TaskReopenPolicy,
   type TaskStatus,
+  type TaskStatistics,
 } from '@familyhub/contracts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
@@ -15,6 +17,11 @@ import { z } from 'zod';
 import { createSessionGuard, requireCsrf } from './auth.js';
 
 const taskIdSchema = z.string().uuid();
+const taskInsightsQuerySchema = z.object({
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
 
 type TaskRow = {
   id: string;
@@ -27,6 +34,7 @@ type TaskRow = {
   createdBy: string;
   createdByName: string;
   claimable: boolean;
+  actionable: boolean;
   dueAt: Date | null;
   periodStartAt: Date | null;
   periodEndAt: Date | null;
@@ -35,7 +43,9 @@ type TaskRow = {
   reopenPolicy: TaskReopenPolicy;
   reopenDelayHours: number | null;
   nextAvailableAt: Date | null;
-  visibility: 'PRIVATE' | 'ALL_MEMBERS';
+  visibility: 'PRIVATE' | 'ALL_MEMBERS' | 'GROUPS' | 'SELECTED_USERS';
+  groupIds: string[];
+  userIds: string[];
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -74,12 +84,43 @@ const selectTask = `
   SELECT t.id, t.title, t.description, t.kind, t.status,
          t.assignee_id AS "assigneeId", assignee.first_name AS "assigneeName",
          r.created_by AS "createdBy", creator.first_name AS "createdByName",
-         t.claimable, t.due_at AS "dueAt", t.period_start_at AS "periodStartAt",
+         t.claimable,
+         (
+           t.assignee_id = $2
+           OR (NOT t.claimable AND t.assignee_id IS NULL AND r.created_by = $2)
+           OR (
+             t.claimable AND (
+               r.visibility = 'ALL_MEMBERS'
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user actionable_user
+                 WHERE actionable_user.resource_id = r.id
+                   AND actionable_user.member_id = $2
+               )
+               OR EXISTS (
+                 SELECT 1
+                 FROM resource_acl_group actionable_group
+                 JOIN group_membership actionable_membership
+                   ON actionable_membership.group_id = actionable_group.group_id
+                 WHERE actionable_group.resource_id = r.id
+                   AND actionable_membership.member_id = $2
+               )
+             )
+           )
+         ) AS actionable,
+         t.due_at AS "dueAt", t.period_start_at AS "periodStartAt",
          t.period_end_at AS "periodEndAt",
          t.recurrence_interval_days AS "recurrenceIntervalDays",
          t.frequency_hint AS "frequencyHint", t.reopen_policy AS "reopenPolicy",
          t.reopen_delay_hours AS "reopenDelayHours",
          t.next_available_at AS "nextAvailableAt", r.visibility,
+         COALESCE((
+           SELECT array_agg(rag.group_id ORDER BY rag.group_id)
+           FROM resource_acl_group rag WHERE rag.resource_id = r.id
+         ), '{}'::uuid[]) AS "groupIds",
+         COALESCE((
+           SELECT array_agg(rau.member_id ORDER BY rau.member_id)
+           FROM resource_acl_user rau WHERE rau.resource_id = r.id
+         ), '{}'::uuid[]) AS "userIds",
          t.version, t.created_at AS "createdAt", t.updated_at AS "updatedAt"
   FROM family_task t
   JOIN resource r ON r.id = t.id
@@ -147,17 +188,8 @@ async function loadTask(
   return result.rows[0] ?? null;
 }
 
-function mayActOnTask(
-  task: TaskRow,
-  memberId: string,
-  role: 'ADMIN' | 'MEMBER',
-): boolean {
-  return (
-    role === 'ADMIN' ||
-    task.createdBy === memberId ||
-    task.assigneeId === memberId ||
-    (task.kind === 'OPEN_CHORE' && task.claimable)
-  );
+function mayActOnTask(task: TaskRow, memberId: string, role: 'ADMIN' | 'MEMBER'): boolean {
+  return role === 'ADMIN' || task.actionable;
 }
 
 function nextPlannedDate(dueAt: Date, intervalDays: number, completedAt: Date): Date {
@@ -216,10 +248,17 @@ export async function registerTaskRoutes(app: FastifyInstance, pool: Pool) {
           `SELECT c.id, c.task_id AS "taskId", c.completed_by AS "completedBy",
                   performer.first_name AS "completedByName", c.completed_at AS "completedAt",
                   c.comment, c.scheduled_for AS "scheduledFor"
-           FROM task_completion c
+           FROM (
+             SELECT completion.*,
+                    row_number() OVER (
+                      PARTITION BY completion.task_id ORDER BY completion.completed_at DESC
+                    ) AS task_rank
+             FROM task_completion completion
+             WHERE completion.task_id = ANY($1::uuid[])
+           ) c
            JOIN instance_member performer_member ON performer_member.id = c.completed_by
            JOIN app_user performer ON performer.id = performer_member.user_id
-           WHERE c.task_id = ANY($1::uuid[])
+           WHERE c.task_rank <= 10
            ORDER BY c.completed_at DESC`,
           [taskIds],
         )
@@ -227,10 +266,77 @@ export async function registerTaskRoutes(app: FastifyInstance, pool: Pool) {
     const byTask = new Map<string, TaskCompletion[]>();
     for (const completion of completions.rows) {
       const entries = byTask.get(completion.taskId) ?? [];
-      if (entries.length < 10) entries.push(serializeCompletion(completion));
+      entries.push(serializeCompletion(completion));
       byTask.set(completion.taskId, entries);
     }
     return { tasks: result.rows.map((task) => serializeTask(task, byTask.get(task.id) ?? [])) };
+  });
+
+  app.get('/api/v1/tasks/activity', { preHandler: requireSession }, async (request, reply) => {
+    if (!(await requireTasksModule(request, reply, pool))) return;
+    const parsed = taskInsightsQuerySchema.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
+    const limit = parsed.data.limit ?? 100;
+    const result = await pool.query<CompletionRow & { taskTitle: string; taskKind: TaskKind }>(
+      `SELECT c.id, c.task_id AS "taskId", c.completed_by AS "completedBy",
+                performer.first_name AS "completedByName", c.completed_at AS "completedAt",
+                c.comment, c.scheduled_for AS "scheduledFor",
+                t.title AS "taskTitle", t.kind AS "taskKind"
+         FROM task_completion c
+         JOIN family_task t ON t.id = c.task_id
+         JOIN resource r ON r.id = t.id
+         JOIN instance_member performer_member ON performer_member.id = c.completed_by
+         JOIN app_user performer ON performer.id = performer_member.user_id
+         WHERE ${readableTask}
+         ORDER BY c.completed_at DESC
+         LIMIT $3`,
+      [request.session!.instanceId, request.session!.id, limit],
+    );
+    const activity: TaskActivityEntry[] = result.rows.map((row) => ({
+      ...serializeCompletion(row),
+      taskId: row.taskId,
+      taskTitle: row.taskTitle,
+      taskKind: row.taskKind,
+    }));
+    return { activity };
+  });
+
+  app.get('/api/v1/tasks/statistics', { preHandler: requireSession }, async (request, reply) => {
+    if (!(await requireTasksModule(request, reply, pool))) return;
+    const parsed = taskInsightsQuerySchema.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
+    const to = parsed.data.to ? new Date(parsed.data.to) : new Date();
+    const from = parsed.data.from
+      ? new Date(parsed.data.from)
+      : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+    if (from >= to) return reply.code(400).send({ error: 'INVALID_PERIOD' });
+
+    const result = await pool.query<{
+      memberId: string;
+      memberName: string;
+      taskId: string;
+      taskTitle: string;
+      count: number;
+    }>(
+      `SELECT c.completed_by AS "memberId", performer.first_name AS "memberName",
+                t.id AS "taskId", t.title AS "taskTitle", count(*)::int AS count
+         FROM task_completion c
+         JOIN family_task t ON t.id = c.task_id
+         JOIN resource r ON r.id = t.id
+         JOIN instance_member performer_member ON performer_member.id = c.completed_by
+         JOIN app_user performer ON performer.id = performer_member.user_id
+         WHERE ${readableTask} AND t.kind = 'OPEN_CHORE' AND r.visibility <> 'PRIVATE'
+           AND c.completed_at >= $3 AND c.completed_at < $4
+         GROUP BY c.completed_by, performer.first_name, t.id, t.title
+         ORDER BY performer.first_name, t.title`,
+      [request.session!.instanceId, request.session!.id, from, to],
+    );
+    const statistics: TaskStatistics = {
+      from: from.toISOString(),
+      to: to.toISOString(),
+      entries: result.rows,
+    };
+    return { statistics };
   });
 
   app.post(
@@ -248,6 +354,27 @@ export async function registerTaskRoutes(app: FastifyInstance, pool: Pool) {
         parsed.data.assigneeId !== request.session?.id
       ) {
         return reply.code(400).send({ error: 'PRIVATE_TASK_ASSIGNEE_INVALID' });
+      }
+
+      if (parsed.data.visibility === 'GROUPS') {
+        const groups = await pool.query<{ id: string }>(
+          `SELECT id FROM member_group
+           WHERE instance_id = $1 AND id = ANY($2::uuid[])`,
+          [request.session?.instanceId, parsed.data.groupIds],
+        );
+        if (groups.rowCount !== parsed.data.groupIds.length) {
+          return reply.code(400).send({ error: 'GROUP_INVALID' });
+        }
+      }
+      if (parsed.data.visibility === 'SELECTED_USERS') {
+        const users = await pool.query<{ id: string }>(
+          `SELECT id FROM instance_member
+           WHERE instance_id = $1 AND status = 'ACTIVE' AND id = ANY($2::uuid[])`,
+          [request.session?.instanceId, parsed.data.userIds],
+        );
+        if (users.rowCount !== parsed.data.userIds.length) {
+          return reply.code(400).send({ error: 'RECIPIENT_INVALID' });
+        }
       }
 
       if (parsed.data.assigneeId) {
@@ -305,6 +432,20 @@ export async function registerTaskRoutes(app: FastifyInstance, pool: Pool) {
               parsed.data.clientMutationId,
             ],
           );
+
+          if (parsed.data.visibility === 'GROUPS') {
+            await client.query(
+              `INSERT INTO resource_acl_group (resource_id, group_id)
+               SELECT $1, unnest($2::uuid[])`,
+              [taskId, parsed.data.groupIds],
+            );
+          } else if (parsed.data.visibility === 'SELECTED_USERS') {
+            await client.query(
+              `INSERT INTO resource_acl_user (resource_id, member_id)
+               SELECT $1, unnest($2::uuid[])`,
+              [taskId, parsed.data.userIds],
+            );
+          }
 
           if (parsed.data.assigneeId && parsed.data.assigneeId !== request.session?.id) {
             await client.query(

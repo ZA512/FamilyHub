@@ -385,78 +385,57 @@ Exemples :
 
 ---
 
-# 9. Tâches et corvées
+# 9. Tâches et routines
 
-Ce module doit distinguer explicitement trois concepts.
+Le module expose deux concepts simples. Le destinataire et la planification sont des
+propriétés indépendantes, pas des types supplémentaires.
 
-## 9.1. Tâche planifiée affectée
+## 9.1. Tâche
 
-Exemple :
+Une tâche est réalisée une fois par défaut. Elle peut :
 
-`Sortir les poubelles tous les mardis — affecté à Paul`
+- être personnelle, affectée à une personne, ou ouverte à un groupe ou au foyer ;
+- ne posséder aucune date ;
+- posséder une échéance ou une période de réalisation ;
+- se répéter à partir de cette date ou période.
 
-Cette tâche :
+Exemples :
 
-- possède une échéance ou une règle de récurrence ;
-- possède un responsable ;
-- apparaît dans la vue Tâches ;
-- apparaît automatiquement dans l'agenda à la date correspondante ;
-- peut être marquée `FAIT`.
+- `Appeler le médecin — pour moi, sans date` ;
+- `Sortir les poubelles le mardi — pour Paul` ;
+- `Ramasser les feuilles entre le 1er octobre et le 30 novembre — pour les enfants`.
 
-La tâche reste un objet `Task`. Elle ne doit pas être dupliquée en objet `Event`.
+Une tâche datée reste un objet `Task`. L'agenda en affiche une projection et ne crée pas
+un deuxième objet `Event`.
 
-L'agenda affiche une projection de la tâche.
+## 9.2. Routine
 
-## 9.2. Corvée ouverte sans date
+Une routine est une action disponible indéfiniment, par exemple `Vider le lave-vaisselle`.
+Chaque réalisation ajoute une occurrence à l'historique sans supprimer sa définition.
 
-Exemple :
+Une routine peut être :
 
-`Vider le lave-vaisselle`
+- toujours disponible ;
+- de nouveau disponible après un délai minimum ;
+- réactivée manuellement.
 
-Caractéristiques :
+Elle peut avoir une fréquence indicative, par exemple `environ 1 fois par jour`. Cette
+fréquence n'est PAS une date de planification. Mettre fin à une routine est une action
+distincte nommée `Archiver`, et non une politique de réouverture.
 
-- aucune date obligatoire ;
-- aucun responsable obligatoire ;
-- peut être accomplie à n'importe quel moment ;
-- visible dans une liste de corvées ouvertes ;
-- le membre qui la réalise clique `FAIT` ;
-- l'application enregistre qui l'a faite et quand ;
-- après validation, la corvée redevient disponible selon sa politique de réouverture.
+## 9.3. Destinataires
 
-Une corvée ouverte peut avoir :
+Le champ `Pour qui ?` propose, dans cet ordre :
 
-- fréquence indicative facultative ;
-- délai minimum avant réouverture ;
-- réouverture manuelle ;
-- réouverture automatique.
+- Tout le foyer ;
+- Moi ;
+- les personnes actives ;
+- les groupes du foyer.
 
-Exemple de fréquence indicative :
-
-`environ 1 fois par jour`
-
-Cette fréquence n'est PAS une date de planification.
-
-## 9.3. Corvée ponctuelle ou saisonnière
-
-Exemple :
-
-`Ramasser les feuilles`
-
-Cette corvée peut être :
-
-- sans responsable ;
-- associée à une période ou une date ;
-- ponctuelle ;
-- annuelle ;
-- saisonnière.
-
-Elle peut être définie comme :
-
-- `à faire le 15 octobre` ;
-- `à faire dans la semaine du 12 octobre` ;
-- `à faire entre le 1er octobre et le 30 novembre`.
-
-Si une date/période existe, elle apparaît dans l'agenda.
+Une personne sélectionnée est responsable. Une tâche destinée à un groupe ou au foyer est
+ouverte à chacun de ses membres. La visibilité est déduite du destinataire afin d'éviter
+des choix contradictoires. `Tout le foyer` est la valeur initiale d'une routine et `Moi`
+celle d'une tâche.
 
 ## 9.4. États
 
@@ -467,9 +446,10 @@ Si une date/période existe, elle apparaît dans l'agenda.
 - `DONE` ;
 - `CANCELLED`.
 
-Pour une corvée récurrente ouverte, `DONE` doit créer une occurrence terminée dans l'historique puis rouvrir la corvée selon sa règle.
+Pour une routine, `DONE` doit créer une occurrence terminée dans l'historique puis rendre
+la routine disponible selon sa règle.
 
-## 9.5. Historique
+## 9.5. Activité et statistiques
 
 Le système doit conserver :
 
@@ -480,7 +460,10 @@ Le système doit conserver :
 
 Objectif : permettre de voir qui participe aux tâches communes sans gamification forcée.
 
-Aucun système de points ou classement n'est requis en MVP.
+Le module propose un journal chronologique des réalisations et des statistiques sur les
+routines partagées. Les statistiques permettent de choisir une période et les personnes
+affichées. Elles comptent les réalisations par personne et par routine, sans points ni
+classement automatique ; elles ne prétendent pas mesurer l'effort réel.
 
 ---
 
@@ -1135,11 +1118,16 @@ Une corvée comme `vider le lave-vaisselle` doit pouvoir exister indéfiniment s
 
 Une tâche avec `assignee = null` et `claimable = true` peut être accomplie par n'importe quel membre autorisé.
 
-## 28.4. Terminer une corvée récurrente crée une occurrence
+Une ACL de groupe limite ce droit aux membres du groupe ; une ACL d'utilisateurs le limite
+aux personnes sélectionnées.
+
+## 28.4. Terminer une routine crée une occurrence
 
 L'historique doit conserver chaque réalisation.
 
 La définition de tâche reste active.
+
+Son archivage est une action séparée de la réalisation d'une occurrence.
 
 ## 28.5. Récurrence temporelle et fréquence indicative sont différentes
 
