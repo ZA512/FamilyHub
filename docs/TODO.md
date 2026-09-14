@@ -106,3 +106,36 @@ fort que les ingrédients ajoutés automatiquement depuis un plat. Cette différ
 - un parent qui ne fait pas les courses doit pouvoir suivre les demandes récentes du foyer ;
 - la personne qui fait les courses doit identifier immédiatement les demandes explicites des membres ;
 - une longue liste d'articles achetés ne doit pas encombrer en permanence la liste active.
+
+## Affichages — modes liste et cartes mémorisés sur l'appareil
+
+**Statut :** idée à étudier — ne pas développer pour le moment.
+
+### Comportement envisagé
+
+- ajouter aux Bookmarks un choix entre une vue liste et une vue cartes ;
+- utiliser la vue liste par défaut pour les Bookmarks tant que l'utilisateur n'a pas exprimé de choix ;
+- ajouter aux Contacts externes un choix entre une vue liste et une vue cartes ;
+- utiliser la vue cartes par défaut pour les Contacts externes tant que l'utilisateur n'a pas
+  exprimé de choix ;
+- mémoriser sur l'appareil le dernier mode choisi dans chacun de ces modules ;
+- appliquer cette mémorisation à tous les autres modules proposant déjà, ou proposant à l'avenir,
+  un choix entre les vues liste et cartes ;
+- conserver une préférence distincte par module : choisir la vue liste dans Bookmarks ne doit pas
+  modifier le mode d'affichage des Contacts, des Repas ou d'un autre module.
+
+### Règle de repli
+
+En l'absence de préférence enregistrée, chaque module utilise son affichage par défaut. Les défauts
+demandés ici sont :
+
+- Bookmarks : liste ;
+- Contacts externes : cartes ;
+- autres modules : conserver leur valeur par défaut actuelle, sauf décision produit ultérieure.
+
+### Points à décider avant implémentation
+
+- stockage uniquement dans le navigateur ou synchronisation éventuelle avec le profil utilisateur ;
+- portée de la préférence lorsqu'un même appareil est utilisé par plusieurs comptes ;
+- comportement en navigation privée, après suppression des données locales ou sur un nouvel appareil ;
+- migration des préférences déjà enregistrées par certains modules vers une convention commune.
