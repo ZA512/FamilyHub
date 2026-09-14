@@ -769,6 +769,11 @@ export type MealPreferenceEntry = {
   value: MealPreference;
 };
 
+export type MealListMember = {
+  id: string;
+  firstName: string;
+};
+
 export type FamilyMeal = {
   id: string;
   name: string;

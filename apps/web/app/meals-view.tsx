@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
-import { localeTag } from '@/lib/i18n';
+import { localeTag, t } from '@/lib/i18n';
 import {
   CalendarPlus,
   ChefHat,
   ChevronLeft,
   ChevronRight,
   Heart,
+  LayoutGrid,
+  List,
   LoaderCircle,
   Lock,
+  Minus,
   Pencil,
   Plus,
+  Search,
   ShoppingBasket,
   ThumbsDown,
   Trash2,
@@ -22,6 +26,7 @@ import type {
   InstanceSettings,
   MealPlanEntry,
   MealPreference,
+  MealListMember,
   MealSlot,
   ModuleConfig,
   WeekStartsOn,
@@ -58,7 +63,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   readMealPlanCache,
   readMealsCache,
@@ -66,6 +85,11 @@ import {
   writeMealsCache,
 } from '@/lib/offline-storage';
 import { normalizeWeekStartsOn, startOfMealWeek } from '@/lib/meal-week';
+import {
+  filterMeals,
+  mealPreferenceFor,
+  type MealPreferenceFilter,
+} from '@/lib/meal-library';
 
 type MealsViewProps = {
   currentMemberId: string;
@@ -106,6 +130,7 @@ export function MealsView({
 }: MealsViewProps) {
   const sessionKey = `${instanceId}:${currentMemberId}`;
   const [meals, setMeals] = useState<FamilyMeal[]>([]);
+  const [members, setMembers] = useState<MealListMember[]>([]);
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [shoppingEnabled, setShoppingEnabled] = useState(true);
   const [weekStartsOn, setWeekStartsOn] = useState<WeekStartsOn>(1);
@@ -137,11 +162,23 @@ export function MealsView({
   const [selectedIngredients, setSelectedIngredients] = useState<Set<string>>(
     new Set(),
   );
+  const [libraryView, setLibraryView] = useState<'list' | 'cards'>('list');
+  const [mealQuery, setMealQuery] = useState('');
+  const [memberFilter, setMemberFilter] = useState('all');
+  const [preferenceFilter, setPreferenceFilter] =
+    useState<MealPreferenceFilter>('all');
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
     [weekStart],
   );
+  const filteredMeals = useMemo(() => {
+    return filterMeals(meals, members, {
+      query: mealQuery,
+      memberId: memberFilter,
+      preference: preferenceFilter,
+    });
+  }, [mealQuery, meals, memberFilter, members, preferenceFilter]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -150,6 +187,7 @@ export function MealsView({
       if (controller.signal.aborted) return;
       if (cached) {
         setMeals(cached.meals);
+        setMembers(cached.members);
         setShoppingEnabled(cached.shoppingEnabled);
       }
       try {
@@ -171,6 +209,7 @@ export function MealsView({
           throw new Error('Impossible de charger les plats.');
         const mealsPayload = (await mealsResponse.json()) as {
           meals: FamilyMeal[];
+          members: MealListMember[];
         };
         const modulesPayload = modulesResponse.ok
           ? ((await modulesResponse.json()) as { modules: ModuleConfig[] })
@@ -179,10 +218,14 @@ export function MealsView({
           modulesPayload.modules.find((module) => module.key === 'shopping')
             ?.enabled ?? false;
         setMeals(mealsPayload.meals);
+        setMembers(mealsPayload.members);
         setShoppingEnabled(shopping);
-        await writeMealsCache(sessionKey, mealsPayload.meals, shopping).catch(
-          () => undefined,
-        );
+        await writeMealsCache(
+          sessionKey,
+          mealsPayload.meals,
+          mealsPayload.members,
+          shopping,
+        ).catch(() => undefined);
         setError('');
       } catch (reason) {
         if (!controller.signal.aborted && !cached) {
@@ -249,11 +292,11 @@ export function MealsView({
 
   useEffect(() => {
     if (!loading) {
-      void writeMealsCache(sessionKey, meals, shoppingEnabled).catch(
+      void writeMealsCache(sessionKey, meals, members, shoppingEnabled).catch(
         () => undefined,
       );
     }
-  }, [loading, meals, sessionKey, shoppingEnabled]);
+  }, [loading, meals, members, sessionKey, shoppingEnabled]);
 
   useEffect(() => {
     if (!planLoading) {
@@ -688,23 +731,86 @@ export function MealsView({
                 </CardContent>
               </Card>
             ) : meals.length ? (
-              <div className="grid gap-4 lg:grid-cols-2">
-                {meals.map((meal) => (
-                  <MealCard
-                    key={meal.id}
-                    meal={meal}
-                    currentMemberId={currentMemberId}
-                    role={role}
-                    busy={busyId === meal.id}
-                    shoppingEnabled={shoppingEnabled}
-                    onPreference={(value) => setPreference(meal, value)}
-                    onEdit={() => openMealEditor(meal)}
-                    onDelete={() => setMealToDelete(meal)}
-                    onShopping={() => openShoppingDialog(meal)}
-                    onPlan={() => openPlan(new Date(), undefined, meal.id)}
-                  />
-                ))}
-              </div>
+              <>
+                <MealLibraryToolbar
+                  query={mealQuery}
+                  memberFilter={memberFilter}
+                  preferenceFilter={preferenceFilter}
+                  members={members}
+                  view={libraryView}
+                  visibleCount={filteredMeals.length}
+                  totalCount={meals.length}
+                  onQueryChange={setMealQuery}
+                  onMemberFilterChange={setMemberFilter}
+                  onPreferenceFilterChange={setPreferenceFilter}
+                  onViewChange={setLibraryView}
+                  onReset={() => {
+                    setMealQuery('');
+                    setMemberFilter('all');
+                    setPreferenceFilter('all');
+                  }}
+                />
+                {filteredMeals.length ? (
+                  libraryView === 'list' ? (
+                    <MealList
+                      meals={filteredMeals}
+                      members={members}
+                      currentMemberId={currentMemberId}
+                      busyId={busyId}
+                      shoppingEnabled={shoppingEnabled}
+                      onPreference={setPreference}
+                      onEdit={openMealEditor}
+                      onDelete={setMealToDelete}
+                      onShopping={(meal) => openShoppingDialog(meal)}
+                      onPlan={(meal) =>
+                        openPlan(new Date(), undefined, meal.id)
+                      }
+                    />
+                  ) : (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      {filteredMeals.map((meal) => (
+                        <MealCard
+                          key={meal.id}
+                          meal={meal}
+                          currentMemberId={currentMemberId}
+                          role={role}
+                          busy={busyId === meal.id}
+                          shoppingEnabled={shoppingEnabled}
+                          onPreference={(value) => setPreference(meal, value)}
+                          onEdit={() => openMealEditor(meal)}
+                          onDelete={() => setMealToDelete(meal)}
+                          onShopping={() => openShoppingDialog(meal)}
+                          onPlan={() =>
+                            openPlan(new Date(), undefined, meal.id)
+                          }
+                        />
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  <Card className="border-dashed bg-muted/20">
+                    <CardContent className="py-10 text-center">
+                      <h2 className="font-semibold">Aucun plat trouvé</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Modifiez la recherche ou les filtres pour afficher
+                        d’autres plats.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-4"
+                        onClick={() => {
+                          setMealQuery('');
+                          setMemberFilter('all');
+                          setPreferenceFilter('all');
+                        }}
+                      >
+                        Réinitialiser les filtres
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             ) : (
               <Card className="border-dashed bg-muted/20">
                 <CardContent className="flex flex-col items-center py-12 text-center">
@@ -875,6 +981,389 @@ function Planner({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function MealLibraryToolbar({
+  query,
+  memberFilter,
+  preferenceFilter,
+  members,
+  view,
+  visibleCount,
+  totalCount,
+  onQueryChange,
+  onMemberFilterChange,
+  onPreferenceFilterChange,
+  onViewChange,
+  onReset,
+}: {
+  query: string;
+  memberFilter: string;
+  preferenceFilter: MealPreferenceFilter;
+  members: MealListMember[];
+  view: 'list' | 'cards';
+  visibleCount: number;
+  totalCount: number;
+  onQueryChange: (value: string) => void;
+  onMemberFilterChange: (value: string) => void;
+  onPreferenceFilterChange: (value: MealPreferenceFilter) => void;
+  onViewChange: (value: 'list' | 'cards') => void;
+  onReset: () => void;
+}) {
+  const filtered = Boolean(
+    query || memberFilter !== 'all' || preferenceFilter !== 'all',
+  );
+
+  return (
+    <div className="mb-4 rounded-xl border bg-card p-3">
+      <div className="grid gap-3 lg:grid-cols-[minmax(16rem,1fr)_minmax(10rem,14rem)_minmax(10rem,14rem)_auto]">
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Rechercher un plat ou un ingrédient…"
+            aria-label="Rechercher par titre ou ingrédient"
+            className="pl-9"
+          />
+        </div>
+        <Select
+          value={memberFilter}
+          onValueChange={(value) => {
+            if (value !== null) onMemberFilterChange(String(value));
+          }}
+        >
+          <SelectTrigger className="w-full" aria-label="Filtrer par membre">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les membres</SelectItem>
+            {members.map((member) => (
+              <SelectItem key={member.id} value={member.id}>
+                {member.firstName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={preferenceFilter}
+          onValueChange={(value) => {
+            if (value !== null)
+              onPreferenceFilterChange(String(value) as MealPreferenceFilter);
+          }}
+        >
+          <SelectTrigger className="w-full" aria-label="Filtrer par avis">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les avis</SelectItem>
+            <SelectItem value="1">Adore</SelectItem>
+            <SelectItem value="0">Neutre</SelectItem>
+            <SelectItem value="-1">N’aime pas</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant={view === 'list' ? 'secondary' : 'ghost'}
+            aria-label="Vue en liste"
+            aria-pressed={view === 'list'}
+            onClick={() => onViewChange('list')}
+          >
+            <List aria-hidden="true" /> Liste
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={view === 'cards' ? 'secondary' : 'ghost'}
+            aria-label="Vue en cartes"
+            aria-pressed={view === 'cards'}
+            onClick={() => onViewChange('cards')}
+          >
+            <LayoutGrid aria-hidden="true" /> Cartes
+          </Button>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>
+          {t('{0} résultats sur {1}', {
+            0: visibleCount,
+            1: totalCount,
+          })}
+        </span>
+        {filtered ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onReset}>
+            <X aria-hidden="true" /> Réinitialiser les filtres
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MealList({
+  meals,
+  members,
+  currentMemberId,
+  busyId,
+  shoppingEnabled,
+  onPreference,
+  onEdit,
+  onDelete,
+  onShopping,
+  onPlan,
+}: {
+  meals: FamilyMeal[];
+  members: MealListMember[];
+  currentMemberId: string;
+  busyId: string | null;
+  shoppingEnabled: boolean;
+  onPreference: (meal: FamilyMeal, value: MealPreference) => void;
+  onEdit: (meal: FamilyMeal) => void;
+  onDelete: (meal: FamilyMeal) => void;
+  onShopping: (meal: FamilyMeal) => void;
+  onPlan: (meal: FamilyMeal) => void;
+}) {
+  const otherMembers = members.filter(
+    (member) => member.id !== currentMemberId,
+  );
+
+  return (
+    <Card className="gap-0 overflow-hidden py-0">
+      <TooltipProvider delay={350}>
+        <Table className="min-w-max">
+          <TableHeader className="bg-muted/35">
+            <TableRow>
+              <TableHead className="sticky left-0 z-10 min-w-56 bg-muted/95 px-4">
+                Recette
+              </TableHead>
+              <TableHead className="text-center">Mon avis</TableHead>
+              {otherMembers.map((member) => (
+                <TableHead key={member.id} className="min-w-20 text-center">
+                  {member.firstName}
+                </TableHead>
+              ))}
+              <TableHead className="px-4 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {meals.map((meal) => {
+              const ownPreference = mealPreferenceFor(meal, currentMemberId);
+              return (
+                <TableRow key={meal.id} className="group">
+                  <TableCell className="sticky left-0 z-10 bg-card px-4 group-hover:bg-muted/50">
+                    <div className="flex items-center gap-2">
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#fff0dc] text-[#b86210]">
+                        <ChefHat className="size-4" aria-hidden="true" />
+                      </span>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label={`Aperçu de ${meal.name}`}
+                              className="max-w-56 truncate text-left font-semibold underline-offset-4 hover:text-[#087f72] hover:underline focus-visible:text-[#087f72] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          }
+                        >
+                          {meal.name}
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="right"
+                          align="start"
+                          sideOffset={10}
+                          className="block w-96 max-w-[calc(100vw-2rem)] rounded-xl bg-popover p-0 text-popover-foreground shadow-xl ring-1 ring-foreground/10"
+                        >
+                          <MealPreview meal={meal} />
+                        </TooltipContent>
+                      </Tooltip>
+                      {meal.visibility === 'PRIVATE' ? (
+                        <Lock
+                          className="size-3.5 text-muted-foreground"
+                          aria-label="Privé"
+                        />
+                      ) : null}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <MealPreferenceButtons
+                      value={ownPreference}
+                      busy={busyId === meal.id}
+                      onChange={(value) => onPreference(meal, value)}
+                    />
+                  </TableCell>
+                  {otherMembers.map((member) => (
+                    <TableCell key={member.id} className="text-center">
+                      <MealPreferenceIndicator
+                        memberName={member.firstName}
+                        value={mealPreferenceFor(meal, member.id)}
+                      />
+                    </TableCell>
+                  ))}
+                  <TableCell className="px-4">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        size="sm"
+                        onClick={() => onPlan(meal)}
+                        className="bg-[#087f72] hover:bg-[#076d63]"
+                      >
+                        <CalendarPlus aria-hidden="true" /> Planifier
+                      </Button>
+                      {shoppingEnabled ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onShopping(meal)}
+                        >
+                          <ShoppingBasket aria-hidden="true" /> Courses
+                        </Button>
+                      ) : null}
+                      {meal.editable ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onEdit(meal)}
+                          >
+                            <Pencil aria-hidden="true" /> Modifier
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            onClick={() => onDelete(meal)}
+                          >
+                            <Trash2 aria-hidden="true" /> Supprimer
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TooltipProvider>
+    </Card>
+  );
+}
+
+function MealPreferenceButtons({
+  value,
+  busy,
+  onChange,
+}: {
+  value: MealPreference;
+  busy: boolean;
+  onChange: (value: MealPreference) => void;
+}) {
+  return (
+    <div className="flex justify-center gap-1">
+      <Button
+        variant={value === 1 ? 'default' : 'outline'}
+        size="icon-sm"
+        aria-label="J’adore"
+        disabled={busy}
+        onClick={() => onChange(value === 1 ? 0 : 1)}
+        className={value === 1 ? 'bg-rose-500 hover:bg-rose-600' : ''}
+      >
+        <Heart aria-hidden="true" />
+      </Button>
+      <Button
+        variant={value === -1 ? 'destructive' : 'outline'}
+        size="icon-sm"
+        aria-label="Je n’aime pas"
+        disabled={busy}
+        onClick={() => onChange(value === -1 ? 0 : -1)}
+      >
+        <ThumbsDown aria-hidden="true" />
+      </Button>
+    </div>
+  );
+}
+
+function MealPreferenceIndicator({
+  memberName,
+  value,
+}: {
+  memberName: string;
+  value: MealPreference;
+}) {
+  const label =
+    value === 1
+      ? t('{0} adore', { 0: memberName })
+      : value === -1
+        ? t('{0} n’aime pas', { 0: memberName })
+        : t('{0} est neutre', { 0: memberName });
+  return (
+    <span
+      title={label}
+      className="inline-flex size-8 items-center justify-center rounded-lg bg-muted/50"
+    >
+      {value === 1 ? (
+        <Heart
+          className="size-4 fill-rose-500 text-rose-500"
+          aria-hidden="true"
+        />
+      ) : value === -1 ? (
+        <ThumbsDown className="size-4 text-destructive" aria-hidden="true" />
+      ) : (
+        <Minus className="size-4 text-muted-foreground" aria-hidden="true" />
+      )}
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+function MealPreview({ meal }: { meal: FamilyMeal }) {
+  return (
+    <div className="overflow-hidden rounded-xl">
+      {meal.photoUrl ? (
+        // Images are user-provided URLs; a build-time image optimizer cannot resolve them.
+        // oxlint-disable-next-line next/no-img-element
+        <img
+          src={meal.photoUrl}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          className="h-32 w-full object-cover"
+        />
+      ) : null}
+      <div className="p-4">
+        <div className="flex items-center gap-2">
+          <h3 className="text-base font-semibold">{meal.name}</h3>
+          {meal.visibility === 'PRIVATE' ? (
+            <Badge variant="outline">
+              <Lock aria-hidden="true" /> Privé
+            </Badge>
+          ) : null}
+        </div>
+        {meal.description ? (
+          <p className="mt-1 whitespace-normal text-sm text-muted-foreground">
+            {meal.description}
+          </p>
+        ) : null}
+        <p className="mt-3 text-sm font-medium">
+          {meal.ingredients.length} ingrédient
+          {meal.ingredients.length > 1 ? 's' : ''} · {meal.referencePortions}{' '}
+          portions
+        </p>
+        <ul className="mt-2 grid gap-1 whitespace-normal text-sm text-muted-foreground sm:grid-cols-2">
+          {meal.ingredients.map((ingredient) => (
+            <li key={ingredient.id}>
+              {formatNumber(ingredient.quantity)} {ingredient.unit} ·{' '}
+              {ingredient.name}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

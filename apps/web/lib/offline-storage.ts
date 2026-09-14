@@ -3,6 +3,7 @@ import type {
   CurrentMember,
   FamilyGroup,
   FamilyMeal,
+  MealListMember,
   FamilyMember,
   FamilyTask,
   MealPlanEntry,
@@ -92,6 +93,7 @@ type AgendaCache = {
 type MealsCache = {
   sessionKey: string;
   meals: FamilyMeal[];
+  members?: MealListMember[];
   shoppingEnabled: boolean;
   updatedAt: string;
 };
@@ -1098,6 +1100,7 @@ export async function readAgendaCache(
 export async function writeMealsCache(
   sessionKey: string,
   meals: FamilyMeal[],
+  members: MealListMember[],
   shoppingEnabled: boolean,
 ) {
   await (
@@ -1105,6 +1108,7 @@ export async function writeMealsCache(
   ).put('meals', {
     sessionKey,
     meals,
+    members,
     shoppingEnabled,
     updatedAt: new Date().toISOString(),
   });
@@ -1113,7 +1117,11 @@ export async function writeMealsCache(
 export async function readMealsCache(sessionKey: string) {
   const cached = await (await database()).get('meals', sessionKey);
   return cached
-    ? { meals: cached.meals, shoppingEnabled: cached.shoppingEnabled }
+    ? {
+        meals: cached.meals,
+        members: cached.members ?? [],
+        shoppingEnabled: cached.shoppingEnabled,
+      }
     : null;
 }
 

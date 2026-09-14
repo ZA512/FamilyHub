@@ -51,6 +51,9 @@ appareils.
 Le premier jour du planning des repas est configurable par un administrateur pour tout le
 foyer. La navigation hebdomadaire et le retour à la semaine courante respectent ce choix,
 avec le lundi comme valeur compatible pour les installations existantes.
+La bibliothèque des plats utilise une liste compacte par défaut, compare les avis de tous
+les membres actifs, filtre par titre, ingrédient, membre et avis, et conserve une vue en
+cartes ainsi qu’un aperçu détaillé au survol ou au focus.
 
 Le module Tâches distingue désormais les tâches à terminer des routines permanentes sans
 multiplier les entrées de navigation. Une création peut cibler soi-même, une personne, un

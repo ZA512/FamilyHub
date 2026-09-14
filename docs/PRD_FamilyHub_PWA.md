@@ -494,6 +494,11 @@ Pour chaque plat et chaque membre :
 
 Aucune moyenne complexe n'est requise.
 
+La bibliothèque de plats propose par défaut une liste compacte qui compare les avis des
+membres. Elle peut être filtrée par titre ou ingrédient, puis par membre et par avis
+(`n'aime pas`, `neutre`, `adore`). Une prévisualisation au survol ou au clavier affiche la
+fiche essentielle du plat. La vue en cartes reste disponible.
+
 ## 10.3. Planning des repas
 
 Permet d'affecter un plat à :

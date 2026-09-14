@@ -8,6 +8,7 @@ import {
   mealUpdateSchema,
   type FamilyMeal,
   type MealIngredient,
+  type MealListMember,
   type MealPlanEntry,
   type MealPreferenceEntry,
   type MealSlot,
@@ -96,11 +97,7 @@ function normalizeIngredient(value: string): string {
   return value.normalize('NFKC').trim().toLocaleLowerCase('fr-FR');
 }
 
-function mayManage(
-  createdBy: string,
-  memberId: string,
-  role: 'ADMIN' | 'MEMBER',
-): boolean {
+function mayManage(createdBy: string, memberId: string, role: 'ADMIN' | 'MEMBER'): boolean {
   return role === 'ADMIN' || createdBy === memberId;
 }
 
@@ -241,13 +238,20 @@ export async function registerMealRoutes(app: FastifyInstance, pool: Pool) {
 
   app.get('/api/v1/meals', { preHandler: requireSession }, async (request, reply) => {
     if (!(await requireMealsModule(request, reply, pool))) return;
-    return {
-      meals: await loadMeals(
-        pool,
-        request.session!.instanceId,
-        request.session!.id,
-        request.session!.role,
+    const [meals, members] = await Promise.all([
+      loadMeals(pool, request.session!.instanceId, request.session!.id, request.session!.role),
+      pool.query<MealListMember>(
+        `SELECT m.id, u.first_name AS "firstName"
+         FROM instance_member m
+         JOIN app_user u ON u.id = m.user_id
+         WHERE m.instance_id = $1 AND m.status = 'ACTIVE'
+         ORDER BY lower(u.first_name), m.joined_at`,
+        [request.session!.instanceId],
       ),
+    ]);
+    return {
+      meals,
+      members: members.rows,
     };
   });
 
@@ -639,7 +643,8 @@ export async function registerMealRoutes(app: FastifyInstance, pool: Pool) {
          WHERE instance_id = $1 AND module_key = 'shopping' AND enabled = true`,
         [request.session!.instanceId],
       );
-      if (!shoppingEnabled.rowCount) return reply.code(404).send({ error: 'SHOPPING_MODULE_NOT_AVAILABLE' });
+      if (!shoppingEnabled.rowCount)
+        return reply.code(404).send({ error: 'SHOPPING_MODULE_NOT_AVAILABLE' });
       const [meal] = await loadMeals(
         pool,
         request.session!.instanceId,
@@ -648,7 +653,9 @@ export async function registerMealRoutes(app: FastifyInstance, pool: Pool) {
         id.data,
       );
       if (!meal) return reply.code(404).send({ error: 'MEAL_NOT_FOUND' });
-      const ingredientById = new Map(meal.ingredients.map((ingredient) => [ingredient.id, ingredient]));
+      const ingredientById = new Map(
+        meal.ingredients.map((ingredient) => [ingredient.id, ingredient]),
+      );
       if (parsed.data.items.some((item) => !ingredientById.has(item.ingredientId))) {
         return reply.code(400).send({ error: 'INGREDIENT_NOT_FOUND' });
       }

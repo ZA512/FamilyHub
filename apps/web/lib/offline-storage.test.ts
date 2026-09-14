@@ -340,10 +340,12 @@ describe('offline shopping helpers', () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     } satisfies MealPlanEntry;
-    await writeMealsCache(sessionKey, [meal], true);
+    const mealMembers = [{ id: member.id, firstName: member.firstName }];
+    await writeMealsCache(sessionKey, [meal], mealMembers, true);
     await writeMealPlanCache(sessionKey, '2026-09-14', '2026-09-20', [plan]);
     expect(await readMealsCache(sessionKey)).toEqual({
       meals: [meal],
+      members: mealMembers,
       shoppingEnabled: true,
     });
     expect(
