@@ -90,6 +90,8 @@ export function ChatView({
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(true);
+  const [messageLoadError, setMessageLoadError] = useState('');
+  const [messageLoadAttempt, setMessageLoadAttempt] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [error, setError] = useState('');
@@ -189,6 +191,7 @@ export function ChatView({
         return (await response.json()) as ChatMessage[];
       })
       .then((payload) => {
+        if (controller.signal.aborted) return;
         setMessages(payload);
         setHasOlderMessages(payload.length === 50);
         setConversations((current) =>
@@ -199,14 +202,14 @@ export function ChatView({
         requestAnimationFrame(() =>
           bottomRef.current?.scrollIntoView({ behavior: 'auto' }),
         );
-        return fetch(`/api/v1/conversations/${selectedId}/read`, {
+        void fetch(`/api/v1/conversations/${selectedId}/read`, {
           method: 'PATCH',
           headers: { 'x-csrf-token': csrfToken },
-        });
+        }).catch(() => undefined);
       })
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) {
-          setError(
+          setMessageLoadError(
             reason instanceof Error
               ? reason.message
               : 'Conversation indisponible.',
@@ -217,7 +220,7 @@ export function ChatView({
         if (!controller.signal.aborted) setMessagesLoading(false);
       });
     return () => controller.abort();
-  }, [csrfToken, selectedId]);
+  }, [csrfToken, messageLoadAttempt, selectedId]);
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -479,12 +482,14 @@ export function ChatView({
   }
 
   function selectConversation(conversationId: string | null) {
+    if (conversationId === selectedId) return;
     historyControllerRef.current?.abort();
     historyControllerRef.current = null;
     setMessagesLoading(Boolean(conversationId));
     setHistoryLoading(false);
     setMessages([]);
     setHasOlderMessages(false);
+    setMessageLoadError('');
     setError('');
     setSelectedId(conversationId);
   }
@@ -724,6 +729,21 @@ export function ChatView({
                       <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
                         <LoaderCircle className="size-4 animate-spin" />{' '}
                         Chargement…
+                      </div>
+                    ) : messageLoadError ? (
+                      <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
+                        <p role="alert">{messageLoadError}</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setMessagesLoading(true);
+                            setMessageLoadError('');
+                            setMessageLoadAttempt((current) => current + 1);
+                          }}
+                        >
+                          Réessayer
+                        </Button>
                       </div>
                     ) : messages.length ? (
                       <>

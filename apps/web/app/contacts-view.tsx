@@ -1,8 +1,11 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
 import { localeTag } from '@/lib/i18n';
+import { useDeviceViewMode } from '@/lib/device-view-mode';
 import {
   ContactRound,
   Globe2,
+  LayoutGrid,
+  List,
   LoaderCircle,
   Lock,
   Mail,
@@ -54,6 +57,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 
 type ContactScope = 'all' | 'mine' | 'shared';
@@ -92,6 +103,11 @@ export function ContactsView({
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [groups, setGroups] = useState<FamilyGroup[]>([]);
   const [scope, setScope] = useState<ContactScope>('all');
+  const [viewMode, setViewMode] = useDeviceViewMode(
+    currentMemberId,
+    'contacts',
+    'cards',
+  );
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState('');
   const [loading, setLoading] = useState(true);
@@ -405,6 +421,28 @@ export function ContactsView({
         </Select>
       </div>
 
+      <fieldset className="mb-4 flex justify-end gap-1">
+        <legend className="sr-only">Affichage des contacts</legend>
+        <Button
+          type="button"
+          size="sm"
+          variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+          aria-pressed={viewMode === 'list'}
+          onClick={() => setViewMode('list')}
+        >
+          <List aria-hidden="true" /> Liste
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+          aria-pressed={viewMode === 'cards'}
+          onClick={() => setViewMode('cards')}
+        >
+          <LayoutGrid aria-hidden="true" /> Cartes
+        </Button>
+      </fieldset>
+
       {loading ? (
         <Card>
           <CardContent className="flex items-center gap-3 py-10 text-muted-foreground">
@@ -412,17 +450,26 @@ export function ContactsView({
           </CardContent>
         </Card>
       ) : contacts.length ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {contacts.map((contact) => (
-            <ContactCard
-              key={contact.id}
-              contact={contact}
-              onEdit={() => openEdit(contact)}
-              onDelete={() => setDeleteTarget(contact)}
-              onTag={setTag}
-            />
-          ))}
-        </div>
+        viewMode === 'list' ? (
+          <ContactList
+            contacts={contacts}
+            onEdit={openEdit}
+            onDelete={setDeleteTarget}
+            onTag={setTag}
+          />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {contacts.map((contact) => (
+              <ContactCard
+                key={contact.id}
+                contact={contact}
+                onEdit={() => openEdit(contact)}
+                onDelete={() => setDeleteTarget(contact)}
+                onTag={setTag}
+              />
+            ))}
+          </div>
+        )
       ) : (
         <Card className="border-dashed bg-muted/20">
           <CardContent className="flex flex-col items-center py-12 text-center">
@@ -501,6 +548,115 @@ export function ContactsView({
         </AlertDialogContent>
       </AlertDialog>
     </section>
+  );
+}
+
+function ContactList({
+  contacts,
+  onEdit,
+  onDelete,
+  onTag,
+}: {
+  contacts: FamilyContact[];
+  onEdit: (contact: FamilyContact) => void;
+  onDelete: (contact: FamilyContact) => void;
+  onTag: (tag: string) => void;
+}) {
+  return (
+    <Card className="gap-0 overflow-hidden py-0">
+      <Table className="min-w-[850px]">
+        <TableHeader className="bg-muted/35">
+          <TableRow>
+            <TableHead className="min-w-48 px-4">Contact</TableHead>
+            <TableHead>Téléphone</TableHead>
+            <TableHead>E-mail</TableHead>
+            <TableHead>Tags</TableHead>
+            <TableHead>Visibilité</TableHead>
+            <TableHead className="px-4 text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {contacts.map((contact) => {
+            const name = displayName(contact);
+            return (
+              <TableRow key={contact.id}>
+                <TableCell className="px-4">
+                  <span className="font-semibold">{name}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Ajouté par {contact.createdByName}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  {contact.phone ? (
+                    <a
+                      href={`tel:${contact.phone}`}
+                      className="hover:text-[#087f72] hover:underline"
+                    >
+                      {contact.phone}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {contact.email ? (
+                    <a
+                      href={`mailto:${contact.email}`}
+                      className="hover:text-[#087f72] hover:underline"
+                    >
+                      {contact.email}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex max-w-40 gap-1 overflow-hidden">
+                    {contact.tags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => onTag(tag)}
+                        className="shrink-0 rounded-full bg-muted px-2 py-1 text-xs hover:bg-[#e7f5f2]"
+                      >
+                        #{tag}
+                      </button>
+                    ))}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <VisibilityBadge visibility={contact.visibility} />
+                </TableCell>
+                <TableCell className="px-4">
+                  {contact.editable ? (
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Modifier ${name}`}
+                        onClick={() => onEdit(contact)}
+                      >
+                        <Pencil aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Supprimer ${name}`}
+                        onClick={() => onDelete(contact)}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </div>
+                  ) : null}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </Card>
   );
 }
 

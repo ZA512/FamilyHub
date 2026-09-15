@@ -96,6 +96,7 @@ export const englishMessages: Record<string, string> = {
   Début: 'Start',
   Fin: 'End',
   Visibilité: 'Visibility',
+  Favori: 'Favourite',
   Participants: 'Participants',
   Responsable: 'Assignee',
   Choisir: 'Choose',
@@ -404,6 +405,7 @@ export const englishMessages: Record<string, string> = {
   Favoris: 'Favourites',
   'Rechercher un lien…': 'Search for a link…',
   'Rechercher dans les bookmarks': 'Search bookmarks',
+  'Affichage des bookmarks': 'Bookmark display mode',
   'Filtrer par tag': 'Filter by tag',
   'Tous les tags': 'All tags',
   'Chargement des bookmarks…': 'Loading bookmarks…',
@@ -583,6 +585,7 @@ export const englishMessages: Record<string, string> = {
   'Ajouter un contact': 'Add contact',
   'Mes contacts': 'My contacts',
   'Rechercher un contact': 'Search contacts',
+  'Affichage des contacts': 'Contact display mode',
   'Chargement des contacts…': 'Loading contacts…',
   'Aucun contact externe': 'No external contacts',
   'Ajoutez par exemple un médecin, une école, un artisan ou un proche hors du foyer.':

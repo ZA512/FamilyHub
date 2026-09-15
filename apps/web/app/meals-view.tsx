@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
 import { localeTag, t } from '@/lib/i18n';
+import { useDeviceViewMode } from '@/lib/device-view-mode';
 import {
   CalendarPlus,
   ChefHat,
@@ -162,7 +163,11 @@ export function MealsView({
   const [selectedIngredients, setSelectedIngredients] = useState<Set<string>>(
     new Set(),
   );
-  const [libraryView, setLibraryView] = useState<'list' | 'cards'>('list');
+  const [libraryView, setLibraryView] = useDeviceViewMode(
+    currentMemberId,
+    'meals',
+    'list',
+  );
   const [mealQuery, setMealQuery] = useState('');
   const [memberFilter, setMemberFilter] = useState('all');
   const [preferenceFilter, setPreferenceFilter] =

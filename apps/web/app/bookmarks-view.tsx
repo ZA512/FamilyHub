@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
 import { localeTag } from '@/lib/i18n';
+import { useDeviceViewMode } from '@/lib/device-view-mode';
 import {
   Bookmark,
   ExternalLink,
   Globe2,
   LoaderCircle,
+  LayoutGrid,
+  List,
   Lock,
   Pencil,
   Plus,
@@ -53,6 +56,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 
 type BookmarkScope = 'mine' | 'recommended' | 'favorites' | 'all';
@@ -81,6 +92,11 @@ export function BookmarksView({
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [groups, setGroups] = useState<FamilyGroup[]>([]);
   const [scope, setScope] = useState<BookmarkScope>('all');
+  const [viewMode, setViewMode] = useDeviceViewMode(
+    currentMemberId,
+    'bookmarks',
+    'list',
+  );
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState('');
   const [loading, setLoading] = useState(true);
@@ -619,6 +635,28 @@ export function BookmarksView({
           </div>
         ) : null}
 
+        <fieldset className="mb-4 flex justify-end gap-1">
+          <legend className="sr-only">Affichage des bookmarks</legend>
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            aria-pressed={viewMode === 'list'}
+            onClick={() => setViewMode('list')}
+          >
+            <List aria-hidden="true" /> Liste
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+            aria-pressed={viewMode === 'cards'}
+            onClick={() => setViewMode('cards')}
+          >
+            <LayoutGrid aria-hidden="true" /> Cartes
+          </Button>
+        </fieldset>
+
         {loading ? (
           <Card>
             <CardContent className="flex items-center justify-center gap-3 py-14 text-muted-foreground">
@@ -628,20 +666,32 @@ export function BookmarksView({
           </Card>
         ) : bookmarks.length ? (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {bookmarks.map((bookmark) => (
-                <BookmarkCard
-                  key={bookmark.id}
-                  bookmark={bookmark}
-                  busy={busyId === bookmark.id}
-                  onFavorite={() => void toggleFavorite(bookmark)}
-                  onUseful={() => void toggleUseful(bookmark)}
-                  onEdit={() => openEdit(bookmark)}
-                  onDelete={() => setToDelete(bookmark)}
-                  onTag={setTag}
-                />
-              ))}
-            </div>
+            {viewMode === 'list' ? (
+              <BookmarkList
+                bookmarks={bookmarks}
+                busyId={busyId}
+                onFavorite={(bookmark) => void toggleFavorite(bookmark)}
+                onUseful={(bookmark) => void toggleUseful(bookmark)}
+                onEdit={openEdit}
+                onDelete={setToDelete}
+                onTag={setTag}
+              />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {bookmarks.map((bookmark) => (
+                  <BookmarkCard
+                    key={bookmark.id}
+                    bookmark={bookmark}
+                    busy={busyId === bookmark.id}
+                    onFavorite={() => void toggleFavorite(bookmark)}
+                    onUseful={() => void toggleUseful(bookmark)}
+                    onEdit={() => openEdit(bookmark)}
+                    onDelete={() => setToDelete(bookmark)}
+                    onTag={setTag}
+                  />
+                ))}
+              </div>
+            )}
             {hasMore ? (
               <div className="mt-6 text-center">
                 <Button
@@ -678,6 +728,143 @@ export function BookmarksView({
         )}
       </section>
     </>
+  );
+}
+
+function BookmarkList({
+  bookmarks,
+  busyId,
+  onFavorite,
+  onUseful,
+  onEdit,
+  onDelete,
+  onTag,
+}: {
+  bookmarks: FamilyBookmark[];
+  busyId: string | null;
+  onFavorite: (bookmark: FamilyBookmark) => void;
+  onUseful: (bookmark: FamilyBookmark) => void;
+  onEdit: (bookmark: FamilyBookmark) => void;
+  onDelete: (bookmark: FamilyBookmark) => void;
+  onTag: (tag: string) => void;
+}) {
+  return (
+    <Card className="gap-0 overflow-hidden py-0">
+      <Table className="min-w-[720px]">
+        <TableHeader className="bg-muted/35">
+          <TableRow>
+            <TableHead className="min-w-52 px-4">Lien</TableHead>
+            <TableHead>Tags</TableHead>
+            <TableHead>Visibilité</TableHead>
+            <TableHead className="text-center">Favori</TableHead>
+            <TableHead className="px-4 text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {bookmarks.map((bookmark) => (
+            <TableRow key={bookmark.id}>
+              <TableCell className="max-w-72 px-4">
+                <a
+                  href={bookmark.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 truncate font-semibold hover:text-[#087f72]"
+                >
+                  <span className="truncate">{bookmark.title}</span>
+                  <ExternalLink
+                    className="size-3.5 shrink-0"
+                    aria-hidden="true"
+                  />
+                </a>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {bookmark.hostname}
+                </span>
+              </TableCell>
+              <TableCell>
+                <div className="flex max-w-48 gap-1 overflow-hidden">
+                  {bookmark.tags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => onTag(tag)}
+                      className="shrink-0 rounded-full bg-muted px-2 py-1 text-xs hover:bg-[#e7f5f2]"
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              </TableCell>
+              <TableCell className="text-xs text-muted-foreground">
+                {bookmark.editable
+                  ? visibilityLabels[bookmark.visibility]
+                  : `Par ${bookmark.createdByName}`}
+              </TableCell>
+              <TableCell className="text-center">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  disabled={busyId === bookmark.id}
+                  onClick={() => onFavorite(bookmark)}
+                  aria-label={
+                    bookmark.favorite
+                      ? 'Retirer des favoris'
+                      : 'Ajouter aux favoris'
+                  }
+                >
+                  <Star
+                    className={
+                      bookmark.favorite
+                        ? 'fill-amber-400 text-amber-500'
+                        : 'text-muted-foreground'
+                    }
+                  />
+                </Button>
+              </TableCell>
+              <TableCell className="px-4">
+                <div className="flex justify-end gap-1">
+                  {bookmark.editable ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onEdit(bookmark)}
+                        aria-label={`Modifier ${bookmark.title}`}
+                      >
+                        <Pencil aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onDelete(bookmark)}
+                        aria-label={`Supprimer ${bookmark.title}`}
+                        className="hover:text-red-600"
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={bookmark.usefulByMe ? 'secondary' : 'ghost'}
+                      disabled={busyId === bookmark.id}
+                      onClick={() => onUseful(bookmark)}
+                      aria-label="Marquer comme utile"
+                    >
+                      <ThumbsUp aria-hidden="true" />{' '}
+                      {bookmark.usefulCount || ''}
+                    </Button>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Card>
   );
 }
 

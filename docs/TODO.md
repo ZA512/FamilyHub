@@ -34,7 +34,8 @@ ajoutée après la conception initiale du chat. Les groupes existants (par exemp
 
 ## Chat — une conversation reste bloquée sur « Chargement… » après sélection
 
-**Statut :** bug à diagnostiquer — ne pas corriger pour le moment.
+**Statut :** corrigé le 15 septembre 2026. Le clic sur la conversation déjà active ne réinitialise
+plus les messages ; un échec de chargement affiche une erreur et une action « Réessayer ».
 
 ### Étapes de reproduction
 
@@ -55,12 +56,13 @@ sélectionnée et ses messages ne finissent pas de s'afficher.
 - en cas d'échec de chargement, l'interface doit sortir de l'état d'attente et présenter une erreur
   explicite avec une possibilité de réessayer.
 
-### Pistes à vérifier lors du diagnostic
+### Diagnostic et correction
 
-- cycle de l'état de chargement lors d'un changement de conversation ;
-- cas particulier d'une nouvelle sélection de l'identifiant déjà actif ;
-- requête de récupération des messages, gestion de son annulation et de ses erreurs ;
-- éventuelle réponse mise en cache ignorée ou écrasée par une requête concurrente.
+Le clic sur la conversation déjà sélectionnée réinitialisait les messages et activait le
+chargement, mais ne changeait pas son identifiant : l'effet de récupération ne se relançait
+donc jamais. La nouvelle sélection identique est ignorée. Le chargement d'une autre
+conversation peut être relancé après une erreur ; une sélection abandonnée ne doit pas
+réécrire les messages de la conversation suivante.
 
 ## Courses — mieux suivre les demandes et les achats récents
 
@@ -109,7 +111,9 @@ fort que les ingrédients ajoutés automatiquement depuis un plat. Cette différ
 
 ## Affichages — modes liste et cartes mémorisés sur l'appareil
 
-**Statut :** idée à étudier — ne pas développer pour le moment.
+**Statut :** réalisé le 15 septembre 2026. Les préférences sont stockées localement par membre et
+par module ; elles sont réinitialisées si les données de l'appareil sont supprimées et ne sont pas
+synchronisées avec le profil.
 
 ### Comportement envisagé
 
@@ -133,9 +137,10 @@ demandés ici sont :
 - Contacts externes : cartes ;
 - autres modules : conserver leur valeur par défaut actuelle, sauf décision produit ultérieure.
 
-### Points à décider avant implémentation
+### Décisions retenues
 
-- stockage uniquement dans le navigateur ou synchronisation éventuelle avec le profil utilisateur ;
-- portée de la préférence lorsqu'un même appareil est utilisé par plusieurs comptes ;
-- comportement en navigation privée, après suppression des données locales ou sur un nouvel appareil ;
-- migration des préférences déjà enregistrées par certains modules vers une convention commune.
+- stockage uniquement dans le navigateur, sans synchronisation avec le profil ;
+- préférence indépendante par membre et par module sur un même appareil ;
+- retour au défaut du module après suppression des données locales, en navigation privée sans
+  conservation des données, ou sur un nouvel appareil ;
+- aucune migration nécessaire : les modules concernés n'enregistraient pas encore ce choix.

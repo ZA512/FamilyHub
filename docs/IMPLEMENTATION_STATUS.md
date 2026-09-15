@@ -1,6 +1,6 @@
 # État d'implémentation du PRD
 
-Mise à jour : 14 septembre 2026.
+Mise à jour : 15 septembre 2026.
 
 ## MVP fonctionnel
 
@@ -54,6 +54,12 @@ avec le lundi comme valeur compatible pour les installations existantes.
 La bibliothèque des plats utilise une liste compacte par défaut, compare les avis de tous
 les membres actifs, filtre par titre, ingrédient, membre et avis, et conserve une vue en
 cartes ainsi qu’un aperçu détaillé au survol ou au focus.
+Le choix liste/cartes est maintenant mémorisé sur l'appareil, séparément par membre et par
+module. Bookmarks propose les deux vues avec la liste par défaut ; Contacts externes
+propose les deux vues avec les cartes par défaut ; Repas conserve la liste par défaut.
+Dans le chat, sélectionner à nouveau la conversation active ne vide plus ses messages ni ne
+laisse l'écran bloqué sur « Chargement… ». Un échec réel du chargement des messages affiche
+une erreur et permet de réessayer.
 
 Le module Tâches distingue désormais les tâches à terminer des routines permanentes sans
 multiplier les entrées de navigation. Une création peut cibler soi-même, une personne, un
