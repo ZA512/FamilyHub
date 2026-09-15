@@ -26,4 +26,23 @@ describe('i18n', () => {
     setLocale('en');
     expect(formatBinarySize(1_048_576)).toBe('1 MiB');
   });
+
+  it('translates the existing group chat warning', () => {
+    setLocale('en');
+    expect(
+      t(
+        'Une conversation avec ces participants existe déjà : « {0} ». Vous pouvez l’ouvrir ou en créer une autre.',
+        { 0: 'Parents' },
+      ),
+    ).toBe(
+      'A conversation with these participants already exists: “Parents”. You can open it or create another one.',
+    );
+  });
+
+  it('translates shopping purchase timestamps', () => {
+    setLocale('en');
+    expect(t('Acheté le {0} par {1}', { 0: '15 Sep', 1: 'Papa' })).toBe(
+      'Bought on 15 Sep by Papa',
+    );
+  });
 });

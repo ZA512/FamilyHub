@@ -7,6 +7,7 @@ import {
   type SyntheticEvent,
 } from 'react';
 import { formatBinarySize, localeTag, t } from '@/lib/i18n';
+import { existingGroupChat, groupChatRecipients } from '@/lib/chat-groups';
 import {
   ArrowLeft,
   Bell,
@@ -31,6 +32,7 @@ import type {
   ChatRealtimeEvent,
   ConversationSummary,
   ConversationType,
+  FamilyGroup,
   FamilyMember,
 } from '@familyhub/contracts';
 
@@ -67,6 +69,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
 const reactions: ChatReaction[] = ['👍', '❤️', '😂', '😮', '😢', '👏'];
@@ -539,6 +548,7 @@ export function ChatView({
         onOpenChange={onComposerOpenChange}
         currentMemberId={currentMemberId}
         members={members}
+        conversations={conversations}
         csrfToken={csrfToken}
         onCreated={(conversation) => {
           setConversations((current) => [
@@ -1172,6 +1182,7 @@ function ConversationDialog({
   onOpenChange,
   currentMemberId,
   members,
+  conversations,
   csrfToken,
   onCreated,
 }: {
@@ -1179,6 +1190,7 @@ function ConversationDialog({
   onOpenChange: (open: boolean) => void;
   currentMemberId: string;
   members: FamilyMember[];
+  conversations: ConversationSummary[];
   csrfToken: string;
   onCreated: (conversation: ConversationSummary) => void;
 }) {
@@ -1189,8 +1201,61 @@ function ConversationDialog({
   const [type, setType] = useState<ConversationType>('DIRECT');
   const [title, setTitle] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
+  const [groups, setGroups] = useState<FamilyGroup[]>([]);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
+  const [groupLoadError, setGroupLoadError] = useState('');
+  const [groupLoadAttempt, setGroupLoadAttempt] = useState(0);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open || type !== 'GROUP' || groupsLoaded) return;
+    const controller = new AbortController();
+    fetch('/api/v1/groups', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Impossible de charger les groupes.');
+        return (await response.json()) as { groups: FamilyGroup[] };
+      })
+      .then((payload) => {
+        if (controller.signal.aborted) return;
+        setGroups(payload.groups);
+        setGroupsLoaded(true);
+        setGroupLoadError('');
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) {
+          setGroupLoadError(
+            reason instanceof Error ? reason.message : 'Groupes indisponibles.',
+          );
+        }
+      });
+    return () => controller.abort();
+  }, [groupLoadAttempt, groupsLoaded, open, type]);
+
+  const eligibleGroups = useMemo(
+    () =>
+      groups.filter(
+        (group) =>
+          groupChatRecipients(group, members, currentMemberId).length > 0,
+      ),
+    [currentMemberId, groups, members],
+  );
+  const existingConversation = selectedGroupId
+    ? existingGroupChat(conversations, currentMemberId, selected)
+    : null;
+
+  function chooseGroup(groupId: string) {
+    setSelectedGroupId(groupId === 'manual' ? '' : groupId);
+    const group = eligibleGroups.find((item) => item.id === groupId);
+    if (!group) {
+      setSelected([]);
+      setTitle('');
+      return;
+    }
+    setSelected(groupChatRecipients(group, members, currentMemberId));
+    setTitle(group.name.slice(0, 120));
+  }
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1217,6 +1282,7 @@ function ConversationDialog({
       onCreated((await response.json()) as ConversationSummary);
       setTitle('');
       setSelected([]);
+      setSelectedGroupId('');
       onOpenChange(false);
     } catch (reason) {
       setError(
@@ -1229,7 +1295,7 @@ function ConversationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Nouvelle conversation</DialogTitle>
           <DialogDescription>
@@ -1245,6 +1311,8 @@ function ConversationDialog({
               onChange={(event) => {
                 const next = event.target.value as ConversationType;
                 setType(next);
+                setSelectedGroupId('');
+                setGroupLoadError('');
                 if (next === 'DIRECT')
                   setSelected((current) => current.slice(0, 1));
               }}
@@ -1255,6 +1323,63 @@ function ConversationDialog({
               <option value="TOPIC">Sujet</option>
             </select>
           </div>
+          {type === 'GROUP' ? (
+            <div className="space-y-2">
+              <Label>Groupe existant</Label>
+              {groupLoadError ? (
+                <div className="flex items-center gap-2 text-sm text-destructive">
+                  <span role="alert">{t(groupLoadError)}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setGroupLoadError('');
+                      setGroupLoadAttempt((current) => current + 1);
+                    }}
+                  >
+                    Réessayer
+                  </Button>
+                </div>
+              ) : !groupsLoaded ? (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <LoaderCircle
+                    className="size-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Chargement des groupes…
+                </p>
+              ) : eligibleGroups.length ? (
+                <Select
+                  value={selectedGroupId || 'manual'}
+                  onValueChange={(value) => chooseGroup(value ?? 'manual')}
+                >
+                  <SelectTrigger aria-label="Choisir un groupe existant">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Sélection manuelle</SelectItem>
+                    {eligibleGroups.map((group) => (
+                      <SelectItem key={group.id} value={group.id}>
+                        {group.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Aucun groupe avec d’autres membres n’est disponible.
+                </p>
+              )}
+              {selectedGroupId ? (
+                <p className="text-xs text-muted-foreground">
+                  Les participants sont copiés du groupe à la création. Ses
+                  changements ultérieurs ne modifieront pas l’accès à cette
+                  conversation.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {type !== 'DIRECT' ? (
             <div className="space-y-2">
               <Label htmlFor="chat-title">Titre</Label>
@@ -1282,15 +1407,16 @@ function ConversationDialog({
                   >
                     <Checkbox
                       checked={checked}
-                      onCheckedChange={(value) =>
+                      onCheckedChange={(value) => {
+                        setSelectedGroupId('');
                         setSelected((current) =>
                           value
                             ? type === 'DIRECT'
                               ? [member.id]
                               : [...current, member.id]
                             : current.filter((id) => id !== member.id),
-                        )
-                      }
+                        );
+                      }}
                     />
                     <span className="grid size-8 place-items-center rounded-full bg-muted text-xs font-semibold">
                       {member.firstName.slice(0, 2).toUpperCase()}
@@ -1304,6 +1430,32 @@ function ConversationDialog({
               })}
             </div>
           </fieldset>
+          {existingConversation ? (
+            <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              <p>
+                {t(
+                  'Une conversation avec ces participants existe déjà : « {0} ». Vous pouvez l’ouvrir ou en créer une autre.',
+                  {
+                    0: existingConversation.displayTitle,
+                  },
+                )}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onCreated(existingConversation);
+                  setSelectedGroupId('');
+                  setSelected([]);
+                  setTitle('');
+                  onOpenChange(false);
+                }}
+              >
+                Ouvrir cette conversation
+              </Button>
+            </div>
+          ) : null}
           {error ? (
             <p role="alert" className="text-sm text-red-700">
               {error}

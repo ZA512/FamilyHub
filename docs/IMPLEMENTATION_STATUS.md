@@ -60,6 +60,15 @@ propose les deux vues avec les cartes par défaut ; Repas conserve la liste par 
 Dans le chat, sélectionner à nouveau la conversation active ne vide plus ses messages ni ne
 laisse l'écran bloqué sur « Chargement… ». Un échec réel du chargement des messages affiche
 une erreur et permet de réessayer.
+La création d'une conversation de groupe peut désormais reprendre les membres actifs d'un groupe
+existant, proposer son nom comme titre et ouvrir une conversation ayant déjà les mêmes
+participants. Cette sélection est un instantané : les changements du groupe n'accordent pas
+automatiquement l'accès au chat et à son historique.
+Le module Courses présente les demandes manuelles avant les ingrédients de repas, précise
+l'auteur, l'origine et les dates d'ajout ou d'achat, puis propose « Mes demandes », « Les
+demandes » et « Déjà acheté ». Les achats des 72 dernières heures sont visibles par défaut ;
+les demandes non satisfaites restent affichées et les éléments plus anciens sont révélés
+progressivement, sans appel API supplémentaire.
 
 Le module Tâches distingue désormais les tâches à terminer des routines permanentes sans
 multiplier les entrées de navigation. Une création peut cibler soi-même, une personne, un

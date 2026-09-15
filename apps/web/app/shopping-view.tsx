@@ -6,6 +6,7 @@ import {
   useState,
   type SyntheticEvent,
 } from 'react';
+import { formatDate, t } from '@/lib/i18n';
 import {
   Check,
   CloudOff,
@@ -31,6 +32,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  shoppingHistoryItems,
+  sortPendingShoppingItems,
+  type ShoppingHistoryView,
+} from '@/lib/shopping-history';
 import {
   applyOptimisticShoppingUpdate,
   createOptimisticShoppingItem,
@@ -80,6 +87,9 @@ export function ShoppingView({
   const [pendingCount, setPendingCount] = useState(0);
   const [conflictCount, setConflictCount] = useState(0);
   const [error, setError] = useState('');
+  const [historyView, setHistoryView] = useState<ShoppingHistoryView>('mine');
+  const [showOlder, setShowOlder] = useState(false);
+  const [visibleHistoryCount, setVisibleHistoryCount] = useState(20);
   const synchronization = useRef<Promise<void> | null>(null);
 
   const refreshCounts = useCallback(async () => {
@@ -179,14 +189,23 @@ export function ShoppingView({
     };
   }, [synchronize]);
 
-  const pending = useMemo(
-    () => items.filter((item) => !item.purchasedAt),
-    [items],
+  const pending = useMemo(() => sortPendingShoppingItems(items), [items]);
+  const now = new Date();
+  const recentHistory = shoppingHistoryItems(
+    items,
+    historyView,
+    currentMemberId,
+    now,
   );
-  const purchased = useMemo(
-    () => items.filter((item) => item.purchasedAt),
-    [items],
+  const fullHistory = shoppingHistoryItems(
+    items,
+    historyView,
+    currentMemberId,
+    now,
+    true,
   );
+  const history = showOlder ? fullHistory : recentHistory;
+  const visibleHistory = history.slice(0, visibleHistoryCount);
 
   async function queueCreate(item: ShoppingItem, payload: ShoppingItemCreate) {
     await writeShoppingCache(sessionKey, items);
@@ -488,22 +507,75 @@ export function ShoppingView({
           </Card>
         )}
 
-        {purchased.length ? (
-          <section className="mt-8" aria-labelledby="purchased-title">
-            <h2 id="purchased-title" className="mb-3 text-lg font-semibold">
-              Déjà acheté
+        {!loading ? (
+          <section className="mt-8" aria-labelledby="shopping-follow-up-title">
+            <h2
+              id="shopping-follow-up-title"
+              className="mb-3 text-lg font-semibold"
+            >
+              Suivi des courses
             </h2>
-            <Card className="gap-0 overflow-hidden py-0 opacity-75">
-              {purchased.map((item, index) => (
-                <ShoppingRow
-                  key={item.id}
-                  item={item}
-                  busy={busyId === item.id}
-                  divided={index > 0}
-                  onToggle={() => setPurchased(item, false)}
-                />
-              ))}
-            </Card>
+            <Tabs
+              value={historyView}
+              onValueChange={(value) => {
+                setHistoryView(value as ShoppingHistoryView);
+                setShowOlder(false);
+                setVisibleHistoryCount(20);
+              }}
+            >
+              <TabsList className="mb-3 max-w-full overflow-x-auto">
+                <TabsTrigger value="mine">Mes demandes</TabsTrigger>
+                <TabsTrigger value="requests">Les demandes</TabsTrigger>
+                <TabsTrigger value="purchased">Déjà acheté</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Achats des trois derniers jours ; les demandes encore à acheter
+              restent visibles.
+            </p>
+            {visibleHistory.length ? (
+              <Card className="gap-0 overflow-hidden py-0">
+                {visibleHistory.map((item, index) => (
+                  <ShoppingRow
+                    key={item.id}
+                    item={item}
+                    busy={busyId === item.id}
+                    divided={index > 0}
+                    onToggle={() => setPurchased(item, !item.purchasedAt)}
+                  />
+                ))}
+              </Card>
+            ) : (
+              <Card className="border-dashed bg-muted/20">
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  {historyView === 'mine'
+                    ? 'Aucune de vos demandes récentes à suivre.'
+                    : historyView === 'requests'
+                      ? 'Aucune demande récente à suivre.'
+                      : 'Aucun achat récent.'}
+                </CardContent>
+              </Card>
+            )}
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {!showOlder && fullHistory.length > recentHistory.length ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowOlder(true)}
+                >
+                  Voir les achats plus anciens
+                </Button>
+              ) : null}
+              {history.length > visibleHistoryCount ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setVisibleHistoryCount((count) => count + 20)}
+                >
+                  Afficher plus
+                </Button>
+              ) : null}
+            </div>
           </section>
         ) : null}
       </section>
@@ -524,6 +596,20 @@ function ShoppingRow({
 }) {
   const purchased = Boolean(item.purchasedAt);
   const local = item.id.startsWith('offline:');
+  const date = formatDate(item.purchasedAt ?? item.createdAt, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+  const activity = item.purchasedAt
+    ? item.purchasedByName
+      ? t('Acheté le {0} par {1}', { 0: date, 1: item.purchasedByName })
+      : t('Acheté le {0}', { 0: date })
+    : item.source === 'MANUAL'
+      ? t('Demandé le {0} par {1}', { 0: date, 1: item.requestedByName })
+      : t('Ajouté depuis un plat le {0} par {1}', {
+          0: date,
+          1: item.requestedByName,
+        });
   return (
     <div
       className={`flex items-center gap-3 px-4 py-4 ${divided ? 'border-t' : ''}`}
@@ -554,17 +640,21 @@ function ShoppingRow({
           <p className={`font-medium ${purchased ? 'line-through' : ''}`}>
             {item.name}
           </p>
+          <Badge variant="secondary" className="text-xs">
+            {item.source === 'MANUAL' ? 'Demande' : 'Repas'}
+          </Badge>
           {local ? (
             <Badge variant="outline" className="text-amber-800">
               À synchroniser
             </Badge>
           ) : null}
         </div>
-        <p className="mt-0.5 truncate text-sm text-muted-foreground">
-          {[item.quantity, item.note, `Demandé par ${item.requestedByName}`]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
+        {item.quantity || item.note ? (
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+            {[item.quantity, item.note].filter(Boolean).join(' · ')}
+          </p>
+        ) : null}
+        <p className="mt-0.5 text-xs text-muted-foreground">{activity}</p>
       </div>
     </div>
   );

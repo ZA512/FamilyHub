@@ -17,6 +17,7 @@ silencieuse de l'historique.
 | D-009 | IndexedDB et journal de mutations idempotentes pour l'offline | Acceptée |
 | D-010 | Redis, moteur de recherche et MinIO non requis au MVP | Acceptée |
 | D-011 | Le module Tâches garde une seule destination et expose deux concepts UX, Tâche et Routine ; destinataire et planification restent des dimensions indépendantes | Acceptée |
+| D-012 | Créer un chat depuis un groupe copie ses membres actifs au moment de la création, sans synchronisation automatique de l'accès et de l'historique | Retenue pour V1 |
 
 ## Conséquences connues
 
@@ -27,3 +28,6 @@ silencieuse de l'historique.
   pièces jointes.
 - La PWA et l'API peuvent évoluer indépendamment dans le code tout en partageant leurs
   contrats et leur cycle de release.
+- Le raccourci « groupe existant » du chat ne crée pas de lien permanent entre le groupe et la
+  conversation ; faire évoluer automatiquement les participants requerrait une règle explicite
+  sur l'accès des nouveaux membres aux anciens messages.

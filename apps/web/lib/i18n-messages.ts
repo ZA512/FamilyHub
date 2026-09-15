@@ -277,6 +277,17 @@ export const englishMessages: Record<string, string> = {
   'Ajoutez un article dès que quelqu’un pense à quelque chose.':
     'Add an item whenever someone thinks of something.',
   'Déjà acheté': 'Already bought',
+  'Suivi des courses': 'Shopping follow-up',
+  'Mes demandes': 'My requests',
+  'Les demandes': 'Requests',
+  'Achats des trois derniers jours ; les demandes encore à acheter restent visibles.':
+    'Purchases from the past three days; requests still to buy remain visible.',
+  'Aucune de vos demandes récentes à suivre.':
+    'None of your recent requests to follow.',
+  'Aucune demande récente à suivre.': 'No recent requests to follow.',
+  'Aucun achat récent.': 'No recent purchases.',
+  'Voir les achats plus anciens': 'Show older purchases',
+  Demande: 'Request',
   'À synchroniser': 'Waiting to sync',
 
   // Meals
@@ -381,6 +392,15 @@ export const englishMessages: Record<string, string> = {
     'Only selected participants will be able to see its content.',
   'Discussion à deux': 'One-to-one chat',
   Groupe: 'Group',
+  'Groupe existant': 'Existing group',
+  'Choisir un groupe existant': 'Choose an existing group',
+  'Sélection manuelle': 'Manual selection',
+  'Chargement des groupes…': 'Loading groups…',
+  'Aucun groupe avec d’autres membres n’est disponible.':
+    'No group with other members is available.',
+  'Les participants sont copiés du groupe à la création. Ses changements ultérieurs ne modifieront pas l’accès à cette conversation.':
+    'Participants are copied from the group when the conversation is created. Later group changes will not change access to this conversation.',
+  'Ouvrir cette conversation': 'Open this conversation',
   Sujet: 'Topic',
   'Créer la conversation': 'Create conversation',
 
@@ -768,6 +788,8 @@ export const englishMessages: Record<string, string> = {
 };
 
 export const englishTemplateMessages: Record<string, string> = {
+  'Une conversation avec ces participants existe déjà : « {0} ». Vous pouvez l’ouvrir ou en créer une autre.':
+    'A conversation with these participants already exists: “{0}”. You can open it or create another one.',
   'Rejoindre {0}': 'Join {0}',
   'Invitation envoyée à {0}.': 'Invitation sent to {0}.',
   '{0} élément{1} à faire': '{0} item{1} to do',
@@ -781,6 +803,10 @@ export const englishTemplateMessages: Record<string, string> = {
   'Remettre {0} sur la liste': 'Put {0} back on the list',
   'Marquer {0} comme acheté': 'Mark {0} as bought',
   'Demandé par {0}': 'Requested by {0}',
+  'Demandé le {0} par {1}': 'Requested on {0} by {1}',
+  'Ajouté depuis un plat le {0} par {1}': 'Added from a dish on {0} by {1}',
+  'Acheté le {0} par {1}': 'Bought on {0} by {1}',
+  'Acheté le {0}': 'Bought on {0}',
   '{0} le module {1}': '{0} the {1} module',
   '{0} {1} dans ma navigation': '{0} {1} in my navigation',
   'Supprimer « {0} »': 'Delete “{0}”',
@@ -1245,6 +1271,8 @@ Object.assign(englishMessages, {
   'Avis indisponible.': 'Opinion unavailable.',
   'Commentaire indisponible.': 'Comments unavailable.',
   'Impossible de charger les conversations.': 'Unable to load conversations.',
+  'Impossible de charger les groupes.': 'Unable to load groups.',
+  'Groupes indisponibles.': 'Groups unavailable.',
   'Impossible de charger la messagerie.': 'Unable to load messages.',
   'Messagerie indisponible.': 'Messaging unavailable.',
   'Impossible de charger les messages.': 'Unable to load messages.',

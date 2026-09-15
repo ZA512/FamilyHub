@@ -5,7 +5,9 @@ liste ne signifie pas qu'elle est planifiée ni en cours de développement.
 
 ## Chat — créer une conversation depuis un groupe existant
 
-**Statut :** idée à étudier — ne pas développer pour le moment.
+**Statut :** première version réalisée le 15 septembre 2026. La création d'une conversation de
+groupe peut sélectionner un groupe existant sans recomposer ses participants ; elle conserve
+aussi la sélection manuelle.
 
 ### Contexte
 
@@ -25,12 +27,24 @@ ajoutée après la conception initiale du chat. Les groupes existants (par exemp
   déjà, ou avertir clairement l'utilisateur avant de continuer ;
 - appliquer les règles habituelles de visibilité et d'accès du chat aux participants résultants.
 
-### Points à décider avant implémentation
+### Décisions retenues pour cette version
 
-- lien dynamique ou instantané entre le groupe et les participants de la conversation ;
-- effet de l'ajout ou du retrait ultérieur d'un membre du groupe sur l'historique du chat ;
-- possibilité d'associer après coup une conversation existante à un groupe ;
-- titre de conversation proposé par défaut et possibilité de le personnaliser.
+- les participants actifs du groupe sont copiés lors de la création ; seuls les groupes dont le
+  créateur fait partie et qui contiennent au moins un autre membre actif sont proposés ;
+- le nom du groupe est proposé comme titre, que l'utilisateur peut personnaliser ;
+- les changements ultérieurs du groupe n'ajoutent ni ne retirent automatiquement des participants
+  du chat et ne changent pas rétroactivement l'accès à son historique ;
+- une conversation de groupe avec les mêmes participants est signalée et peut être ouverte ;
+  l'utilisateur peut encore en créer une autre si le sujet est différent ;
+- aucun lien permanent au groupe n'est enregistré dans la conversation : le choix sert à sa
+  création et ne remplace pas les permissions propres au chat.
+
+### Suite éventuelle à étudier
+
+- association permanente d'une conversation existante à un groupe ;
+- synchronisation contrôlée des membres d'une conversation avec ceux du groupe, en définissant
+  explicitement ce qu'un nouveau membre peut lire dans l'historique ;
+- distinction entre plusieurs conversations d'un même groupe et une conversation « principale ».
 
 ## Chat — une conversation reste bloquée sur « Chargement… » après sélection
 
@@ -66,7 +80,8 @@ réécrire les messages de la conversation suivante.
 
 ## Courses — mieux suivre les demandes et les achats récents
 
-**Statut :** idée à étudier — ne pas développer pour le moment.
+**Statut :** première version réalisée le 15 septembre 2026. Le suivi distingue les demandes
+manuelles des articles issus des repas et affiche les dates d'ajout et d'achat.
 
 ### Contexte
 
@@ -92,15 +107,26 @@ fort que les ingrédients ajoutés automatiquement depuis un plat. Cette différ
   gérer les ingrédients générés depuis les plats ;
 - conserver un accès à un historique plus ancien si cela reste utile.
 
-### Points à décider avant implémentation
+### Décisions retenues pour cette version
 
-- point de départ exact des trois jours : date d'ajout, date d'achat ou les deux selon la liste ;
-- comportement d'une demande ancienne qui n'a toujours pas été achetée ;
-- séparation en onglets, filtres ou sections de « Mes demandes », « Les demandes » et « Déjà acheté » ;
-- nombre d'articles affichés avant pagination et type de pagination ou de chargement progressif ;
-- durée de conservation de l'historique des achats et possibilité de choisir une autre période ;
-- traitement des articles fusionnés lorsque plusieurs sources demandent le même produit ;
-- visibilité des demandes selon les droits, les groupes et l'âge des membres.
+- « Mes demandes » montre les articles ajoutés manuellement par le membre courant ;
+  « Les demandes » montre les articles manuels de tous les membres ; « Déjà acheté » montre
+  les articles achetés, quelle que soit leur origine ;
+- les achats sont récents pendant les 72 heures suivant leur date d'achat, pas leur date d'ajout ;
+- une demande non satisfaite reste visible sans limite de trois jours ;
+- les demandes manuelles apparaissent avant les ingrédients issus des repas dans la liste active ;
+- vingt éléments d'historique sont affichés initialement, puis « Afficher plus » révèle les suivants ;
+- les achats plus anciens restent accessibles sur demande, sans appel API supplémentaire ;
+- les articles et achats restent conservés dans la base selon le comportement actuel : cette vue
+  ne les supprime ni ne change leur durée de conservation.
+
+### Suite éventuelle à étudier
+
+- pagination côté serveur si la taille de l'historique devient coûteuse à charger ou à conserver
+  hors connexion ;
+- politique de conservation ou d'archivage explicite des anciens achats ;
+- fusion de plusieurs demandes pour un même produit sans perdre leurs auteurs ;
+- visibilité des demandes selon les droits, les groupes ou l'âge des membres si ce besoin apparaît.
 
 ### Critères d'usage à préserver
 
