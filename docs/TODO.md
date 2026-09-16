@@ -170,3 +170,54 @@ demandés ici sont :
 - retour au défaut du module après suppression des données locales, en navigation privée sans
   conservation des données, ou sur un nouvel appareil ;
 - aucune migration nécessaire : les modules concernés n'enregistraient pas encore ce choix.
+
+## Navigation mobile — « Plus » ouvre la création rapide au lieu des autres modules
+
+**Statut :** bug UX à corriger ultérieurement — ne pas développer pour le moment.
+
+### Contexte et reproduction
+
+Sur téléphone, la barre de navigation inférieure contient « Accueil », « Chat », « Agenda »,
+« Tâches » et « Plus ». Un bouton flottant vert « + » est également affiché au-dessus de cette
+barre.
+
+1. ouvrir un écran mobile, par exemple Documents ;
+2. toucher « Plus » dans la barre de navigation ;
+3. fermer le menu, puis toucher le bouton flottant vert « + ».
+
+### Résultat observé
+
+Les deux boutons ouvrent le même menu de création rapide. Le code confirme que l'entrée « Plus »
+appelle actuellement la même action que le bouton vert. Il ne s'agit donc pas, en premier lieu,
+d'un problème de recouvrement ou de zone tactile.
+
+Ce comportement empêche d'utiliser « Plus » pour accéder aux modules absents de la barre mobile,
+notamment Repas et les autres entrées visibles dans la navigation de bureau. Choisir « Repas »
+depuis ce menu propose d'ajouter un repas au lieu d'ouvrir le module Repas. Le module Chat y est
+par ailleurs nommé « Message », alors que la navigation principale utilise « Chat ».
+
+### Résultat attendu
+
+- « Plus » ouvre un menu ou un panneau de **navigation** vers les modules non affichés dans la
+  barre mobile ;
+- choisir « Repas », « Courses », « Documents » ou un autre module ouvre sa page, sans lancer
+  automatiquement une création ;
+- le bouton flottant vert « + » reste l'accès à la **création rapide** ;
+- les modules proposés dans « Plus » respectent les modules activés, les préférences de visibilité
+  et les droits du membre, comme la navigation de bureau ;
+- la terminologie du module reste « Chat » dans la navigation. Si une action de création est
+  affichée dans le menu « + », employer un libellé d'action explicite comme « Nouveau message »
+  afin de ne pas confondre destination et création ;
+- vérifier lors de la correction que le bouton flottant ne masque aucun élément de navigation ou
+  bouton d'action, y compris avec la zone de sécurité basse du téléphone.
+
+### Critères d'acceptation
+
+- depuis n'importe quel écran mobile, « Plus » permet d'ouvrir Repas et chaque module disponible
+  qui n'a pas sa propre entrée dans la barre inférieure ;
+- toucher « Plus » n'ouvre jamais le formulaire de création rapide ;
+- toucher le bouton vert « + » continue d'ouvrir la création rapide ;
+- fermer l'un des deux menus ou utiliser le retour du téléphone ramène à l'écran courant sans
+  navigation ou création involontaire ;
+- les libellés « Chat » et « Nouveau message » sont employés de façon cohérente selon qu'il s'agit
+  de naviguer ou de créer.
