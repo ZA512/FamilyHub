@@ -173,7 +173,8 @@ demandés ici sont :
 
 ## Navigation mobile — « Plus » ouvre la création rapide au lieu des autres modules
 
-**Statut :** bug UX à corriger ultérieurement — ne pas développer pour le moment.
+**Statut :** corrigé le 16 septembre 2026. « Plus » ouvre désormais la navigation vers les
+modules secondaires ; le bouton vert « + » reste réservé à la création rapide.
 
 ### Contexte et reproduction
 

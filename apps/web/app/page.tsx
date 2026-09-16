@@ -44,6 +44,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -179,7 +186,7 @@ const mobileNavigation = [
 ];
 
 const quickCreateOptions = [
-  { view: 'chat' as const, label: 'Message', icon: MessageCircle },
+  { view: 'chat' as const, label: 'Nouveau message', icon: MessageCircle },
   { view: 'agenda' as const, label: 'Événement', icon: CalendarDays },
   { view: 'tasks' as const, label: 'Tâche', icon: CheckSquare2 },
   {
@@ -219,6 +226,7 @@ export default function DashboardPage({
   const [displayFirstName, setDisplayFirstName] = useState(firstName);
   const initials = displayFirstName.slice(0, 2).toUpperCase();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [moreNavigationOpen, setMoreNavigationOpen] = useState(false);
   const [shoppingComposerOpen, setShoppingComposerOpen] = useState(false);
   const [agendaComposerOpen, setAgendaComposerOpen] = useState(false);
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
@@ -256,9 +264,14 @@ export default function DashboardPage({
   const canCreate = quickCreateOptions.some((option) =>
     moduleVisible(option.view),
   );
+  const activeViewInMoreNavigation =
+    activeView === 'settings' ||
+    secondaryNavigation.some((item) => item.id === activeView);
+
   function navigate(view: ViewId) {
     setActiveView(view);
     setQuickAddOpen(false);
+    setMoreNavigationOpen(false);
   }
 
   function startCreation(view: ViewId) {
@@ -399,6 +412,7 @@ export default function DashboardPage({
         event.preventDefault();
         setActiveView('search');
         setQuickAddOpen(false);
+        setMoreNavigationOpen(false);
       }
     }
     window.addEventListener('keydown', openSearch);
@@ -407,6 +421,51 @@ export default function DashboardPage({
 
   return (
     <>
+      <Sheet open={moreNavigationOpen} onOpenChange={setMoreNavigationOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[80dvh] overflow-y-auto rounded-t-3xl pb-[calc(1rem+env(safe-area-inset-bottom))] md:hidden"
+        >
+          <SheetHeader className="pr-12">
+            <SheetTitle>Tous les modules</SheetTitle>
+            <SheetDescription>
+              Accédez aux autres espaces de votre foyer.
+            </SheetDescription>
+          </SheetHeader>
+          <nav
+            aria-label="Autres modules"
+            className="grid grid-cols-2 gap-2 px-4"
+          >
+            {secondaryNavigation
+              .filter((item) => item.id === 'members' || moduleVisible(item.id))
+              .map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-current={activeView === item.id ? 'page' : undefined}
+                  onClick={() => navigate(item.id)}
+                  className={`flex min-h-20 flex-col items-start justify-between rounded-xl border p-3 text-left font-medium transition-colors hover:bg-muted ${activeView === item.id ? 'border-[#087f72] bg-[#e8f7f4] text-[#075e55]' : 'bg-background'}`}
+                >
+                  <item.icon
+                    className="size-5 text-[#087f72]"
+                    aria-hidden="true"
+                  />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            <button
+              type="button"
+              aria-current={activeView === 'settings' ? 'page' : undefined}
+              onClick={() => navigate('settings')}
+              className={`flex min-h-20 flex-col items-start justify-between rounded-xl border p-3 text-left font-medium transition-colors hover:bg-muted ${activeView === 'settings' ? 'border-[#087f72] bg-[#e8f7f4] text-[#075e55]' : 'bg-background'}`}
+            >
+              <Settings className="size-5 text-[#087f72]" aria-hidden="true" />
+              <span>Paramètres</span>
+            </button>
+          </nav>
+        </SheetContent>
+      </Sheet>
+
       <Dialog open={quickAddOpen} onOpenChange={setQuickAddOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -851,10 +910,19 @@ export default function DashboardPage({
                     <button
                       onClick={() =>
                         item.id === 'more'
-                          ? setQuickAddOpen(true)
+                          ? setMoreNavigationOpen(true)
                           : navigate(item.id)
                       }
-                      className={`relative flex size-full flex-col items-center justify-center gap-1 text-xs ${item.id !== 'more' && activeView === item.id ? 'font-semibold text-[#087f72]' : 'text-muted-foreground'}`}
+                      aria-current={
+                        item.id === 'more'
+                          ? activeViewInMoreNavigation
+                            ? 'page'
+                            : undefined
+                          : activeView === item.id
+                            ? 'page'
+                            : undefined
+                      }
+                      className={`relative flex size-full flex-col items-center justify-center gap-1 text-xs ${item.id === 'more' ? (activeViewInMoreNavigation ? 'font-semibold text-[#087f72]' : 'text-muted-foreground') : activeView === item.id ? 'font-semibold text-[#087f72]' : 'text-muted-foreground'}`}
                     >
                       <item.icon className="size-5" aria-hidden="true" />
                       <span>{item.label}</span>
