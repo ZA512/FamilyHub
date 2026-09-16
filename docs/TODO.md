@@ -42,12 +42,10 @@ ajoutée après la conception initiale du chat. Les groupes existants (par exemp
 - ce lien reste informatif : les permissions du chat reposent toujours sur ses participants et ne
   sont pas modifiées automatiquement avec le groupe ;
 - si le groupe est supprimé, le lien est retiré sans supprimer la conversation ni son historique.
-
-### Suite éventuelle à étudier
-
-- synchronisation contrôlée des membres d'une conversation avec ceux du groupe, en définissant
-  explicitement ce qu'un nouveau membre peut lire dans l'historique ;
-- distinction entre plusieurs conversations d'un même groupe et une conversation « principale ».
+- pour rester simple et prévisible dans un usage familial, aucune synchronisation automatique ou
+  manuelle des membres du groupe vers la conversation n'est prévue ;
+- il n'existe pas de conversation « principale » : la liste est triée par dernière activité et
+  ouvre la conversation la plus récente, à la manière d'une messagerie classique.
 
 ## Chat — une conversation reste bloquée sur « Chargement… » après sélection
 
@@ -83,8 +81,9 @@ réécrire les messages de la conversation suivante.
 
 ## Courses — mieux suivre les demandes et les achats récents
 
-**Statut :** première version réalisée le 15 septembre 2026. Le suivi distingue les demandes
-manuelles des articles issus des repas et affiche les dates d'ajout et d'achat.
+**Statut :** réalisé. Depuis le 15 septembre 2026, le suivi distingue les demandes manuelles des
+articles issus des repas et affiche les dates d'ajout et d'achat. Depuis le 16 septembre 2026, les
+filtres de membre et d'état s'appliquent aussi aux achats, lesquels sont supprimés après sept jours.
 
 ### Contexte
 
@@ -108,28 +107,26 @@ fort que les ingrédients ajoutés automatiquement depuis un plat. Cette différ
   manuel ou génération depuis le planning des repas ;
 - donner davantage de visibilité aux demandes manuelles, sans modifier la capacité à cocher et
   gérer les ingrédients générés depuis les plats ;
-- conserver un accès à un historique plus ancien si cela reste utile.
+- conserver pendant sept jours un accès borné aux achats plus anciens.
 
 ### Décisions retenues pour cette version
 
-- « Mes demandes » montre les articles ajoutés manuellement par le membre courant ;
-  « Les demandes » montre les articles manuels de tous les membres ; « Déjà acheté » montre
-  les articles achetés, quelle que soit leur origine ;
+- « Mes demandes » montre les articles ajoutés manuellement par le membre courant et « Toutes les
+  demandes » ceux de tous les membres ;
+- un second filtre permet d'afficher tous les états, uniquement les demandes à acheter ou uniquement
+  celles déjà achetées ; les deux filtres se combinent ;
 - les achats sont récents pendant les 72 heures suivant leur date d'achat, pas leur date d'ajout ;
 - une demande non satisfaite reste visible sans limite de trois jours ;
 - les demandes manuelles apparaissent avant les ingrédients issus des repas dans la liste active ;
 - vingt éléments d'historique sont affichés initialement, puis « Afficher plus » révèle les suivants ;
-- les achats plus anciens restent accessibles sur demande, sans appel API supplémentaire ;
-- les articles et achats restent conservés dans la base selon le comportement actuel : cette vue
-  ne les supprime ni ne change leur durée de conservation.
-
-### Suite éventuelle à étudier
-
-- pagination côté serveur si la taille de l'historique devient coûteuse à charger ou à conserver
-  hors connexion ;
-- politique de conservation ou d'archivage explicite des anciens achats ;
-- fusion de plusieurs demandes pour un même produit sans perdre leurs auteurs ;
-- visibilité des demandes selon les droits, les groupes ou l'âge des membres si ce besoin apparaît.
+- les achats des jours 4 à 7 restent accessibles avec « Voir jusqu'à sept jours » ;
+- au-delà de sept jours après l'achat, l'article est supprimé physiquement lors du prochain accès
+  au module Courses ; les articles non achetés ne sont jamais concernés par cette purge ;
+- cette conservation courte borne naturellement le volume chargé, donc aucune pagination serveur
+  supplémentaire n'est nécessaire ;
+- les demandes identiques restent des lignes distinctes : deux demandes de la même chose représentent
+  bien deux articles à acheter ;
+- aucune visibilité fondée sur l'âge n'est introduite.
 
 ### Critères d'usage à préserver
 

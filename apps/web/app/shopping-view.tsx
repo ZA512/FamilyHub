@@ -36,7 +36,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   shoppingHistoryItems,
   sortPendingShoppingItems,
-  type ShoppingHistoryView,
+  type ShoppingHistoryScope,
+  type ShoppingHistoryStatus,
 } from '@/lib/shopping-history';
 import {
   applyOptimisticShoppingUpdate,
@@ -87,7 +88,10 @@ export function ShoppingView({
   const [pendingCount, setPendingCount] = useState(0);
   const [conflictCount, setConflictCount] = useState(0);
   const [error, setError] = useState('');
-  const [historyView, setHistoryView] = useState<ShoppingHistoryView>('mine');
+  const [historyScope, setHistoryScope] =
+    useState<ShoppingHistoryScope>('mine');
+  const [historyStatus, setHistoryStatus] =
+    useState<ShoppingHistoryStatus>('all');
   const [showOlder, setShowOlder] = useState(false);
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(20);
   const synchronization = useRef<Promise<void> | null>(null);
@@ -193,13 +197,15 @@ export function ShoppingView({
   const now = new Date();
   const recentHistory = shoppingHistoryItems(
     items,
-    historyView,
+    historyScope,
+    historyStatus,
     currentMemberId,
     now,
   );
   const fullHistory = shoppingHistoryItems(
     items,
-    historyView,
+    historyScope,
+    historyStatus,
     currentMemberId,
     now,
     true,
@@ -516,22 +522,35 @@ export function ShoppingView({
               Suivi des courses
             </h2>
             <Tabs
-              value={historyView}
+              value={historyScope}
               onValueChange={(value) => {
-                setHistoryView(value as ShoppingHistoryView);
+                setHistoryScope(value as ShoppingHistoryScope);
                 setShowOlder(false);
                 setVisibleHistoryCount(20);
               }}
             >
               <TabsList className="mb-3 max-w-full overflow-x-auto">
                 <TabsTrigger value="mine">Mes demandes</TabsTrigger>
-                <TabsTrigger value="requests">Les demandes</TabsTrigger>
-                <TabsTrigger value="purchased">Déjà acheté</TabsTrigger>
+                <TabsTrigger value="all">Toutes les demandes</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Tabs
+              value={historyStatus}
+              onValueChange={(value) => {
+                setHistoryStatus(value as ShoppingHistoryStatus);
+                setShowOlder(false);
+                setVisibleHistoryCount(20);
+              }}
+            >
+              <TabsList className="mb-3 max-w-full overflow-x-auto">
+                <TabsTrigger value="all">Toutes</TabsTrigger>
+                <TabsTrigger value="pending">À acheter</TabsTrigger>
+                <TabsTrigger value="purchased">Déjà achetées</TabsTrigger>
               </TabsList>
             </Tabs>
             <p className="mb-3 text-xs text-muted-foreground">
               Achats des trois derniers jours ; les demandes encore à acheter
-              restent visibles.
+              restent visibles. Les achats sont supprimés après sept jours.
             </p>
             {visibleHistory.length ? (
               <Card className="gap-0 overflow-hidden py-0">
@@ -548,11 +567,13 @@ export function ShoppingView({
             ) : (
               <Card className="border-dashed bg-muted/20">
                 <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  {historyView === 'mine'
-                    ? 'Aucune de vos demandes récentes à suivre.'
-                    : historyView === 'requests'
-                      ? 'Aucune demande récente à suivre.'
-                      : 'Aucun achat récent.'}
+                  {historyStatus === 'purchased'
+                    ? historyScope === 'mine'
+                      ? 'Aucune de vos demandes n’a été achetée récemment.'
+                      : 'Aucune demande achetée récemment.'
+                    : historyScope === 'mine'
+                      ? 'Aucune de vos demandes à suivre.'
+                      : 'Aucune demande à suivre.'}
                 </CardContent>
               </Card>
             )}
@@ -563,7 +584,7 @@ export function ShoppingView({
                   variant="outline"
                   onClick={() => setShowOlder(true)}
                 >
-                  Voir les achats plus anciens
+                  Voir jusqu’à sept jours
                 </Button>
               ) : null}
               {history.length > visibleHistoryCount ? (

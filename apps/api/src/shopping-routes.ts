@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { createSessionGuard, requireCsrf } from './auth.js';
 
 const shoppingItemIdSchema = z.string().uuid();
+const PURCHASE_RETENTION_DAYS = 7;
 
 type ShoppingRow = {
   id: string;
@@ -73,6 +74,23 @@ export async function registerShoppingRoutes(app: FastifyInstance, pool: Pool) {
 
   app.get('/api/v1/shopping-items', { preHandler: requireSession }, async (request, reply) => {
     if (!(await requireShoppingModule(request, reply, pool))) return;
+    await pool.query(
+      `WITH expired AS MATERIALIZED (
+         SELECT id FROM shopping_item
+         WHERE instance_id = $1
+           AND purchased_at < now() - ($2::int * interval '1 day')
+       ), deleted_notifications AS (
+         DELETE FROM notification notification
+         USING expired
+         WHERE notification.resource_type = 'shopping_item'
+           AND notification.resource_id = expired.id
+         RETURNING notification.id
+       )
+       DELETE FROM shopping_item item
+       USING expired
+       WHERE item.id = expired.id`,
+      [request.session?.instanceId, PURCHASE_RETENTION_DAYS],
+    );
     const result = await pool.query<ShoppingRow>(
       `${selectShoppingItem}
        WHERE i.instance_id = $1 AND i.deleted_at IS NULL

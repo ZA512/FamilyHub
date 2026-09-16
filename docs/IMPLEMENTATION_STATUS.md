@@ -65,12 +65,14 @@ existant, proposer son nom comme titre et ouvrir une conversation ayant déjà l
 participants. Cette sélection est un instantané : les changements du groupe n'accordent pas
 automatiquement l'accès au chat et à son historique. Les nouvelles conversations ainsi créées
 conservent toutefois le groupe d'origine comme référence, ce qui permet de les retrouver même si
-la composition du groupe évolue.
+la composition du groupe évolue. La liste reste triée par dernière activité et ouvre la conversation
+la plus récente ; aucun concept supplémentaire de conversation principale n'est nécessaire.
 Le module Courses présente les demandes manuelles avant les ingrédients de repas, précise
-l'auteur, l'origine et les dates d'ajout ou d'achat, puis propose « Mes demandes », « Les
-demandes » et « Déjà acheté ». Les achats des 72 dernières heures sont visibles par défaut ;
-les demandes non satisfaites restent affichées et les éléments plus anciens sont révélés
-progressivement, sans appel API supplémentaire.
+l'auteur, l'origine et les dates d'ajout ou d'achat. Les filtres « Mes demandes » ou « Toutes les
+demandes » se combinent avec « Toutes », « À acheter » ou « Déjà achetées ». Les achats des 72
+dernières heures sont visibles par défaut et ceux des sept derniers jours restent consultables par
+blocs de vingt. Au prochain accès à Courses, les achats de plus de sept jours sont supprimés
+physiquement ; les demandes non satisfaites restent conservées.
 
 Le module Tâches distingue désormais les tâches à terminer des routines permanentes sans
 multiplier les entrées de navigation. Une création peut cibler soi-même, une personne, un

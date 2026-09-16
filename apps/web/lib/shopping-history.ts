@@ -1,8 +1,10 @@
 import type { ShoppingItem } from '@familyhub/contracts';
 
-export type ShoppingHistoryView = 'mine' | 'requests' | 'purchased';
+export type ShoppingHistoryScope = 'mine' | 'all';
+export type ShoppingHistoryStatus = 'all' | 'pending' | 'purchased';
 
 const RECENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const RETENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function sortPendingShoppingItems(
   items: ShoppingItem[],
@@ -21,31 +23,29 @@ export function sortPendingShoppingItems(
 
 export function shoppingHistoryItems(
   items: ShoppingItem[],
-  view: ShoppingHistoryView,
+  scope: ShoppingHistoryScope,
+  status: ShoppingHistoryStatus,
   currentMemberId: string,
   now: Date,
   includeOlder = false,
 ): ShoppingItem[] {
-  const cutoff = now.getTime() - RECENT_WINDOW_MS;
+  const recentCutoff = now.getTime() - RECENT_WINDOW_MS;
+  const retentionCutoff = now.getTime() - RETENTION_WINDOW_MS;
   return items
     .filter((item) => {
-      if (view === 'purchased') {
-        return (
-          item.purchasedAt !== null &&
-          (includeOlder || Date.parse(item.purchasedAt) >= cutoff)
-        );
-      }
       if (item.source !== 'MANUAL') return false;
-      if (view === 'mine' && item.requestedBy !== currentMemberId) return false;
-      return (
-        !item.purchasedAt ||
-        includeOlder ||
-        Date.parse(item.purchasedAt) >= cutoff
-      );
+      if (scope === 'mine' && item.requestedBy !== currentMemberId)
+        return false;
+      if (status === 'pending') return item.purchasedAt === null;
+      if (status === 'purchased' && item.purchasedAt === null) return false;
+      if (item.purchasedAt === null) return true;
+      const purchasedAt = Date.parse(item.purchasedAt);
+      if (purchasedAt < retentionCutoff) return false;
+      return includeOlder || purchasedAt >= recentCutoff;
     })
     .sort((left, right) => {
       if (
-        view !== 'purchased' &&
+        status === 'all' &&
         Boolean(left.purchasedAt) !== Boolean(right.purchasedAt)
       ) {
         return left.purchasedAt ? 1 : -1;

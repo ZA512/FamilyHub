@@ -29,7 +29,14 @@ const items = [
     '2026-09-14T12:00:00.000Z',
   ),
   item(
-    'old-bought',
+    'week-bought',
+    'MANUAL',
+    'child',
+    '2026-09-01T12:00:00.000Z',
+    '2026-09-10T12:00:00.000Z',
+  ),
+  item(
+    'expired-bought',
     'MANUAL',
     'child',
     '2026-09-01T12:00:00.000Z',
@@ -53,29 +60,34 @@ describe('shopping history', () => {
     ]);
   });
 
-  it('keeps old unanswered requests but hides old purchases by default', () => {
+  it('keeps unanswered requests and only exposes purchases retained for seven days', () => {
     expect(
-      shoppingHistoryItems(items, 'mine', 'child', now).map(
+      shoppingHistoryItems(items, 'mine', 'all', 'child', now).map(
         (entry) => entry.id,
       ),
     ).toEqual(['old-pending', 'recent-bought']);
     expect(
-      shoppingHistoryItems(items, 'mine', 'child', now, true).map(
+      shoppingHistoryItems(items, 'mine', 'all', 'child', now, true).map(
         (entry) => entry.id,
       ),
-    ).toEqual(['old-pending', 'recent-bought', 'old-bought']);
+    ).toEqual(['old-pending', 'recent-bought', 'week-bought']);
   });
 
-  it('separates manual requests from all recent purchases', () => {
+  it('applies the member scope to pending and purchased requests', () => {
     expect(
-      shoppingHistoryItems(items, 'requests', 'child', now).map(
+      shoppingHistoryItems(items, 'all', 'pending', 'child', now).map(
         (entry) => entry.id,
       ),
-    ).toEqual(['manual-pending', 'old-pending', 'recent-bought']);
+    ).toEqual(['manual-pending', 'old-pending']);
     expect(
-      shoppingHistoryItems(items, 'purchased', 'child', now).map(
+      shoppingHistoryItems(items, 'mine', 'purchased', 'child', now).map(
         (entry) => entry.id,
       ),
-    ).toEqual(['meal-bought', 'recent-bought']);
+    ).toEqual(['recent-bought']);
+    expect(
+      shoppingHistoryItems(items, 'all', 'purchased', 'child', now).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(['recent-bought']);
   });
 });
