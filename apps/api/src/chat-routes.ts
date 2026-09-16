@@ -67,6 +67,8 @@ async function loadConversations(
     type: 'DIRECT' | 'GROUP' | 'TOPIC';
     title: string | null;
     displayTitle: string;
+    sourceGroupId: string | null;
+    sourceGroupName: string | null;
     createdBy: string;
     participants: Array<{ memberId: string; memberName: string }>;
     lastMessage: string | null;
@@ -86,6 +88,8 @@ async function loadConversations(
               ), 'Conversation')
               ELSE c.title
             END AS "displayTitle",
+            c.source_group_id AS "sourceGroupId",
+            source_group.name AS "sourceGroupName",
             c.created_by AS "createdBy",
             COALESCE((
               SELECT jsonb_agg(jsonb_build_object(
@@ -105,6 +109,7 @@ async function loadConversations(
             mine.muted, c.created_at AS "createdAt"
      FROM conversation c
      JOIN conversation_member mine ON mine.conversation_id = c.id AND mine.member_id = $2
+     LEFT JOIN member_group source_group ON source_group.id = c.source_group_id
      LEFT JOIN LATERAL (
        SELECT CASE WHEN lm.deleted_at IS NOT NULL THEN 'Message supprimé' ELSE COALESCE(
                 NULLIF(lm.body, ''),
@@ -271,6 +276,37 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
       if (active.rowCount !== ids.length) {
         return reply.code(400).send({ error: 'INVALID_PARTICIPANTS' });
       }
+      if (parsed.data.sourceGroupId) {
+        const sourceGroup = await pool.query<{ memberIds: string[] }>(
+          `SELECT COALESCE(
+                    array_agg(member.id ORDER BY member.id)
+                      FILTER (WHERE member.id IS NOT NULL),
+                    '{}'
+                  ) AS "memberIds"
+           FROM member_group source_group
+           JOIN group_membership creator_membership
+             ON creator_membership.group_id = source_group.id
+            AND creator_membership.member_id = $3
+           LEFT JOIN group_membership membership
+             ON membership.group_id = source_group.id
+           LEFT JOIN instance_member member
+             ON member.id = membership.member_id AND member.status = 'ACTIVE'
+           WHERE source_group.instance_id = $1 AND source_group.id = $2
+           GROUP BY source_group.id`,
+          [session.instanceId, parsed.data.sourceGroupId, session.id],
+        );
+        if (!sourceGroup.rowCount) {
+          return reply.code(400).send({ error: 'INVALID_SOURCE_GROUP' });
+        }
+        const currentGroupMemberIds = sourceGroup.rows[0]!.memberIds;
+        const expectedMemberIds = new Set(ids);
+        if (
+          currentGroupMemberIds.length !== ids.length ||
+          currentGroupMemberIds.some((id) => !expectedMemberIds.has(id))
+        ) {
+          return reply.code(409).send({ error: 'SOURCE_GROUP_MEMBERS_CHANGED' });
+        }
+      }
 
       const client = await pool.connect();
       try {
@@ -278,8 +314,8 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
         const directKey = parsed.data.type === 'DIRECT' ? ids.join(':') : null;
         const inserted = await client.query<{ id: string }>(
           `INSERT INTO conversation
-             (instance_id, type, title, direct_key, created_by, client_mutation_id)
-           VALUES ($1, $2, $3, $4, $5, $6)
+             (instance_id, type, title, direct_key, source_group_id, created_by, client_mutation_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (instance_id, client_mutation_id) DO NOTHING
            RETURNING id`,
           [
@@ -287,6 +323,7 @@ export async function registerChatRoutes(app: FastifyInstance, pool: Pool) {
             parsed.data.type,
             parsed.data.type === 'DIRECT' ? null : parsed.data.title,
             directKey,
+            parsed.data.sourceGroupId ?? null,
             session.id,
             parsed.data.clientMutationId,
           ],

@@ -24,7 +24,17 @@ export function existingGroupChat(
   conversations: ConversationSummary[],
   currentMemberId: string,
   recipientIds: string[],
+  sourceGroupId?: string,
 ): ConversationSummary | null {
+  const linkedConversation = sourceGroupId
+    ? conversations.find(
+        (conversation) =>
+          conversation.type === 'GROUP' &&
+          conversation.sourceGroupId === sourceGroupId,
+      )
+    : undefined;
+  if (linkedConversation) return linkedConversation;
+
   const participants = [...new Set([currentMemberId, ...recipientIds])].sort();
   return (
     conversations.find(

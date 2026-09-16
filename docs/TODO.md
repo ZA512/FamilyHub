@@ -5,9 +5,10 @@ liste ne signifie pas qu'elle est planifiée ni en cours de développement.
 
 ## Chat — créer une conversation depuis un groupe existant
 
-**Statut :** première version réalisée le 15 septembre 2026. La création d'une conversation de
-groupe peut sélectionner un groupe existant sans recomposer ses participants ; elle conserve
-aussi la sélection manuelle.
+**Statut :** réalisée. Depuis le 15 septembre 2026, la création d'une conversation de groupe peut
+sélectionner un groupe existant sans recomposer ses participants et conserve aussi la sélection
+manuelle. Depuis le 16 septembre 2026, la conversation garde également un lien durable vers son
+groupe d'origine.
 
 ### Contexte
 
@@ -36,12 +37,14 @@ ajoutée après la conception initiale du chat. Les groupes existants (par exemp
   du chat et ne changent pas rétroactivement l'accès à son historique ;
 - une conversation de groupe avec les mêmes participants est signalée et peut être ouverte ;
   l'utilisateur peut encore en créer une autre si le sujet est différent ;
-- aucun lien permanent au groupe n'est enregistré dans la conversation : le choix sert à sa
-  création et ne remplace pas les permissions propres au chat.
+- le groupe source est enregistré avec la conversation et permet de retrouver celle-ci même si la
+  composition du groupe change ensuite ;
+- ce lien reste informatif : les permissions du chat reposent toujours sur ses participants et ne
+  sont pas modifiées automatiquement avec le groupe ;
+- si le groupe est supprimé, le lien est retiré sans supprimer la conversation ni son historique.
 
 ### Suite éventuelle à étudier
 
-- association permanente d'une conversation existante à un groupe ;
 - synchronisation contrôlée des membres d'une conversation avec ceux du groupe, en définissant
   explicitement ce qu'un nouveau membre peut lire dans l'historique ;
 - distinction entre plusieurs conversations d'un même groupe et une conversation « principale ».

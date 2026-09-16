@@ -812,12 +812,23 @@ export type MealPlanEntry = {
 export const conversationTypeSchema = z.enum(['DIRECT', 'GROUP', 'TOPIC']);
 export const chatReactionSchema = z.enum(['👍', '❤️', '😂', '😮', '😢', '👏']);
 
-export const conversationCreateSchema = z.object({
-  type: conversationTypeSchema,
-  title: optionalText(120),
-  participantIds: z.array(z.string().uuid()).min(1).max(100),
-  clientMutationId: z.string().uuid(),
-});
+export const conversationCreateSchema = z
+  .object({
+    type: conversationTypeSchema,
+    title: optionalText(120),
+    participantIds: z.array(z.string().uuid()).min(1).max(100),
+    sourceGroupId: z.string().uuid().nullable().optional(),
+    clientMutationId: z.string().uuid(),
+  })
+  .superRefine((value, context) => {
+    if (value.sourceGroupId && value.type !== 'GROUP') {
+      context.addIssue({
+        code: 'custom',
+        path: ['sourceGroupId'],
+        message: 'Un groupe source est réservé aux conversations de groupe.',
+      });
+    }
+  });
 
 export const chatMessageCreateSchema = z
   .object({
@@ -864,6 +875,8 @@ export type ConversationSummary = {
   type: ConversationType;
   title: string;
   displayTitle: string;
+  sourceGroupId: string | null;
+  sourceGroupName: string | null;
   createdBy: string;
   participants: ConversationParticipant[];
   lastMessage: string | null;

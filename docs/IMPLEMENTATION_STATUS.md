@@ -1,6 +1,6 @@
 # État d'implémentation du PRD
 
-Mise à jour : 15 septembre 2026.
+Mise à jour : 16 septembre 2026.
 
 ## MVP fonctionnel
 
@@ -63,7 +63,9 @@ une erreur et permet de réessayer.
 La création d'une conversation de groupe peut désormais reprendre les membres actifs d'un groupe
 existant, proposer son nom comme titre et ouvrir une conversation ayant déjà les mêmes
 participants. Cette sélection est un instantané : les changements du groupe n'accordent pas
-automatiquement l'accès au chat et à son historique.
+automatiquement l'accès au chat et à son historique. Les nouvelles conversations ainsi créées
+conservent toutefois le groupe d'origine comme référence, ce qui permet de les retrouver même si
+la composition du groupe évolue.
 Le module Courses présente les demandes manuelles avant les ingrédients de repas, précise
 l'auteur, l'origine et les dates d'ajout ou d'achat, puis propose « Mes demandes », « Les
 demandes » et « Déjà acheté ». Les achats des 72 dernières heures sont visibles par défaut ;

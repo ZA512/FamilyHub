@@ -588,6 +588,9 @@ export const conversations = pgTable(
     type: text('type').notNull(),
     title: text('title'),
     directKey: text('direct_key'),
+    sourceGroupId: uuid('source_group_id').references(() => groups.id, {
+      onDelete: 'set null',
+    }),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => instanceMembers.id, { onDelete: 'restrict' }),
@@ -602,6 +605,9 @@ export const conversations = pgTable(
       .on(table.instanceId, table.directKey)
       .where(sql`${table.directKey} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     index('conversation_instance_updated_idx').on(table.instanceId, table.updatedAt),
+    index('conversation_source_group_idx')
+      .on(table.sourceGroupId)
+      .where(sql`${table.sourceGroupId} IS NOT NULL`),
   ],
 );
 

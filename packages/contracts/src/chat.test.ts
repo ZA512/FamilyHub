@@ -20,6 +20,19 @@ describe('chat contracts', () => {
     ).toBe(true);
   });
 
+  it('only accepts a source group for a group conversation', () => {
+    const sourceGroupId = '6bd0455c-a000-4d77-9ef3-9cad43b28c7c';
+    const base = {
+      title: 'Vacances',
+      participantIds: ['f41fb9af-c16d-468f-9881-8b35683cf1f0'],
+      sourceGroupId,
+      clientMutationId: '912b6fb0-1a40-4918-a548-6382e855de82',
+    };
+
+    expect(conversationCreateSchema.safeParse({ ...base, type: 'GROUP' }).success).toBe(true);
+    expect(conversationCreateSchema.safeParse({ ...base, type: 'TOPIC' }).success).toBe(false);
+  });
+
   it('rejects empty and oversized messages', () => {
     expect(
       chatMessageCreateSchema.safeParse({

@@ -695,6 +695,9 @@ export function ChatView({
                         {selected.displayTitle}
                       </h2>
                       <p className="truncate text-xs text-muted-foreground">
+                        {selected.sourceGroupName
+                          ? `Groupe ${selected.sourceGroupName} · `
+                          : ''}
                         {selected.participants
                           .map((item) => item.memberName)
                           .join(', ')}
@@ -1242,7 +1245,12 @@ function ConversationDialog({
     [currentMemberId, groups, members],
   );
   const existingConversation = selectedGroupId
-    ? existingGroupChat(conversations, currentMemberId, selected)
+    ? existingGroupChat(
+        conversations,
+        currentMemberId,
+        selected,
+        selectedGroupId,
+      )
     : null;
 
   function chooseGroup(groupId: string) {
@@ -1274,6 +1282,7 @@ function ConversationDialog({
           type,
           title: type === 'DIRECT' ? null : title,
           participantIds: selected,
+          sourceGroupId: type === 'GROUP' ? selectedGroupId || null : null,
           clientMutationId: crypto.randomUUID(),
         }),
       });
@@ -1434,7 +1443,9 @@ function ConversationDialog({
             <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
               <p>
                 {t(
-                  'Une conversation avec ces participants existe déjà : « {0} ». Vous pouvez l’ouvrir ou en créer une autre.',
+                  existingConversation.sourceGroupId === selectedGroupId
+                    ? 'Une conversation liée à ce groupe existe déjà : « {0} ». Vous pouvez l’ouvrir ou en créer une autre.'
+                    : 'Une conversation avec ces participants existe déjà : « {0} ». Vous pouvez l’ouvrir ou en créer une autre.',
                   {
                     0: existingConversation.displayTitle,
                   },

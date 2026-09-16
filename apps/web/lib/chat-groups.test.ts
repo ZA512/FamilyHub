@@ -38,4 +38,28 @@ describe('group chat selection', () => {
     );
     expect(existingGroupChat([existing], 'parent', ['another'])).toBeNull();
   });
+
+  it('prefers a conversation permanently linked to the selected group', () => {
+    const linked = {
+      id: 'linked',
+      type: 'GROUP',
+      sourceGroupId: 'parents',
+      participants: [{ memberId: 'former-member' }],
+    } as ConversationSummary;
+    const sameParticipants = {
+      id: 'same-participants',
+      type: 'GROUP',
+      sourceGroupId: null,
+      participants: [{ memberId: 'child' }, { memberId: 'parent' }],
+    } as ConversationSummary;
+
+    expect(
+      existingGroupChat(
+        [sameParticipants, linked],
+        'parent',
+        ['child'],
+        'parents',
+      ),
+    ).toBe(linked);
+  });
 });
