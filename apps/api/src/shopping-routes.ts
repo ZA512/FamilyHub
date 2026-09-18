@@ -20,6 +20,7 @@ type ShoppingRow = {
   source: string;
   requestedBy: string;
   requestedByName: string;
+  requestedByAvatarId: string | null;
   purchasedBy: string | null;
   purchasedByName: string | null;
   purchasedAt: Date | null;
@@ -29,22 +30,35 @@ type ShoppingRow = {
   updatedAt: Date;
 };
 
-const selectShoppingItem = `
+function selectShoppingItem(viewerIdParameter: number, viewerRoleParameter: number) {
+  return `
   SELECT i.id, i.name, i.quantity, i.note, i.source,
          i.requested_by AS "requestedBy", requester.first_name AS "requestedByName",
+         CASE WHEN i.requested_by = $${viewerIdParameter}
+                   OR $${viewerRoleParameter} = 'ADMIN'
+                   OR COALESCE(requester_preference.visibility, 'ALL_MEMBERS') = 'ALL_MEMBERS'
+              THEN requester_preference.avatar_attachment_id ELSE NULL
+         END AS "requestedByAvatarId",
          i.purchased_by AS "purchasedBy", purchaser.first_name AS "purchasedByName",
          i.purchased_at AS "purchasedAt", i.client_mutation_id AS "clientMutationId",
          i.version, i.created_at AS "createdAt", i.updated_at AS "updatedAt"
   FROM shopping_item i
   JOIN instance_member requester_member ON requester_member.id = i.requested_by
   JOIN app_user requester ON requester.id = requester_member.user_id
+  LEFT JOIN member_profile_preference requester_preference
+         ON requester_preference.member_id = requester_member.id
   LEFT JOIN instance_member purchaser_member ON purchaser_member.id = i.purchased_by
   LEFT JOIN app_user purchaser ON purchaser.id = purchaser_member.user_id
 `;
+}
 
 function serializeShoppingItem(row: ShoppingRow): ShoppingItem {
+  const { requestedByAvatarId, ...item } = row;
   return {
-    ...row,
+    ...item,
+    requestedByAvatarUrl: requestedByAvatarId
+      ? `/api/v1/attachments/${requestedByAvatarId}/content`
+      : null,
     purchasedAt: row.purchasedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -92,10 +106,10 @@ export async function registerShoppingRoutes(app: FastifyInstance, pool: Pool) {
       [request.session?.instanceId, PURCHASE_RETENTION_DAYS],
     );
     const result = await pool.query<ShoppingRow>(
-      `${selectShoppingItem}
+      `${selectShoppingItem(2, 3)}
        WHERE i.instance_id = $1 AND i.deleted_at IS NULL
        ORDER BY i.purchased_at NULLS FIRST, i.created_at DESC`,
-      [request.session?.instanceId],
+      [request.session?.instanceId, request.session?.id, request.session?.role],
     );
     return { items: result.rows.map(serializeShoppingItem) };
   });
@@ -159,9 +173,9 @@ export async function registerShoppingRoutes(app: FastifyInstance, pool: Pool) {
         }
 
         const result = await client.query<ShoppingRow>(
-          `${selectShoppingItem}
+          `${selectShoppingItem(3, 4)}
            WHERE i.id = $1 AND i.instance_id = $2 AND i.deleted_at IS NULL`,
-          [itemId, request.session?.instanceId],
+          [itemId, request.session?.instanceId, request.session?.id, request.session?.role],
         );
         const row = result.rows[0];
         if (!row) throw new Error('Shopping item creation returned no row.');
@@ -242,9 +256,14 @@ export async function registerShoppingRoutes(app: FastifyInstance, pool: Pool) {
         ],
       );
       const result = await pool.query<ShoppingRow>(
-        `${selectShoppingItem}
+        `${selectShoppingItem(3, 4)}
          WHERE i.id = $1 AND i.instance_id = $2 AND i.deleted_at IS NULL`,
-        [updated.rows[0]?.id, request.session?.instanceId],
+        [
+          updated.rows[0]?.id,
+          request.session?.instanceId,
+          request.session?.id,
+          request.session?.role,
+        ],
       );
       const row = result.rows[0];
       if (!row) return reply.code(404).send({ error: 'SHOPPING_ITEM_NOT_FOUND' });

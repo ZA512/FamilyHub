@@ -700,6 +700,7 @@ export default function DashboardPage({
               <ShoppingView
                 currentMemberId={memberId}
                 currentMemberName={displayFirstName}
+                currentMemberAvatarUrl={displayAvatarUrl}
                 instanceId={instanceId}
                 csrfToken={csrfToken}
                 composerOpen={shoppingComposerOpen}

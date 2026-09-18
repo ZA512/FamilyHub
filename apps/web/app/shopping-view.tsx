@@ -17,7 +17,6 @@ import {
   RotateCcw,
   ShoppingBasket,
   Trash2,
-  UserRound,
 } from 'lucide-react';
 
 import type {
@@ -27,6 +26,7 @@ import type {
 } from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -71,6 +71,7 @@ import {
 type ShoppingViewProps = {
   currentMemberId: string;
   currentMemberName: string;
+  currentMemberAvatarUrl?: string | null;
   instanceId: string;
   csrfToken: string;
   composerOpen: boolean;
@@ -85,6 +86,7 @@ function formText(data: FormData, key: string): string {
 export function ShoppingView({
   currentMemberId,
   currentMemberName,
+  currentMemberAvatarUrl = null,
   instanceId,
   csrfToken,
   composerOpen,
@@ -92,8 +94,12 @@ export function ShoppingView({
 }: ShoppingViewProps) {
   const sessionKey = `${instanceId}:${currentMemberId}`;
   const member = useMemo(
-    () => ({ id: currentMemberId, firstName: currentMemberName }),
-    [currentMemberId, currentMemberName],
+    () => ({
+      id: currentMemberId,
+      firstName: currentMemberName,
+      avatarUrl: currentMemberAvatarUrl,
+    }),
+    [currentMemberAvatarUrl, currentMemberId, currentMemberName],
   );
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -674,6 +680,11 @@ export function ShoppingView({
                 busy={busyId === item.id}
                 divided={index > 0}
                 editable={item.requestedBy === currentMemberId}
+                requesterAvatarUrl={
+                  item.requestedBy === currentMemberId
+                    ? currentMemberAvatarUrl
+                    : item.requestedByAvatarUrl
+                }
                 onToggle={() => setPurchased(item, true)}
                 onEdit={() => setEditedItem(item)}
                 onDelete={() => setToDelete(item)}
@@ -715,6 +726,11 @@ export function ShoppingView({
                     busy={busyId === item.id}
                     divided={index > 0}
                     editable={item.requestedBy === currentMemberId}
+                    requesterAvatarUrl={
+                      item.requestedBy === currentMemberId
+                        ? currentMemberAvatarUrl
+                        : item.requestedByAvatarUrl
+                    }
                     onToggle={() => setPurchased(item, !item.purchasedAt)}
                     onEdit={() => setEditedItem(item)}
                     onDelete={() => setToDelete(item)}
@@ -762,6 +778,7 @@ function ShoppingRow({
   busy,
   divided,
   editable,
+  requesterAvatarUrl,
   onToggle,
   onEdit,
   onDelete,
@@ -770,6 +787,7 @@ function ShoppingRow({
   busy: boolean;
   divided: boolean;
   editable: boolean;
+  requesterAvatarUrl?: string | null;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -824,13 +842,18 @@ function ShoppingRow({
           <Check aria-hidden="true" />
         )}
       </Button>
-      <span
-        className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground"
+      <Avatar
+        className="size-8"
         title={item.requestedByName}
         aria-label={`Demandé par ${item.requestedByName}`}
       >
-        <UserRound className="size-4" aria-hidden="true" />
-      </span>
+        {requesterAvatarUrl ? (
+          <AvatarImage src={requesterAvatarUrl} alt="" />
+        ) : null}
+        <AvatarFallback className="text-[10px] font-semibold uppercase">
+          {item.requestedByName.trim().slice(0, 2)}
+        </AvatarFallback>
+      </Avatar>
       <span
         className="max-w-20 min-w-7 shrink-0 truncate text-center text-sm font-semibold text-foreground"
         title={item.quantity ?? '1'}

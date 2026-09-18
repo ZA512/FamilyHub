@@ -558,6 +558,7 @@ export type ShoppingItem = {
   source: string;
   requestedBy: string;
   requestedByName: string;
+  requestedByAvatarUrl?: string | null;
   purchasedBy: string | null;
   purchasedByName: string | null;
   purchasedAt: string | null;

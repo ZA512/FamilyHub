@@ -328,7 +328,7 @@ export async function shoppingMutationCounts(
 export function createOptimisticShoppingItem(
   mutationId: string,
   input: ShoppingItemCreate,
-  member: Pick<CurrentMember, 'id' | 'firstName'>,
+  member: Pick<CurrentMember, 'id' | 'firstName' | 'avatarUrl'>,
 ): ShoppingItem {
   const now = new Date().toISOString();
   return {
@@ -339,6 +339,7 @@ export function createOptimisticShoppingItem(
     source: 'MANUAL',
     requestedBy: member.id,
     requestedByName: member.firstName,
+    requestedByAvatarUrl: member.avatarUrl ?? null,
     purchasedBy: null,
     purchasedByName: null,
     purchasedAt: null,
