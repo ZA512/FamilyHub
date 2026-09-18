@@ -174,6 +174,7 @@ export async function registerRoutes(
             email: parsed.data.email,
             role: 'ADMIN',
             locale: 'fr',
+            avatarUrl: null,
           },
           csrfToken: session.csrfToken,
         });
@@ -205,10 +206,11 @@ export async function registerRoutes(
         password_hash: string;
         role: 'ADMIN' | 'MEMBER';
         locale: 'fr' | 'en';
+        avatar_attachment_id: string | null;
       }>(
         `SELECT u.id AS user_id, m.id AS member_id, m.instance_id, i.name AS instance_name, u.email,
               u.first_name, u.password_hash, m.role,
-              COALESCE(p.locale, i.locale, 'fr') AS locale
+              COALESCE(p.locale, i.locale, 'fr') AS locale, p.avatar_attachment_id
        FROM app_user u
        JOIN instance_member m ON m.user_id = u.id
        JOIN instance i ON i.id = m.instance_id
@@ -239,6 +241,9 @@ export async function registerRoutes(
           email: row.email,
           role: row.role,
           locale: row.locale,
+          avatarUrl: row.avatar_attachment_id
+            ? `/api/v1/attachments/${row.avatar_attachment_id}/content`
+            : null,
         },
         csrfToken: session.csrfToken,
       };
@@ -267,6 +272,7 @@ export async function registerRoutes(
         email: session.email,
         role: session.role,
         locale: session.locale,
+        avatarUrl: session.avatarUrl,
       },
       csrfToken,
     };

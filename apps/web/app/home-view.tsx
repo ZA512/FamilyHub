@@ -19,6 +19,7 @@ import type {
 } from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 
 type HomeViewProps = {
@@ -225,9 +226,14 @@ function ActivitySection({
               onClick={() => onNavigate(item.view)}
               className="flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/45"
             >
-              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-bold text-foreground/70">
-                {item.actorName.slice(0, 2).toUpperCase()}
-              </span>
+              <Avatar className="size-8">
+                {item.actorAvatarUrl ? (
+                  <AvatarImage src={item.actorAvatarUrl} alt="" />
+                ) : null}
+                <AvatarFallback className="text-[10px] font-bold text-foreground/70">
+                  {item.actorName.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium leading-snug">
                   {item.actorName}{' '}

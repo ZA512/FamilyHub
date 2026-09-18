@@ -35,6 +35,7 @@ export type CurrentMember = {
   email: string;
   role: 'ADMIN' | 'MEMBER';
   locale?: 'fr' | 'en';
+  avatarUrl?: string | null;
 };
 
 export const essentialModuleKeys = [
@@ -335,6 +336,7 @@ export type HomeActivity = {
     | 'contact.created'
     | 'document.created';
   actorName: string;
+  actorAvatarUrl?: string | null;
   subject: string;
   occurredAt: string;
   view:

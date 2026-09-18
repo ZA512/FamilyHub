@@ -359,6 +359,7 @@ export async function registerInvitationRoutes(
             email: invitation.email,
             role: invitation.role,
             locale: invitation.locale,
+            avatarUrl: null,
           },
           csrfToken: session.csrfToken,
         });

@@ -286,6 +286,15 @@ export function App() {
     setView('login');
   }
 
+  function updateAvatarUrl(avatarUrl: string | null) {
+    setMember((current) => {
+      if (!current) return current;
+      const updated = { ...current, avatarUrl };
+      void saveOfflineSession(updated);
+      return updated;
+    });
+  }
+
   useEffect(() => {
     if (view !== 'dashboard' || csrfToken) return;
     const controller = new AbortController();
@@ -387,9 +396,11 @@ export function App() {
         memberId={member.id}
         instanceId={member.instanceId}
         firstName={member.firstName}
+        avatarUrl={member.avatarUrl}
         instanceName={member.instanceName}
         role={member.role}
         csrfToken={csrfToken}
+        onAvatarUrlChange={updateAvatarUrl}
         onLogout={logout}
       />
     );

@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   applyTheme,
   parsePersonalPreferences,
@@ -208,9 +209,11 @@ type DashboardPageProps = {
   memberId: string;
   instanceId: string;
   firstName?: string;
+  avatarUrl?: string | null;
   instanceName?: string;
   role: 'ADMIN' | 'MEMBER';
   csrfToken: string;
+  onAvatarUrlChange: (avatarUrl: string | null) => void;
   onLogout: () => Promise<void>;
 };
 
@@ -218,12 +221,15 @@ export default function DashboardPage({
   memberId,
   instanceId,
   firstName = 'Maxime',
+  avatarUrl = null,
   instanceName = 'Foyer Girard',
   role,
   csrfToken,
+  onAvatarUrlChange,
   onLogout,
 }: DashboardPageProps) {
   const [displayFirstName, setDisplayFirstName] = useState(firstName);
+  const [displayAvatarUrl, setDisplayAvatarUrl] = useState(avatarUrl);
   const initials = displayFirstName.slice(0, 2).toUpperCase();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [moreNavigationOpen, setMoreNavigationOpen] = useState(false);
@@ -585,9 +591,14 @@ export default function DashboardPage({
                   className="rounded-xl px-2"
                   onClick={() => navigate('settings')}
                 >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
-                    {initials}
-                  </span>
+                  <Avatar className="size-8">
+                    {displayAvatarUrl ? (
+                      <AvatarImage src={displayAvatarUrl} alt="" />
+                    ) : null}
+                    <AvatarFallback className="bg-accent text-xs font-bold text-accent-foreground">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
                   <span className="flex min-w-0 flex-col leading-tight">
                     <span className="truncate font-medium">
                       {displayFirstName}
@@ -679,6 +690,10 @@ export default function DashboardPage({
                 personalPreferences={personalPreferences}
                 onPersonalPreferencesChange={setPersonalPreferences}
                 onFirstNameChange={setDisplayFirstName}
+                onAvatarUrlChange={(nextAvatarUrl) => {
+                  setDisplayAvatarUrl(nextAvatarUrl);
+                  onAvatarUrlChange(nextAvatarUrl);
+                }}
                 onLogout={onLogout}
               />
             ) : activeView === 'shopping' ? (

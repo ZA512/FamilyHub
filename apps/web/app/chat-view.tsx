@@ -37,6 +37,7 @@ import type {
 } from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -635,9 +636,11 @@ export function ChatView({
                       onClick={() => selectConversation(conversation.id)}
                       className={`flex w-full gap-3 border-b p-4 text-left transition-colors hover:bg-muted/45 ${selectedId === conversation.id ? 'bg-accent/65' : ''}`}
                     >
-                      <span className="grid size-10 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold">
-                        {conversation.displayTitle.slice(0, 2).toUpperCase()}
-                      </span>
+                      <ConversationAvatar
+                        conversation={conversation}
+                        members={members}
+                        currentMemberId={currentMemberId}
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center justify-between gap-2">
                           <span className="truncate font-medium">
@@ -1425,9 +1428,14 @@ function ConversationDialog({
                         );
                       }}
                     />
-                    <span className="grid size-8 place-items-center rounded-full bg-muted text-xs font-semibold">
-                      {member.firstName.slice(0, 2).toUpperCase()}
-                    </span>
+                    <Avatar className="size-8">
+                      {member.avatarUrl ? (
+                        <AvatarImage src={member.avatarUrl} alt="" />
+                      ) : null}
+                      <AvatarFallback className="text-xs font-semibold">
+                        {member.firstName.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                     <span className="text-sm">
                       {member.firstName}
                       {member.lastName ? ` ${member.lastName}` : ''}
@@ -1486,5 +1494,35 @@ function ConversationDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ConversationAvatar({
+  conversation,
+  members,
+  currentMemberId,
+}: {
+  conversation: ConversationSummary;
+  members: FamilyMember[];
+  currentMemberId: string;
+}) {
+  const directParticipant =
+    conversation.type === 'DIRECT'
+      ? conversation.participants.find(
+          (participant) => participant.memberId !== currentMemberId,
+        )
+      : null;
+  const avatarUrl = directParticipant
+    ? members.find((member) => member.id === directParticipant.memberId)
+        ?.avatarUrl
+    : null;
+
+  return (
+    <Avatar className="size-10">
+      {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
+      <AvatarFallback className="text-sm font-semibold">
+        {conversation.displayTitle.slice(0, 2).toUpperCase()}
+      </AvatarFallback>
+    </Avatar>
   );
 }

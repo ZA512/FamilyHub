@@ -5,7 +5,10 @@ import type { Pool } from 'pg';
 import { createSessionGuard } from './auth.js';
 import { reopenAvailableTasks } from './task-routes.js';
 
-type ActivityRow = Omit<HomeActivity, 'occurredAt'> & { occurredAt: Date };
+type ActivityRow = Omit<HomeActivity, 'occurredAt' | 'actorAvatarUrl'> & {
+  occurredAt: Date;
+  actorAvatarAttachmentId: string | null;
+};
 
 export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
   const requireSession = createSessionGuard(pool);
@@ -114,9 +117,18 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
           [request.session?.instanceId, request.session?.id],
         ),
         pool.query<ActivityRow>(
-          `SELECT * FROM (
+          `SELECT events.id, events.type, events."actorName", events.subject,
+                  events."occurredAt", events.view,
+                  CASE
+                    WHEN events."actorId" = $2 OR $3 = 'ADMIN'
+                      OR COALESCE(actor_profile.visibility, 'ALL_MEMBERS') = 'ALL_MEMBERS'
+                    THEN actor_profile.avatar_attachment_id
+                    ELSE NULL
+                  END AS "actorAvatarAttachmentId"
+           FROM (
            SELECT concat('shopping.added:', i.id) AS id,
                   'shopping.added'::text AS type, requester.first_name AS "actorName",
+                  requester_member.id AS "actorId",
                   i.name AS subject, i.created_at AS "occurredAt", 'shopping'::text AS view
            FROM shopping_item i
            JOIN instance_member requester_member ON requester_member.id = i.requested_by
@@ -132,6 +144,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('shopping.purchased:', i.id) AS id,
                   'shopping.purchased'::text AS type, purchaser.first_name AS "actorName",
+                  purchaser_member.id AS "actorId",
                   i.name AS subject, i.purchased_at AS "occurredAt", 'shopping'::text AS view
            FROM shopping_item i
            JOIN instance_member purchaser_member ON purchaser_member.id = i.purchased_by
@@ -147,6 +160,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('task.created:', t.id) AS id,
                   'task.created'::text AS type, creator.first_name AS "actorName",
+                  creator_member.id AS "actorId",
                   t.title AS subject, t.created_at AS "occurredAt", 'tasks'::text AS view
            FROM family_task t
            JOIN resource r ON r.id = t.id
@@ -175,6 +189,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('task.completed:', c.id) AS id,
                   'task.completed'::text AS type, performer.first_name AS "actorName",
+                  performer_member.id AS "actorId",
                   t.title AS subject, c.completed_at AS "occurredAt", 'tasks'::text AS view
            FROM task_completion c
            JOIN family_task t ON t.id = c.task_id
@@ -204,6 +219,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('meal.created:', m.id) AS id,
                   'meal.created'::text AS type, creator.first_name AS "actorName",
+                  creator_member.id AS "actorId",
                   m.name AS subject, m.created_at AS "occurredAt", 'meals'::text AS view
            FROM meal m
            JOIN resource r ON r.id = m.id
@@ -221,6 +237,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('meal.planned:', pe.id) AS id,
                   'meal.planned'::text AS type, planner.first_name AS "actorName",
+                  planner_member.id AS "actorId",
                   m.name AS subject, pe.created_at AS "occurredAt", 'meals'::text AS view
            FROM meal_plan_entry pe
            JOIN meal m ON m.id = pe.meal_id
@@ -239,6 +256,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('bookmark.shared:', b.id) AS id,
                   'bookmark.shared'::text AS type, creator.first_name AS "actorName",
+                  creator_member.id AS "actorId",
                   b.title AS subject, b.created_at AS "occurredAt", 'bookmarks'::text AS view
            FROM bookmark b
            JOIN resource r ON r.id = b.id
@@ -267,6 +285,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('page.updated:', p.id) AS id,
                   'page.updated'::text AS type, editor.first_name AS "actorName",
+                  editor_member.id AS "actorId",
                   p.title AS subject, p.updated_at AS "occurredAt", 'pages'::text AS view
            FROM page p
            JOIN resource r ON r.id = p.id
@@ -297,6 +316,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('collection.item.added:', item.id) AS id,
                   'collection.item.added'::text AS type, author.first_name AS "actorName",
+                  author_member.id AS "actorId",
                   concat(item.title, ' · ', c.name) AS subject,
                   item.created_at AS "occurredAt", 'collections'::text AS view
            FROM collection_item item
@@ -328,6 +348,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('poll.created:', p.id) AS id,
                   'poll.created'::text AS type, creator.first_name AS "actorName",
+                  creator_member.id AS "actorId",
                   p.question AS subject, p.created_at AS "occurredAt", 'polls'::text AS view
            FROM poll p
            JOIN resource r ON r.id = p.id
@@ -356,6 +377,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('idea.created:', i.id) AS id,
                   'idea.created'::text AS type, creator.first_name AS "actorName",
+                  creator_member.id AS "actorId",
                   i.title AS subject, i.created_at AS "occurredAt", 'ideas'::text AS view
            FROM idea i
            JOIN resource r ON r.id = i.id
@@ -384,6 +406,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('contact.created:', c.id) AS id,
                   'contact.created'::text AS type, creator.first_name AS "actorName",
+                  creator_member.id AS "actorId",
                   concat_ws(' ', c.first_name, c.last_name) AS subject,
                   c.created_at AS "occurredAt", 'contacts'::text AS view
            FROM contact c
@@ -413,6 +436,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            SELECT concat('document.created:', d.id) AS id,
                   'document.created'::text AS type, creator.first_name AS "actorName",
+                  creator_member.id AS "actorId",
                   d.title AS subject, d.created_at AS "occurredAt", 'documents'::text AS view
            FROM document d
            JOIN resource r ON r.id = d.id
@@ -437,9 +461,11 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
                )
              )
          ) events
+         LEFT JOIN member_profile_preference actor_profile
+           ON actor_profile.member_id = events."actorId"
          ORDER BY "occurredAt" DESC
          LIMIT 12`,
-          [request.session?.instanceId, request.session?.id],
+          [request.session?.instanceId, request.session?.id, request.session?.role],
         ),
       ]);
 
@@ -511,8 +537,11 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
     return {
       attention,
       activity: activityResult.rows.map(
-        (row): HomeActivity => ({
+        ({ actorAvatarAttachmentId, ...row }): HomeActivity => ({
           ...row,
+          actorAvatarUrl: actorAvatarAttachmentId
+            ? `/api/v1/attachments/${actorAvatarAttachmentId}/content`
+            : null,
           occurredAt: row.occurredAt.toISOString(),
         }),
       ),

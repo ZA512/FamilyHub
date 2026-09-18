@@ -48,6 +48,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -648,6 +649,7 @@ export function IdeasView({
             <IdeaCard
               key={idea.id}
               idea={idea}
+              members={members}
               busy={busyId === idea.id}
               onReact={(value) => void react(idea, value)}
               onComment={(event) => void addComment(idea, event)}
@@ -755,6 +757,7 @@ export function IdeasView({
 
 function IdeaCard({
   idea,
+  members,
   busy,
   onReact,
   onComment,
@@ -765,6 +768,7 @@ function IdeaCard({
   onNavigate,
 }: {
   idea: FamilyIdea;
+  members: FamilyMember[];
   busy: boolean;
   onReact: (value: -1 | 1) => void;
   onComment: (event: SyntheticEvent<HTMLFormElement>) => void;
@@ -853,34 +857,44 @@ function IdeaCard({
 
         {idea.comments.length ? (
           <div className="mt-4 space-y-2">
-            {idea.comments.map((comment) => (
-              <div
-                key={comment.id}
-                className="flex gap-2 rounded-xl bg-muted/45 px-3 py-2.5"
-              >
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-background text-[10px] font-bold">
-                  {comment.authorName.slice(0, 2).toUpperCase()}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium">{comment.authorName}</p>
-                  <p className="mt-0.5 whitespace-pre-wrap text-sm">
-                    {comment.body}
-                  </p>
+            {idea.comments.map((comment) => {
+              const avatarUrl = members.find(
+                (member) => member.id === comment.authorId,
+              )?.avatarUrl;
+              return (
+                <div
+                  key={comment.id}
+                  className="flex gap-2 rounded-xl bg-muted/45 px-3 py-2.5"
+                >
+                  <Avatar className="size-7">
+                    {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
+                    <AvatarFallback className="bg-background text-[10px] font-bold">
+                      {comment.authorName.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium">
+                      {comment.authorName}
+                    </p>
+                    <p className="mt-0.5 whitespace-pre-wrap text-sm">
+                      {comment.body}
+                    </p>
+                  </div>
+                  {comment.editable ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      disabled={busy}
+                      aria-label="Supprimer ce commentaire"
+                      onClick={() => onRemoveComment(comment.id)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  ) : null}
                 </div>
-                {comment.editable ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={busy}
-                    aria-label="Supprimer ce commentaire"
-                    onClick={() => onRemoveComment(comment.id)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                ) : null}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
         <form onSubmit={onComment} className="mt-3 flex gap-2">

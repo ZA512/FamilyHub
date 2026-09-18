@@ -136,6 +136,7 @@ type SettingsViewProps = {
   personalPreferences: PersonalPreferences;
   onPersonalPreferencesChange: (preferences: PersonalPreferences) => void;
   onFirstNameChange: (firstName: string) => void;
+  onAvatarUrlChange: (avatarUrl: string | null) => void;
   onLogout: () => Promise<void>;
 };
 
@@ -148,6 +149,7 @@ export function SettingsView({
   personalPreferences,
   onPersonalPreferencesChange,
   onFirstNameChange,
+  onAvatarUrlChange,
   onLogout,
 }: SettingsViewProps) {
   const [busyKey, setBusyKey] = useState<ModuleKey | null>(null);
@@ -184,6 +186,7 @@ export function SettingsView({
       <ProfileSettings
         csrfToken={csrfToken}
         onFirstNameChange={onFirstNameChange}
+        onAvatarUrlChange={onAvatarUrlChange}
         onLogout={onLogout}
       />
 

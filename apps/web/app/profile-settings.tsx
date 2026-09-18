@@ -30,12 +30,14 @@ import { setLocale } from '@/lib/i18n';
 type ProfileSettingsProps = {
   csrfToken: string;
   onFirstNameChange: (firstName: string) => void;
+  onAvatarUrlChange: (avatarUrl: string | null) => void;
   onLogout: () => Promise<void>;
 };
 
 export function ProfileSettings({
   csrfToken,
   onFirstNameChange,
+  onAvatarUrlChange,
   onLogout,
 }: ProfileSettingsProps) {
   const [profile, setProfile] = useState<MemberProfile | null>(null);
@@ -110,6 +112,7 @@ export function ProfileSettings({
       setAvatarFile(null);
       setRemoveAvatar(false);
       onFirstNameChange(payload.profile.firstName);
+      onAvatarUrlChange(payload.profile.avatarUrl);
       setSaved(true);
     } catch (reason) {
       setError(

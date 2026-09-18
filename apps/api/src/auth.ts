@@ -89,10 +89,11 @@ export function createSessionGuard(pool: Pool) {
       email: string;
       role: 'ADMIN' | 'MEMBER';
       locale: 'fr' | 'en';
+      avatar_attachment_id: string | null;
     }>(
       `SELECT s.id AS session_id, s.csrf_hash, m.id AS member_id, m.user_id,
               m.instance_id, i.name AS instance_name, u.first_name, u.email, m.role,
-              COALESCE(p.locale, i.locale, 'fr') AS locale
+              COALESCE(p.locale, i.locale, 'fr') AS locale, p.avatar_attachment_id
        FROM session s
        JOIN instance_member m ON m.id = s.member_id
        JOIN instance i ON i.id = m.instance_id
@@ -123,6 +124,9 @@ export function createSessionGuard(pool: Pool) {
       email: row.email,
       role: row.role,
       locale: row.locale,
+      avatarUrl: row.avatar_attachment_id
+        ? `/api/v1/attachments/${row.avatar_attachment_id}/content`
+        : null,
     };
   };
 }
