@@ -6,26 +6,44 @@ import {
   useState,
   type SyntheticEvent,
 } from 'react';
-import { formatDate, t } from '@/lib/i18n';
+import { formatDate } from '@/lib/i18n';
 import {
   Check,
   CloudOff,
   LoaderCircle,
+  Pencil,
   Plus,
   RefreshCw,
   RotateCcw,
   ShoppingBasket,
+  Trash2,
+  UserRound,
 } from 'lucide-react';
 
-import type { ShoppingItem, ShoppingItemCreate } from '@familyhub/contracts';
+import type {
+  ShoppingItem,
+  ShoppingItemCreate,
+  ShoppingItemUpdate,
+} from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -37,7 +55,6 @@ import {
   shoppingHistoryItems,
   sortPendingShoppingItems,
   type ShoppingHistoryScope,
-  type ShoppingHistoryStatus,
 } from '@/lib/shopping-history';
 import {
   applyOptimisticShoppingUpdate,
@@ -88,10 +105,9 @@ export function ShoppingView({
   const [pendingCount, setPendingCount] = useState(0);
   const [conflictCount, setConflictCount] = useState(0);
   const [error, setError] = useState('');
-  const [historyScope, setHistoryScope] =
-    useState<ShoppingHistoryScope>('mine');
-  const [historyStatus, setHistoryStatus] =
-    useState<ShoppingHistoryStatus>('all');
+  const [scope, setScope] = useState<ShoppingHistoryScope>('mine');
+  const [editedItem, setEditedItem] = useState<ShoppingItem | null>(null);
+  const [toDelete, setToDelete] = useState<ShoppingItem | null>(null);
   const [showOlder, setShowOlder] = useState(false);
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(20);
   const synchronization = useRef<Promise<void> | null>(null);
@@ -194,18 +210,21 @@ export function ShoppingView({
   }, [synchronize]);
 
   const pending = useMemo(() => sortPendingShoppingItems(items), [items]);
+  const visiblePending = pending.filter(
+    (item) => scope === 'all' || item.requestedBy === currentMemberId,
+  );
   const now = new Date();
   const recentHistory = shoppingHistoryItems(
     items,
-    historyScope,
-    historyStatus,
+    scope,
+    'purchased',
     currentMemberId,
     now,
   );
   const fullHistory = shoppingHistoryItems(
     items,
-    historyScope,
-    historyStatus,
+    scope,
+    'purchased',
     currentMemberId,
     now,
     true,
@@ -278,10 +297,9 @@ export function ShoppingView({
     }
   }
 
-  async function setPurchased(item: ShoppingItem, value: boolean) {
+  async function updateItem(item: ShoppingItem, update: ShoppingItemUpdate) {
     setBusyId(item.id);
     setError('');
-    const update = { purchased: value };
     const optimisticItem = applyOptimisticShoppingUpdate(item, update, member);
     const optimisticItems = items.map((candidate) =>
       candidate.id === item.id ? optimisticItem : candidate,
@@ -293,7 +311,7 @@ export function ShoppingView({
       if (!navigator.onLine || !csrfToken || item.id.startsWith('offline:')) {
         await enqueueShoppingUpdate(sessionKey, optimisticItem, update);
         await refreshCounts();
-        return;
+        return true;
       }
 
       let response: Response | null = null;
@@ -325,9 +343,57 @@ export function ShoppingView({
         await writeShoppingCache(sessionKey, nextItems);
         setServerAvailable(true);
       }
+      return true;
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Modification impossible.',
+      );
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function setPurchased(item: ShoppingItem, value: boolean) {
+    await updateItem(item, { purchased: value });
+  }
+
+  async function editItem(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editedItem) return;
+    const data = new FormData(event.currentTarget);
+    const update = {
+      name: formText(data, 'name'),
+      quantity: formText(data, 'quantity') || null,
+      note: formText(data, 'note') || null,
+    } satisfies ShoppingItemUpdate;
+    if (await updateItem(editedItem, update)) setEditedItem(null);
+  }
+
+  async function deleteItem() {
+    if (!toDelete) return;
+    if (!navigator.onLine || !csrfToken || toDelete.id.startsWith('offline:')) {
+      setError(
+        'La suppression sera disponible dès que cet article aura été synchronisé.',
+      );
+      setToDelete(null);
+      return;
+    }
+    setBusyId(toDelete.id);
+    setError('');
+    try {
+      const response = await fetch(`/api/v1/shopping-items/${toDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'x-csrf-token': csrfToken },
+      });
+      if (!response.ok) throw new Error('Impossible de supprimer cet article.');
+      const nextItems = items.filter((item) => item.id !== toDelete.id);
+      setItems(nextItems);
+      await writeShoppingCache(sessionKey, nextItems);
+      setToDelete(null);
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : 'Suppression impossible.',
       );
     } finally {
       setBusyId(null);
@@ -403,6 +469,103 @@ export function ShoppingView({
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={Boolean(editedItem)}
+        onOpenChange={(open) => {
+          if (!open && !busyId) setEditedItem(null);
+        }}
+      >
+        <DialogContent key={editedItem?.id} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Modifier l’article</DialogTitle>
+            <DialogDescription>
+              Mettez à jour le nom, la quantité ou la note.
+            </DialogDescription>
+          </DialogHeader>
+          {editedItem ? (
+            <form className="space-y-4" onSubmit={editItem}>
+              <div className="space-y-2">
+                <Label htmlFor="shopping-edit-name">Article</Label>
+                <Input
+                  id="shopping-edit-name"
+                  name="name"
+                  required
+                  maxLength={160}
+                  defaultValue={editedItem.name}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="shopping-edit-quantity">Quantité</Label>
+                <Input
+                  id="shopping-edit-quantity"
+                  name="quantity"
+                  maxLength={80}
+                  defaultValue={editedItem.quantity ?? ''}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="shopping-edit-note">Note</Label>
+                <Textarea
+                  id="shopping-edit-note"
+                  name="note"
+                  maxLength={500}
+                  defaultValue={editedItem.note ?? ''}
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={Boolean(busyId)}
+                  onClick={() => setEditedItem(null)}
+                >
+                  Annuler
+                </Button>
+                <Button type="submit" disabled={Boolean(busyId)}>
+                  {busyId ? (
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                  ) : null}
+                  Enregistrer
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(toDelete)}
+        onOpenChange={(open) => {
+          if (!open && !busyId) setToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cet article ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              « {toDelete?.name} » disparaîtra de la liste de courses.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(busyId)}>
+              Annuler
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={Boolean(busyId)}
+              onClick={() => void deleteItem()}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {busyId ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Trash2 aria-hidden="true" />
+              )}
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <section>
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -413,8 +576,8 @@ export function ShoppingView({
               Courses
             </h1>
             <p className="mt-1 text-base text-muted-foreground">
-              {pending.length
-                ? `${pending.length} article${pending.length > 1 ? 's' : ''} à acheter`
+              {visiblePending.length
+                ? `${visiblePending.length} article${visiblePending.length > 1 ? 's' : ''} à acheter`
                 : 'La liste est à jour'}
             </p>
           </div>
@@ -426,6 +589,21 @@ export function ShoppingView({
             Ajouter un article
           </Button>
         </div>
+
+        <Tabs
+          value={scope}
+          onValueChange={(value) => {
+            setScope(value as ShoppingHistoryScope);
+            setShowOlder(false);
+            setVisibleHistoryCount(20);
+          }}
+          className="mb-5"
+        >
+          <TabsList className="max-w-full">
+            <TabsTrigger value="mine">Mes demandes</TabsTrigger>
+            <TabsTrigger value="all">Toutes les demandes</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {connectionProblem || pendingCount || conflictCount || syncing ? (
           <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
@@ -487,15 +665,18 @@ export function ShoppingView({
               Chargement de la liste…
             </CardContent>
           </Card>
-        ) : pending.length ? (
+        ) : visiblePending.length ? (
           <Card className="gap-0 overflow-hidden py-0">
-            {pending.map((item, index) => (
+            {visiblePending.map((item, index) => (
               <ShoppingRow
                 key={item.id}
                 item={item}
                 busy={busyId === item.id}
                 divided={index > 0}
+                editable={item.requestedBy === currentMemberId}
                 onToggle={() => setPurchased(item, true)}
+                onEdit={() => setEditedItem(item)}
+                onDelete={() => setToDelete(item)}
               />
             ))}
           </Card>
@@ -514,43 +695,16 @@ export function ShoppingView({
         )}
 
         {!loading ? (
-          <section className="mt-8" aria-labelledby="shopping-follow-up-title">
+          <section className="mt-8" aria-labelledby="shopping-purchased-title">
             <h2
-              id="shopping-follow-up-title"
+              id="shopping-purchased-title"
               className="mb-3 text-lg font-semibold"
             >
-              Suivi des courses
+              Déjà achetés
             </h2>
-            <Tabs
-              value={historyScope}
-              onValueChange={(value) => {
-                setHistoryScope(value as ShoppingHistoryScope);
-                setShowOlder(false);
-                setVisibleHistoryCount(20);
-              }}
-            >
-              <TabsList className="mb-3 max-w-full overflow-x-auto">
-                <TabsTrigger value="mine">Mes demandes</TabsTrigger>
-                <TabsTrigger value="all">Toutes les demandes</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <Tabs
-              value={historyStatus}
-              onValueChange={(value) => {
-                setHistoryStatus(value as ShoppingHistoryStatus);
-                setShowOlder(false);
-                setVisibleHistoryCount(20);
-              }}
-            >
-              <TabsList className="mb-3 max-w-full overflow-x-auto">
-                <TabsTrigger value="all">Toutes</TabsTrigger>
-                <TabsTrigger value="pending">À acheter</TabsTrigger>
-                <TabsTrigger value="purchased">Déjà achetées</TabsTrigger>
-              </TabsList>
-            </Tabs>
             <p className="mb-3 text-xs text-muted-foreground">
-              Achats des trois derniers jours ; les demandes encore à acheter
-              restent visibles. Les achats sont supprimés après sept jours.
+              Achats des trois derniers jours. Ils sont supprimés après sept
+              jours.
             </p>
             {visibleHistory.length ? (
               <Card className="gap-0 overflow-hidden py-0">
@@ -560,20 +714,19 @@ export function ShoppingView({
                     item={item}
                     busy={busyId === item.id}
                     divided={index > 0}
+                    editable={item.requestedBy === currentMemberId}
                     onToggle={() => setPurchased(item, !item.purchasedAt)}
+                    onEdit={() => setEditedItem(item)}
+                    onDelete={() => setToDelete(item)}
                   />
                 ))}
               </Card>
             ) : (
               <Card className="border-dashed bg-muted/20">
                 <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  {historyStatus === 'purchased'
-                    ? historyScope === 'mine'
-                      ? 'Aucune de vos demandes n’a été achetée récemment.'
-                      : 'Aucune demande achetée récemment.'
-                    : historyScope === 'mine'
-                      ? 'Aucune de vos demandes à suivre.'
-                      : 'Aucune demande à suivre.'}
+                  {scope === 'mine'
+                    ? 'Aucune de vos demandes n’a été achetée récemment.'
+                    : 'Aucune demande achetée récemment.'}
                 </CardContent>
               </Card>
             )}
@@ -608,33 +761,48 @@ function ShoppingRow({
   item,
   busy,
   divided,
+  editable,
   onToggle,
+  onEdit,
+  onDelete,
 }: {
   item: ShoppingItem;
   busy: boolean;
   divided: boolean;
+  editable: boolean;
   onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
+  const [mobileActionsVisible, setMobileActionsVisible] = useState(false);
   const purchased = Boolean(item.purchasedAt);
   const local = item.id.startsWith('offline:');
   const date = formatDate(item.purchasedAt ?? item.createdAt, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    day: 'numeric',
+    month: 'short',
   });
-  const activity = item.purchasedAt
+  const activity = purchased
     ? item.purchasedByName
-      ? t('Acheté le {0} par {1}', { 0: date, 1: item.purchasedByName })
-      : t('Acheté le {0}', { 0: date })
-    : item.source === 'MANUAL'
-      ? t('Demandé le {0} par {1}', { 0: date, 1: item.requestedByName })
-      : t('Ajouté depuis un plat le {0} par {1}', {
-          0: date,
-          1: item.requestedByName,
-        });
+      ? `Acheté le ${date} par ${item.purchasedByName}`
+      : `Acheté le ${date}`
+    : `Demandé le ${date} par ${item.requestedByName}`;
+
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-4 ${divided ? 'border-t' : ''}`}
+      className={`group relative flex min-w-0 items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 ${divided ? 'border-t' : ''}`}
     >
+      {editable ? (
+        <button
+          type="button"
+          className="absolute inset-0 z-0 cursor-pointer md:hidden"
+          onClick={() => setMobileActionsVisible((visible) => !visible)}
+          aria-label={
+            mobileActionsVisible
+              ? `Masquer les actions pour ${item.name}`
+              : `Afficher les actions pour ${item.name}`
+          }
+        />
+      ) : null}
       <Button
         type="button"
         size="icon"
@@ -646,7 +814,7 @@ function ShoppingRow({
             : `Marquer ${item.name} comme acheté`
         }
         onClick={onToggle}
-        className={`shrink-0 rounded-xl ${purchased ? 'text-primary' : ''}`}
+        className={`relative z-10 size-11 shrink-0 rounded-xl sm:size-12 ${purchased ? 'text-primary' : ''}`}
       >
         {busy ? (
           <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -656,27 +824,76 @@ function ShoppingRow({
           <Check aria-hidden="true" />
         )}
       </Button>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className={`font-medium ${purchased ? 'line-through' : ''}`}>
-            {item.name}
-          </p>
-          <Badge variant="secondary" className="text-xs">
-            {item.source === 'MANUAL' ? 'Demande' : 'Repas'}
+      <span
+        className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground"
+        title={item.requestedByName}
+        aria-label={`Demandé par ${item.requestedByName}`}
+      >
+        <UserRound className="size-4" aria-hidden="true" />
+      </span>
+      <span
+        className="max-w-20 min-w-7 shrink-0 truncate text-center text-sm font-semibold text-foreground"
+        title={item.quantity ?? '1'}
+      >
+        {item.quantity || '1'}
+      </span>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span
+          className={`truncate font-medium ${purchased ? 'line-through text-muted-foreground' : ''}`}
+          title={item.note ? `${item.name} — ${item.note}` : item.name}
+        >
+          {item.name}
+        </span>
+        <Badge
+          variant="secondary"
+          className={`${mobileActionsVisible ? 'hidden sm:inline-flex' : 'inline-flex'} h-5 shrink-0 px-1.5 text-[10px] sm:px-2 sm:text-xs`}
+        >
+          {item.source === 'MANUAL' ? 'Demande' : 'Repas'}
+        </Badge>
+        {local ? (
+          <Badge
+            variant="outline"
+            className="hidden shrink-0 text-amber-800 lg:inline-flex"
+          >
+            À synchroniser
           </Badge>
-          {local ? (
-            <Badge variant="outline" className="text-amber-800">
-              À synchroniser
-            </Badge>
-          ) : null}
-        </div>
-        {item.quantity || item.note ? (
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">
-            {[item.quantity, item.note].filter(Boolean).join(' · ')}
-          </p>
         ) : null}
-        <p className="mt-0.5 text-xs text-muted-foreground">{activity}</p>
+        <span
+          className={`${mobileActionsVisible ? 'hidden sm:inline' : 'inline'} shrink-0 text-[11px] text-muted-foreground sm:text-xs`}
+        >
+          {date}
+        </span>
       </div>
+      {editable ? (
+        <div
+          className={`${mobileActionsVisible ? 'flex' : 'hidden'} relative z-10 shrink-0 items-center gap-0.5 md:flex md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100`}
+        >
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={onEdit}
+            aria-label={`Modifier ${item.name}`}
+            title="Modifier"
+          >
+            <Pencil aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={onDelete}
+            aria-label={`Supprimer ${item.name}`}
+            title="Supprimer"
+            className="hover:text-red-600"
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
+      ) : null}
+      <span className="sr-only">{activity}</span>
     </div>
   );
 }

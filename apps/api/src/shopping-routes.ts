@@ -187,12 +187,23 @@ export async function registerShoppingRoutes(app: FastifyInstance, pool: Pool) {
       const itemId = shoppingItemIdSchema.safeParse(request.params.id);
       if (!itemId.success) return reply.code(404).send({ error: 'SHOPPING_ITEM_NOT_FOUND' });
 
-      const current = await pool.query<{ purchased_at: Date | null; purchased_by: string | null }>(
-        `SELECT purchased_at, purchased_by FROM shopping_item
+      const current = await pool.query<{
+        purchased_at: Date | null;
+        purchased_by: string | null;
+        requested_by: string;
+      }>(
+        `SELECT purchased_at, purchased_by, requested_by FROM shopping_item
          WHERE id = $1 AND instance_id = $2 AND deleted_at IS NULL`,
         [itemId.data, request.session?.instanceId],
       );
       if (!current.rows[0]) return reply.code(404).send({ error: 'SHOPPING_ITEM_NOT_FOUND' });
+      const changesRequest =
+        parsed.data.name !== undefined ||
+        Object.hasOwn(parsed.data, 'quantity') ||
+        Object.hasOwn(parsed.data, 'note');
+      if (changesRequest && current.rows[0].requested_by !== request.session?.id) {
+        return reply.code(403).send({ error: 'SHOPPING_ITEM_ACTION_FORBIDDEN' });
+      }
 
       const purchasedAt =
         parsed.data.purchased === undefined
@@ -248,6 +259,15 @@ export async function registerShoppingRoutes(app: FastifyInstance, pool: Pool) {
       if (!(await requireShoppingModule(request, reply, pool))) return;
       const itemId = shoppingItemIdSchema.safeParse(request.params.id);
       if (!itemId.success) return reply.code(404).send({ error: 'SHOPPING_ITEM_NOT_FOUND' });
+      const current = await pool.query<{ requested_by: string }>(
+        `SELECT requested_by FROM shopping_item
+         WHERE id = $1 AND instance_id = $2 AND deleted_at IS NULL`,
+        [itemId.data, request.session?.instanceId],
+      );
+      if (!current.rows[0]) return reply.code(404).send({ error: 'SHOPPING_ITEM_NOT_FOUND' });
+      if (current.rows[0].requested_by !== request.session?.id) {
+        return reply.code(403).send({ error: 'SHOPPING_ITEM_ACTION_FORBIDDEN' });
+      }
       const result = await pool.query(
         `UPDATE shopping_item SET deleted_at = now(), updated_at = now(), version = version + 1
          WHERE id = $1 AND instance_id = $2 AND deleted_at IS NULL`,
