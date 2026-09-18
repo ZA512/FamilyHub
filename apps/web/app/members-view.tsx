@@ -120,7 +120,7 @@ export function MembersView({
   async function revokeInvitation(invitation: PendingInvitation) {
     if (
       !window.confirm(
-        t("Annuler l’invitation envoyée à {0} ?", {
+        t('Annuler l’invitation envoyée à {0} ?', {
           0: invitation.email,
         }),
       )
@@ -391,7 +391,7 @@ export function MembersView({
             <Button
               type="submit"
               disabled={submitting || !csrfToken}
-              className="w-full bg-[#087f72] hover:bg-[#076d63]"
+              className="w-full bg-primary hover:bg-primary/80"
             >
               {submitting ? (
                 <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -409,9 +409,7 @@ export function MembersView({
       <section>
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-1 text-sm font-medium text-[#087f72]">
-              Votre foyer
-            </p>
+            <p className="mb-1 text-sm font-medium text-primary">Votre foyer</p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
               Membres et groupes
             </h1>
@@ -430,7 +428,7 @@ export function MembersView({
               />
               <Button
                 onClick={openNewGroup}
-                className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+                className="rounded-xl bg-primary hover:bg-primary/80"
               >
                 <Plus aria-hidden="true" />
                 Nouveau groupe
@@ -544,7 +542,7 @@ export function MembersView({
                 {groups.map((group) => (
                   <Card key={group.id} className="gap-4">
                     <CardHeader className="flex-row items-start gap-3">
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
                         {group.isSystem ? (
                           <LockKeyhole className="size-4" aria-hidden="true" />
                         ) : (
@@ -685,7 +683,7 @@ function MemberCard({
           {member.avatarUrl ? (
             <AvatarImage src={member.avatarUrl} alt="" />
           ) : null}
-          <AvatarFallback className="bg-[#d9f4ef] font-semibold text-[#075e55]">
+          <AvatarFallback className="bg-accent font-semibold text-accent-foreground">
             {initials || member.firstName.slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>

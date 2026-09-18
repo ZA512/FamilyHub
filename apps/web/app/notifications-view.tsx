@@ -138,7 +138,7 @@ export function NotificationsView({
     <section>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-1 text-sm font-medium text-[#087f72]">
+          <p className="mb-1 text-sm font-medium text-primary">
             À ne pas manquer
           </p>
           <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -198,7 +198,7 @@ export function NotificationsView({
       ) : (
         <Card className="border-dashed bg-muted/20">
           <CardContent className="flex flex-col items-center py-12 text-center">
-            <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
+            <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-secondary text-secondary-foreground">
               <Bell aria-hidden="true" />
             </span>
             <h2 className="font-semibold">Aucune notification</h2>
@@ -227,9 +227,9 @@ function NotificationRow({
   const unread = !notification.readAt;
   return (
     <article
-      className={`flex items-start gap-3 px-4 py-4 ${divided ? 'border-t' : ''} ${unread ? 'bg-[#f3fbf9]' : ''}`}
+      className={`flex items-start gap-3 px-4 py-4 ${divided ? 'border-t' : ''} ${unread ? 'bg-accent/35' : ''}`}
     >
-      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
         {notification.moduleKey === 'shopping' ? (
           <ShoppingBasket className="size-4" aria-hidden="true" />
         ) : notification.moduleKey === 'bookmarks' ? (

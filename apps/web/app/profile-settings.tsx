@@ -136,7 +136,7 @@ export function ProfileSettings({
   return (
     <Card className="mb-8">
       <CardHeader className="flex-row items-center gap-3">
-        <span className="grid size-10 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+        <span className="grid size-10 place-items-center rounded-xl bg-secondary text-secondary-foreground">
           <UserRound className="size-4" aria-hidden="true" />
         </span>
         <div>
@@ -165,7 +165,7 @@ export function ProfileSettings({
                 {!removeAvatar && profile.avatarUrl ? (
                   <AvatarImage src={profile.avatarUrl} alt="" />
                 ) : null}
-                <AvatarFallback className="bg-[#d9f4ef] text-lg font-semibold text-[#075e55]">
+                <AvatarFallback className="bg-accent text-lg font-semibold text-accent-foreground">
                   {profile.firstName.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -332,7 +332,7 @@ export function ProfileSettings({
               <Button
                 type="submit"
                 disabled={saving || loggingOut || !csrfToken}
-                className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+                className="rounded-xl bg-primary hover:bg-primary/80"
               >
                 {saving ? (
                   <LoaderCircle className="animate-spin" aria-hidden="true" />

@@ -444,10 +444,10 @@ export default function DashboardPage({
                   type="button"
                   aria-current={activeView === item.id ? 'page' : undefined}
                   onClick={() => navigate(item.id)}
-                  className={`flex min-h-20 flex-col items-start justify-between rounded-xl border p-3 text-left font-medium transition-colors hover:bg-muted ${activeView === item.id ? 'border-[#087f72] bg-[#e8f7f4] text-[#075e55]' : 'bg-background'}`}
+                  className={`flex min-h-20 flex-col items-start justify-between rounded-xl border p-3 text-left font-medium transition-colors hover:bg-muted ${activeView === item.id ? 'border-primary bg-accent text-accent-foreground' : 'bg-background'}`}
                 >
                   <item.icon
-                    className="size-5 text-[#087f72]"
+                    className="size-5 text-primary"
                     aria-hidden="true"
                   />
                   <span>{item.label}</span>
@@ -457,9 +457,9 @@ export default function DashboardPage({
               type="button"
               aria-current={activeView === 'settings' ? 'page' : undefined}
               onClick={() => navigate('settings')}
-              className={`flex min-h-20 flex-col items-start justify-between rounded-xl border p-3 text-left font-medium transition-colors hover:bg-muted ${activeView === 'settings' ? 'border-[#087f72] bg-[#e8f7f4] text-[#075e55]' : 'bg-background'}`}
+              className={`flex min-h-20 flex-col items-start justify-between rounded-xl border p-3 text-left font-medium transition-colors hover:bg-muted ${activeView === 'settings' ? 'border-primary bg-accent text-accent-foreground' : 'bg-background'}`}
             >
-              <Settings className="size-5 text-[#087f72]" aria-hidden="true" />
+              <Settings className="size-5 text-primary" aria-hidden="true" />
               <span>Paramètres</span>
             </button>
           </nav>
@@ -484,7 +484,7 @@ export default function DashboardPage({
                   className="flex min-h-20 flex-col items-start justify-between rounded-xl border bg-background p-3 text-left font-medium transition-colors hover:bg-muted"
                 >
                   <item.icon
-                    className="size-5 text-[#087f72]"
+                    className="size-5 text-primary"
                     aria-hidden="true"
                   />
                   <span>{item.label}</span>
@@ -585,7 +585,7 @@ export default function DashboardPage({
                   className="rounded-xl px-2"
                   onClick={() => navigate('settings')}
                 >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#d9f4ef] text-xs font-bold text-[#075e55]">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
                     {initials}
                   </span>
                   <span className="flex min-w-0 flex-col leading-tight">
@@ -652,7 +652,7 @@ export default function DashboardPage({
             {canCreate ? (
               <Button
                 onClick={() => setQuickAddOpen(true)}
-                className="hidden rounded-xl bg-[#087f72] hover:bg-[#076d63] sm:inline-flex"
+                className="hidden rounded-xl bg-primary hover:bg-primary/80 sm:inline-flex"
               >
                 <Plus data-icon="inline-start" aria-hidden="true" />
                 Ajouter
@@ -892,7 +892,7 @@ export default function DashboardPage({
               size="icon-lg"
               aria-label="Ajouter"
               onClick={() => setQuickAddOpen(true)}
-              className="fixed bottom-20 right-4 z-30 size-12 rounded-2xl bg-[#087f72] shadow-lg hover:bg-[#076d63] sm:hidden"
+              className="fixed bottom-20 right-4 z-30 size-12 rounded-2xl bg-primary shadow-lg hover:bg-primary/80 sm:hidden"
             >
               <Plus className="size-5" aria-hidden="true" />
             </Button>
@@ -922,7 +922,7 @@ export default function DashboardPage({
                             ? 'page'
                             : undefined
                       }
-                      className={`relative flex size-full flex-col items-center justify-center gap-1 text-xs ${item.id === 'more' ? (activeViewInMoreNavigation ? 'font-semibold text-[#087f72]' : 'text-muted-foreground') : activeView === item.id ? 'font-semibold text-[#087f72]' : 'text-muted-foreground'}`}
+                      className={`relative flex size-full flex-col items-center justify-center gap-1 text-xs ${item.id === 'more' ? (activeViewInMoreNavigation ? 'font-semibold text-primary' : 'text-muted-foreground') : activeView === item.id ? 'font-semibold text-primary' : 'text-muted-foreground'}`}
                     >
                       <item.icon className="size-5" aria-hidden="true" />
                       <span>{item.label}</span>

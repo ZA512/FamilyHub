@@ -1,7 +1,7 @@
 import 'temporal-polyfill/global';
 import '@fullcalendar/react/skeleton.css';
 import '@fullcalendar/react/themes/forma/theme.css';
-import '@fullcalendar/react/themes/forma/palettes/green.css';
+import '@fullcalendar/react/themes/forma/palettes/blue.css';
 
 import FullCalendar, {
   type CalendarRef,
@@ -322,7 +322,7 @@ export function AgendaView({
       <section>
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-1 text-sm font-medium text-[#087f72]">
+            <p className="mb-1 text-sm font-medium text-primary">
               Temps partagé
             </p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -334,7 +334,7 @@ export function AgendaView({
           </div>
           <Button
             onClick={() => openComposer()}
-            className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+            className="rounded-xl bg-primary hover:bg-primary/80"
           >
             <Plus aria-hidden="true" /> Ajouter un événement
           </Button>
@@ -353,7 +353,7 @@ export function AgendaView({
           {loading ? (
             <span className="absolute right-4 top-4 z-10 grid size-8 place-items-center rounded-full bg-background shadow">
               <LoaderCircle
-                className="size-4 animate-spin text-[#087f72]"
+                className="size-4 animate-spin text-primary"
                 aria-label="Chargement"
               />
             </span>
@@ -714,7 +714,7 @@ function EventComposer({
           <Button
             type="submit"
             disabled={submitting || !csrfToken}
-            className="w-full bg-[#087f72] hover:bg-[#076d63]"
+            className="w-full bg-primary hover:bg-primary/80"
           >
             {submitting ? (
               <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -771,7 +771,7 @@ function EventDetails({
       <div className="space-y-4">
         <p className="flex items-start gap-3 text-sm">
           <Clock
-            className="mt-0.5 size-4 shrink-0 text-[#087f72]"
+            className="mt-0.5 size-4 shrink-0 text-primary"
             aria-hidden="true"
           />
           <span>{formatEntryDate(entry)}</span>
@@ -779,7 +779,7 @@ function EventDetails({
         {entry.location ? (
           <p className="flex items-start gap-3 text-sm">
             <MapPin
-              className="mt-0.5 size-4 shrink-0 text-[#087f72]"
+              className="mt-0.5 size-4 shrink-0 text-primary"
               aria-hidden="true"
             />
             {entry.location}
@@ -896,7 +896,10 @@ function toCalendarEvent(entry: AgendaEntry): EventInput {
       ? { backgroundColor: '#e49131', borderColor: '#c97618' }
       : entry.visibility === 'PRIVATE'
         ? { backgroundColor: '#5651a8', borderColor: '#45418e' }
-        : { backgroundColor: '#087f72', borderColor: '#076d63' };
+        : {
+            backgroundColor: 'var(--primary)',
+            borderColor: 'color-mix(in oklch, var(--primary), black 14%)',
+          };
   return {
     id: entry.id,
     title: entry.sourceType === 'task' ? `✓ ${entry.title}` : entry.title,

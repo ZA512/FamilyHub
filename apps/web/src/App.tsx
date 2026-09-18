@@ -376,7 +376,7 @@ export function App() {
         'content',
         locale === 'en'
           ? 'The private space for organising household life.'
-          : "L’espace privé pour organiser la vie du foyer.",
+          : 'L’espace privé pour organiser la vie du foyer.',
       );
   }, [locale]);
 
@@ -396,7 +396,7 @@ export function App() {
   }
 
   return (
-    <main className="grid min-h-svh place-items-center bg-[radial-gradient(circle_at_top_left,#daf4ef_0,transparent_34%),linear-gradient(150deg,#f9fcfc_0%,#eef4f7_100%)] px-4 py-10">
+    <main className="familyhub-auth-background grid min-h-svh place-items-center px-4 py-10">
       <div className="w-full max-w-md">
         <fieldset
           className="mb-4 flex justify-end gap-1 border-0 p-0"
@@ -422,7 +422,7 @@ export function App() {
           </Button>
         </fieldset>
         <div className="mb-6 flex items-center justify-center gap-3">
-          <div className="grid size-11 place-items-center rounded-2xl bg-[#102b3f] text-white shadow-lg">
+          <div className="grid size-11 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
             <Sparkles className="size-5" aria-hidden="true" />
           </div>
           <div>
@@ -431,9 +431,9 @@ export function App() {
           </div>
         </div>
 
-        <Card className="gap-5 border-0 bg-white/90 py-6 shadow-[0_24px_80px_-45px_rgba(16,43,63,.55)] ring-black/5 backdrop-blur">
+        <Card className="gap-5 border-0 bg-card/90 py-6 shadow-[0_24px_80px_-45px_rgba(16,34,52,.55)] ring-foreground/5 backdrop-blur">
           <CardHeader className="px-6">
-            <span className="mb-2 grid size-10 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+            <span className="mb-2 grid size-10 place-items-center rounded-xl bg-secondary text-secondary-foreground">
               {view === 'setup' ? (
                 <KeyRound className="size-5" aria-hidden="true" />
               ) : view === 'invite' ? (
@@ -563,7 +563,7 @@ export function App() {
                 type="submit"
                 size="lg"
                 disabled={submitting}
-                className="mt-2 h-11 w-full rounded-xl bg-[#087f72] text-base hover:bg-[#076d63]"
+                className="mt-2 h-11 w-full rounded-xl bg-primary text-base hover:bg-primary/80"
               >
                 {submitting ? (
                   <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -611,7 +611,7 @@ function FormField({
       <Input
         id={name}
         required={required}
-        className="h-11 rounded-xl bg-white"
+        className="h-11 rounded-xl bg-background"
         {...inputProps}
       />
     </div>
@@ -622,7 +622,7 @@ function LoadingScreen() {
   return (
     <main className="grid min-h-svh place-items-center bg-background">
       <div className="flex flex-col items-center gap-3 text-muted-foreground">
-        <div className="grid size-12 place-items-center rounded-2xl bg-[#102b3f] text-white">
+        <div className="grid size-12 place-items-center rounded-2xl bg-primary text-primary-foreground">
           <Sparkles className="size-5" aria-hidden="true" />
         </div>
         <LoaderCircle className="size-5 animate-spin" aria-label="Chargement" />

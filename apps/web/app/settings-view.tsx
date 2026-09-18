@@ -172,7 +172,7 @@ export function SettingsView({
   return (
     <section>
       <div className="mb-6">
-        <p className="mb-1 text-sm font-medium text-[#087f72]">Votre espace</p>
+        <p className="mb-1 text-sm font-medium text-primary">Votre espace</p>
         <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
           Paramètres
         </h1>
@@ -219,7 +219,8 @@ export function SettingsView({
             {role === 'ADMIN' ? (
               <a
                 className={buttonVariants({
-                  className: 'bg-[#087f72] text-white hover:bg-[#076d63]',
+                  className:
+                    'bg-primary text-primary-foreground hover:bg-primary/80',
                 })}
                 href="/api/v1/exports/instance"
                 download
@@ -258,7 +259,7 @@ export function SettingsView({
         </p>
       ) : null}
 
-      <Card className="mb-6 gap-3 bg-[#102b3f] text-white">
+      <Card className="mb-6 gap-3 bg-primary text-primary-foreground">
         <CardHeader>
           <CardTitle className="text-base">Toujours disponibles</CardTitle>
           <CardDescription className="text-white/60">
@@ -303,7 +304,7 @@ export function SettingsView({
                 key={module.key}
                 className={`flex items-center gap-4 px-4 py-4 sm:px-5 ${index ? 'border-t' : ''}`}
               >
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
                   <module.icon className="size-4" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -384,7 +385,7 @@ function BookmarkImport({ csrfToken }: { csrfToken: string }) {
   return (
     <div className="border-t pt-4">
       <div className="mb-3 flex items-start gap-3">
-        <Upload className="mt-0.5 size-4 text-[#087f72]" aria-hidden="true" />
+        <Upload className="mt-0.5 size-4 text-primary" aria-hidden="true" />
         <div>
           <p className="text-sm font-medium">Importer des bookmarks</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -420,7 +421,7 @@ function BookmarkImport({ csrfToken }: { csrfToken: string }) {
         </Button>
       </div>
       {message ? (
-        <output className="mt-3 block text-sm text-[#087f72]">
+        <output className="mt-3 block text-sm text-primary">
           {t(message)}
         </output>
       ) : null}
@@ -786,7 +787,7 @@ function NotificationSettings({ csrfToken }: { csrfToken: string }) {
                       size="sm"
                       variant={muted ? 'default' : 'outline'}
                       onClick={() => toggleModule(module.key, !muted)}
-                      className={muted ? 'bg-[#102b3f] hover:bg-[#183b55]' : ''}
+                      className={muted ? 'bg-primary hover:bg-primary/80' : ''}
                       aria-pressed={muted}
                     >
                       {module.label}
@@ -818,7 +819,7 @@ function NotificationSettings({ csrfToken }: { csrfToken: string }) {
                   disabled={pushBusy || !csrfToken}
                   onClick={() => void togglePush()}
                   className={
-                    pushSubscribed ? '' : 'bg-[#087f72] hover:bg-[#076d63]'
+                    pushSubscribed ? '' : 'bg-primary hover:bg-primary/80'
                   }
                 >
                   {pushBusy ? (
@@ -832,9 +833,7 @@ function NotificationSettings({ csrfToken }: { csrfToken: string }) {
             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
               <div>
                 {message ? (
-                  <output className="text-sm text-[#087f72]">
-                    {t(message)}
-                  </output>
+                  <output className="text-sm text-primary">{t(message)}</output>
                 ) : null}
                 {error ? (
                   <p role="alert" className="text-sm text-destructive">
@@ -846,7 +845,7 @@ function NotificationSettings({ csrfToken }: { csrfToken: string }) {
                 type="button"
                 disabled={saving || !csrfToken}
                 onClick={() => void save()}
-                className="bg-[#087f72] hover:bg-[#076d63]"
+                className="bg-primary hover:bg-primary/80"
               >
                 {saving ? (
                   <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -900,7 +899,7 @@ function AuditLogSettings() {
   return (
     <Card className="mb-8">
       <CardHeader className="flex-row items-start gap-4">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
           <ShieldCheck className="size-5" aria-hidden="true" />
         </span>
         <div>
@@ -1050,7 +1049,7 @@ function HouseholdSettings({
   return (
     <Card className="mb-8">
       <CardHeader className="flex-row items-start gap-4">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
           <CalendarDays className="size-5" aria-hidden="true" />
         </span>
         <div>
@@ -1072,7 +1071,7 @@ function HouseholdSettings({
               </span>
             </div>
             <Progress
-              className="mt-3 [&_[data-slot=progress-indicator]]:bg-[#087f72] [&_[data-slot=progress-track]]:h-2"
+              className="mt-3 [&_[data-slot=progress-indicator]]:bg-primary [&_[data-slot=progress-track]]:h-2"
               value={Math.min(
                 100,
                 ((usage.usedBytes + usage.reservedBytes) / usage.quotaBytes) *
@@ -1186,7 +1185,7 @@ function HouseholdSettings({
           </p>
         ) : null}
         {message ? (
-          <output className="mt-3 block text-sm text-[#087f72]">
+          <output className="mt-3 block text-sm text-primary">
             {t(message)}
           </output>
         ) : null}

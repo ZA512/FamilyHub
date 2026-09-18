@@ -82,7 +82,7 @@ export function HomeView({
   return (
     <>
       <section className="mb-7">
-        <p className="mb-1 text-sm font-medium text-[#087f72]">
+        <p className="mb-1 text-sm font-medium text-primary">
           {todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}
         </p>
         <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -136,7 +136,10 @@ function AttentionSection({
           À voir
         </h2>
         {items.length ? (
-          <Badge variant="secondary" className="bg-[#e7f5f2] text-[#075e55]">
+          <Badge
+            variant="secondary"
+            className="bg-secondary text-secondary-foreground"
+          >
             {items.length} sujet{items.length > 1 ? 's' : ''}
           </Badge>
         ) : null}
@@ -152,7 +155,7 @@ function AttentionSection({
               className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/45 ${index ? 'border-t' : ''}`}
             >
               <span
-                className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.id === 'notifications' ? 'bg-[#eef0ff] text-[#5651a8]' : item.id === 'tasks' || item.id === 'chat' ? 'bg-[#e7f5f2] text-[#087f72]' : 'bg-[#fff3df] text-[#a55e10]'}`}
+                className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.id === 'notifications' ? 'bg-[#eef0ff] text-[#5651a8]' : item.id === 'tasks' || item.id === 'chat' ? 'bg-secondary text-secondary-foreground' : 'bg-[#fff3df] text-[#a55e10]'}`}
               >
                 {item.id === 'notifications' ? (
                   <Bell className="size-4" aria-hidden="true" />
@@ -182,7 +185,7 @@ function AttentionSection({
       ) : (
         <Card className="border-dashed bg-muted/20">
           <CardContent className="flex items-center gap-4 py-8">
-            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-secondary text-secondary-foreground">
               <CheckCircle2 aria-hidden="true" />
             </span>
             <div>

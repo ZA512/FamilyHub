@@ -506,7 +506,7 @@ export function BookmarksView({
                   (visibility === 'GROUPS' && !selectedGroups.length) ||
                   (visibility === 'SELECTED_USERS' && !selectedMembers.length)
                 }
-                className="bg-[#087f72] hover:bg-[#076d63]"
+                className="bg-primary hover:bg-primary/80"
               >
                 {submitting ? (
                   <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -549,7 +549,7 @@ export function BookmarksView({
       <section>
         <div className="mb-5 flex items-end justify-between gap-3">
           <div>
-            <p className="mb-1 text-sm font-medium text-[#087f72]">
+            <p className="mb-1 text-sm font-medium text-primary">
               Liens utiles
             </p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -558,7 +558,7 @@ export function BookmarksView({
           </div>
           <Button
             onClick={openNew}
-            className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+            className="rounded-xl bg-primary hover:bg-primary/80"
           >
             <Plus aria-hidden="true" /> Ajouter
           </Button>
@@ -627,7 +627,7 @@ export function BookmarksView({
                 size="sm"
                 variant={tag === item ? 'default' : 'outline'}
                 onClick={() => setTag(tag === item ? '' : item)}
-                className={tag === item ? 'bg-[#087f72]' : ''}
+                className={tag === item ? 'bg-primary' : ''}
               >
                 #{item}
               </Button>
@@ -710,7 +710,7 @@ export function BookmarksView({
         ) : (
           <Card className="border-dashed bg-muted/20">
             <CardContent className="flex flex-col items-center py-14 text-center">
-              <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
+              <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-secondary text-secondary-foreground">
                 <Bookmark aria-hidden="true" />
               </span>
               <h2 className="font-semibold">
@@ -768,7 +768,7 @@ function BookmarkList({
                   href={bookmark.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1 truncate font-semibold hover:text-[#087f72]"
+                  className="flex items-center gap-1 truncate font-semibold hover:text-primary"
                 >
                   <span className="truncate">{bookmark.title}</span>
                   <ExternalLink
@@ -787,7 +787,7 @@ function BookmarkList({
                       key={tag}
                       type="button"
                       onClick={() => onTag(tag)}
-                      className="shrink-0 rounded-full bg-muted px-2 py-1 text-xs hover:bg-[#e7f5f2]"
+                      className="shrink-0 rounded-full bg-muted px-2 py-1 text-xs hover:bg-secondary"
                     >
                       #{tag}
                     </button>
@@ -929,7 +929,7 @@ function BookmarkCard({
     <Card className="h-full gap-4 overflow-hidden py-5">
       <CardContent className="flex h-full flex-col px-5">
         <div className="mb-4 flex items-start gap-3">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#e7f5f2] font-semibold text-[#087f72]">
+          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-secondary font-semibold text-secondary-foreground">
             {bookmark.hostname.slice(0, 2).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
@@ -937,7 +937,7 @@ function BookmarkCard({
               href={bookmark.url}
               target="_blank"
               rel="noreferrer"
-              className="group/link flex items-start gap-2 font-semibold leading-snug hover:text-[#087f72]"
+              className="group/link flex items-start gap-2 font-semibold leading-snug hover:text-primary"
             >
               <span className="line-clamp-2">{bookmark.title}</span>
               <ExternalLink
@@ -987,7 +987,7 @@ function BookmarkCard({
                 type="button"
                 key={tag}
                 onClick={() => onTag(tag)}
-                className="rounded-full bg-muted px-2 py-1 text-xs hover:bg-[#e7f5f2] hover:text-[#087f72]"
+                className="rounded-full bg-muted px-2 py-1 text-xs hover:bg-secondary hover:text-primary"
               >
                 #{tag}
               </button>

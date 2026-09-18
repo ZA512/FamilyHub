@@ -358,7 +358,7 @@ export function PollsView({
     <section>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-1 text-sm font-medium text-[#087f72]">
+          <p className="mb-1 text-sm font-medium text-primary">
             Décider ensemble
           </p>
           <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -370,7 +370,7 @@ export function PollsView({
         </div>
         <Button
           onClick={openComposer}
-          className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+          className="rounded-xl bg-primary hover:bg-primary/80"
         >
           <Plus aria-hidden="true" /> Nouveau sondage
         </Button>
@@ -448,7 +448,7 @@ export function PollsView({
       ) : (
         <Card className="border-dashed bg-muted/20">
           <CardContent className="flex flex-col items-center py-14 text-center">
-            <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
+            <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-secondary text-secondary-foreground">
               <ChartBar />
             </span>
             <h2 className="font-semibold">Aucun sondage ici</h2>
@@ -545,7 +545,7 @@ function PollCard({
     <Card className="overflow-hidden py-0">
       <CardContent className="p-5">
         <div className="flex items-start gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-secondary text-secondary-foreground">
             <ChartBar className="size-5" />
           </span>
           <div className="min-w-0 flex-1">
@@ -593,15 +593,15 @@ function PollCard({
                 aria-pressed={checked}
                 aria-label={`${checked ? 'Désélectionner' : 'Sélectionner'} ${option.label}, ${option.percentage} %, ${option.voteCount} vote${option.voteCount > 1 ? 's' : ''}`}
                 onClick={() => onChoose(option.id)}
-                className={`relative w-full overflow-hidden rounded-xl border px-3 py-3 text-left transition-colors ${checked ? 'border-[#087f72] bg-[#f1fbf9]' : 'bg-background hover:bg-muted/40'} disabled:cursor-default`}
+                className={`relative w-full overflow-hidden rounded-xl border px-3 py-3 text-left transition-colors ${checked ? 'border-primary bg-accent/45' : 'bg-background hover:bg-muted/40'} disabled:cursor-default`}
               >
                 <span
-                  className="absolute inset-y-0 left-0 bg-[#d9f4ef] transition-[width]"
+                  className="absolute inset-y-0 left-0 bg-accent transition-[width]"
                   style={{ width: `${option.percentage}%` }}
                 />
                 <span className="relative flex items-start gap-3">
                   <span
-                    className={`mt-0.5 grid size-5 shrink-0 place-items-center border text-white ${poll.allowMultiple ? 'rounded-md' : 'rounded-full'} ${checked ? 'border-[#087f72] bg-[#087f72]' : 'border-muted-foreground/40 bg-background'}`}
+                    className={`mt-0.5 grid size-5 shrink-0 place-items-center border text-primary-foreground ${poll.allowMultiple ? 'rounded-md' : 'rounded-full'} ${checked ? 'border-primary bg-primary' : 'border-muted-foreground/40 bg-background'}`}
                   >
                     {checked ? (
                       <Check className="size-3.5" strokeWidth={3} />
@@ -648,7 +648,7 @@ function PollCard({
             <Button
               disabled={!selected.length || busy || (poll.hasVoted && !changed)}
               onClick={onVote}
-              className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+              className="rounded-xl bg-primary hover:bg-primary/80"
             >
               {busy ? (
                 <LoaderCircle className="animate-spin" />
@@ -840,7 +840,7 @@ function PollEditorDialog({
             <Button
               type="submit"
               disabled={submitting}
-              className="bg-[#087f72] hover:bg-[#076d63]"
+              className="bg-primary hover:bg-primary/80"
             >
               {submitting ? (
                 <LoaderCircle className="animate-spin" />

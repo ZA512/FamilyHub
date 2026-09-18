@@ -388,7 +388,7 @@ export function ShoppingView({
             <Button
               type="submit"
               disabled={submitting}
-              className="w-full bg-[#087f72] hover:bg-[#076d63]"
+              className="w-full bg-primary hover:bg-primary/80"
             >
               {submitting ? (
                 <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -406,7 +406,7 @@ export function ShoppingView({
       <section>
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-1 text-sm font-medium text-[#087f72]">
+            <p className="mb-1 text-sm font-medium text-primary">
               Liste commune
             </p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -420,7 +420,7 @@ export function ShoppingView({
           </div>
           <Button
             onClick={() => onComposerOpenChange(true)}
-            className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+            className="rounded-xl bg-primary hover:bg-primary/80"
           >
             <Plus aria-hidden="true" />
             Ajouter un article
@@ -502,7 +502,7 @@ export function ShoppingView({
         ) : (
           <Card className="border-dashed bg-muted/20">
             <CardContent className="flex flex-col items-center py-12 text-center">
-              <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
+              <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-secondary text-secondary-foreground">
                 <ShoppingBasket aria-hidden="true" />
               </span>
               <h2 className="font-semibold">Rien à acheter</h2>
@@ -646,7 +646,7 @@ function ShoppingRow({
             : `Marquer ${item.name} comme acheté`
         }
         onClick={onToggle}
-        className={`shrink-0 rounded-xl ${purchased ? 'text-[#087f72]' : ''}`}
+        className={`shrink-0 rounded-xl ${purchased ? 'text-primary' : ''}`}
       >
         {busy ? (
           <LoaderCircle className="animate-spin" aria-hidden="true" />

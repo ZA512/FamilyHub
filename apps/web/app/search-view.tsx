@@ -96,7 +96,7 @@ export function SearchView({ onNavigate }: SearchViewProps) {
   return (
     <section className="mx-auto max-w-3xl">
       <div className="mb-6">
-        <p className="mb-1 text-sm font-medium text-[#087f72]">Tout le foyer</p>
+        <p className="mb-1 text-sm font-medium text-primary">Tout le foyer</p>
         <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
           Recherche
         </h1>
@@ -166,7 +166,7 @@ export function SearchView({ onNavigate }: SearchViewProps) {
                 onClick={() => onNavigate(result.view)}
                 className={`flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/45 ${index ? 'border-t' : ''}`}
               >
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
                   {result.type === 'member' ? (
                     <Users className="size-4" aria-hidden="true" />
                   ) : result.type === 'task' ? (
@@ -238,7 +238,7 @@ export function SearchView({ onNavigate }: SearchViewProps) {
         ) : (
           <Card className="border-dashed bg-muted/20">
             <CardContent className="flex flex-col items-center py-12 text-center">
-              <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
+              <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-secondary text-secondary-foreground">
                 <Search aria-hidden="true" />
               </span>
               <h2 className="font-semibold">Aucun résultat</h2>

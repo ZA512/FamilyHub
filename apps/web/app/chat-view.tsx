@@ -594,16 +594,14 @@ export function ChatView({
       <section>
         <div className="mb-5 flex items-end justify-between gap-3">
           <div>
-            <p className="mb-1 text-sm font-medium text-[#087f72]">
-              Entre nous
-            </p>
+            <p className="mb-1 text-sm font-medium text-primary">Entre nous</p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
               Messages
             </h1>
           </div>
           <Button
             onClick={() => onComposerOpenChange(true)}
-            className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+            className="rounded-xl bg-primary hover:bg-primary/80"
           >
             <Plus data-icon="inline-start" aria-hidden="true" /> Nouvelle
             conversation
@@ -635,7 +633,7 @@ export function ChatView({
                       type="button"
                       key={conversation.id}
                       onClick={() => selectConversation(conversation.id)}
-                      className={`flex w-full gap-3 border-b p-4 text-left transition-colors hover:bg-muted/45 ${selectedId === conversation.id ? 'bg-[#e7f5f2]/65' : ''}`}
+                      className={`flex w-full gap-3 border-b p-4 text-left transition-colors hover:bg-muted/45 ${selectedId === conversation.id ? 'bg-accent/65' : ''}`}
                     >
                       <span className="grid size-10 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold">
                         {conversation.displayTitle.slice(0, 2).toUpperCase()}
@@ -652,7 +650,7 @@ export function ChatView({
                             />
                           ) : null}
                           {conversation.unreadCount ? (
-                            <Badge className="bg-[#087f72]">
+                            <Badge className="bg-primary">
                               {conversation.unreadCount}
                             </Badge>
                           ) : null}
@@ -900,7 +898,7 @@ export function ChatView({
                           (!body.trim() && !selectedFiles.length) || sending
                         }
                         aria-label="Envoyer"
-                        className="shrink-0 bg-[#087f72] hover:bg-[#076d63]"
+                        className="shrink-0 bg-primary hover:bg-primary/80"
                       >
                         {sending ? (
                           <LoaderCircle className="animate-spin" />
@@ -959,7 +957,7 @@ function MessageBubble({
           </p>
         ) : null}
         <div
-          className={`rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${mine ? 'rounded-br-md bg-[#087f72] text-white' : 'rounded-bl-md border bg-background'}`}
+          className={`rounded-2xl px-3.5 py-2.5 text-sm shadow-sm ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border bg-background'}`}
         >
           {message.replyTo && !deleted ? (
             <div
@@ -997,7 +995,7 @@ function MessageBubble({
                 type="button"
                 key={reaction.emoji}
                 onClick={() => onReaction(reaction.emoji)}
-                className={`rounded-full border px-2 py-0.5 text-xs ${reaction.memberIds.includes(currentMemberId) ? 'border-[#087f72] bg-[#e7f5f2]' : 'bg-background'}`}
+                className={`rounded-full border px-2 py-0.5 text-xs ${reaction.memberIds.includes(currentMemberId) ? 'border-primary bg-secondary' : 'bg-background'}`}
                 aria-label={`${reaction.emoji}, ${reaction.count} réaction${reaction.count > 1 ? 's' : ''}`}
               >
                 {reaction.emoji} {reaction.count}
@@ -1117,7 +1115,7 @@ function MessageText({ body, mine }: { body: string; mine: boolean }) {
               href={part}
               target="_blank"
               rel="noreferrer"
-              className={`underline underline-offset-2 ${mine ? 'text-white' : 'text-[#087f72]'}`}
+              className={`underline underline-offset-2 ${mine ? 'text-white' : 'text-primary'}`}
             >
               {part}
             </a>
@@ -1474,7 +1472,7 @@ function ConversationDialog({
           ) : null}
           <Button
             type="submit"
-            className="w-full bg-[#087f72] hover:bg-[#076d63]"
+            className="w-full bg-primary hover:bg-primary/80"
             disabled={
               submitting ||
               !selected.length ||

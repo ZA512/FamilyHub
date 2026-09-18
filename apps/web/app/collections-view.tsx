@@ -765,7 +765,7 @@ export function CollectionsView({
       <section>
         <div className="mb-5 flex items-end justify-between gap-3">
           <div>
-            <p className="mb-1 text-sm font-medium text-[#087f72]">
+            <p className="mb-1 text-sm font-medium text-primary">
               Nos recommandations
             </p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -774,7 +774,7 @@ export function CollectionsView({
           </div>
           <Button
             onClick={openNewCollection}
-            className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+            className="rounded-xl bg-primary hover:bg-primary/80"
           >
             <Plus aria-hidden="true" /> Nouvelle collection
           </Button>
@@ -857,7 +857,7 @@ export function CollectionsView({
                 key={entry}
                 size="sm"
                 variant={tag === entry ? 'default' : 'outline'}
-                className={tag === entry ? 'bg-[#087f72]' : ''}
+                className={tag === entry ? 'bg-primary' : ''}
                 onClick={() => setTag(tag === entry ? '' : entry)}
               >
                 #{entry}
@@ -886,9 +886,9 @@ export function CollectionsView({
                       key={collection.id}
                       type="button"
                       onClick={() => setSelectedId(collection.id)}
-                      className={`flex w-full gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/55 ${selectedId === collection.id ? 'bg-[#e7f5f2]' : ''}`}
+                      className={`flex w-full gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/55 ${selectedId === collection.id ? 'bg-secondary' : ''}`}
                     >
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-background text-[#087f72] shadow-sm">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-background text-primary shadow-sm">
                         <Icon className="size-4" aria-hidden="true" />
                       </span>
                       <span className="min-w-0 flex-1">
@@ -917,10 +917,7 @@ export function CollectionsView({
               </div>
             ) : (
               <div className="flex flex-col items-center p-8 text-center">
-                <LibraryBig
-                  className="mb-3 text-[#087f72]"
-                  aria-hidden="true"
-                />
+                <LibraryBig className="mb-3 text-primary" aria-hidden="true" />
                 <p className="font-medium">Aucune collection</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Rassemblez ici les idées que le foyer veut garder.
@@ -1014,14 +1011,14 @@ function CollectionReader({
               }}
             />
           ) : (
-            <span className="grid size-20 shrink-0 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
+            <span className="grid size-20 shrink-0 place-items-center rounded-2xl bg-secondary text-secondary-foreground">
               <Icon className="size-8" aria-hidden="true" />
             </span>
           )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-[#087f72]">
+                <p className="text-sm font-medium text-primary">
                   {config.label}
                 </p>
                 <h2 className="text-2xl font-semibold tracking-tight">
@@ -1082,7 +1079,7 @@ function CollectionReader({
           </p>
           <Button
             onClick={onAddItem}
-            className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+            className="rounded-xl bg-primary hover:bg-primary/80"
           >
             <Plus aria-hidden="true" /> Ajouter un {config.itemLabel}
           </Button>
@@ -1112,7 +1109,7 @@ function CollectionReader({
                       }}
                     />
                   ) : (
-                    <div className="grid aspect-[16/7] place-items-center bg-gradient-to-br from-[#e7f5f2] to-[#f5faf9] text-[#087f72]">
+                    <div className="grid aspect-[16/7] place-items-center bg-gradient-to-br from-secondary to-background text-primary">
                       <Icon className="size-8" aria-hidden="true" />
                     </div>
                   )}
@@ -1178,10 +1175,7 @@ function CollectionReader({
         ) : (
           <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed bg-muted/15 text-center">
             <div>
-              <Icon
-                className="mx-auto mb-3 text-[#087f72]"
-                aria-hidden="true"
-              />
+              <Icon className="mx-auto mb-3 text-primary" aria-hidden="true" />
               <p className="font-medium">Collection vide</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Ajoutez la première recommandation.
@@ -1216,7 +1210,7 @@ function PreferenceButton({
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs transition-colors ${active ? 'bg-[#e7f5f2] font-semibold text-[#087f72]' : 'text-muted-foreground hover:bg-muted'}`}
+      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs transition-colors ${active ? 'bg-secondary font-semibold text-secondary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
     >
       <span className="[&_svg]:size-3.5">{children}</span>
       {count}
@@ -1356,7 +1350,7 @@ function CollectionEditorDialog({
             <Button
               type="submit"
               disabled={submitting}
-              className="bg-[#087f72] hover:bg-[#076d63]"
+              className="bg-primary hover:bg-primary/80"
             >
               {submitting ? (
                 <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -1579,7 +1573,7 @@ function ItemEditorDialog({
             <Button
               type="submit"
               disabled={submitting}
-              className="bg-[#087f72] hover:bg-[#076d63]"
+              className="bg-primary hover:bg-primary/80"
             >
               {submitting ? (
                 <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -1783,7 +1777,7 @@ function ItemDetailDialog({
               <Button
                 type="submit"
                 disabled={busy}
-                className="bg-[#087f72] hover:bg-[#076d63]"
+                className="bg-primary hover:bg-primary/80"
               >
                 {busy ? (
                   <LoaderCircle className="animate-spin" aria-hidden="true" />

@@ -880,7 +880,7 @@ export function TasksView({
             <Button
               type="submit"
               disabled={submitting}
-              className="w-full bg-[#087f72] hover:bg-[#076d63]"
+              className="w-full bg-primary hover:bg-primary/80"
             >
               {submitting ? (
                 <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -915,7 +915,7 @@ export function TasksView({
             <Button
               type="submit"
               disabled={Boolean(busyId)}
-              className="w-full bg-[#087f72] hover:bg-[#076d63]"
+              className="w-full bg-primary hover:bg-primary/80"
             >
               {busyId ? (
                 <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -931,7 +931,7 @@ export function TasksView({
       <section>
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-1 text-sm font-medium text-[#087f72]">
+            <p className="mb-1 text-sm font-medium text-primary">
               Organisation du foyer
             </p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -945,7 +945,7 @@ export function TasksView({
           </div>
           <Button
             onClick={() => onComposerOpenChange(true)}
-            className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+            className="rounded-xl bg-primary hover:bg-primary/80"
           >
             <Plus aria-hidden="true" /> Ajouter
           </Button>
@@ -1106,7 +1106,7 @@ export function TasksView({
                   <CardContent className="divide-y px-4 sm:px-5">
                     {activity.map((entry) => (
                       <div key={entry.id} className="flex gap-3 py-3">
-                        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-[#e7f5f2] text-[#087f72]">
+                        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
                           <Check className="size-4" aria-hidden="true" />
                         </span>
                         <div className="min-w-0">
@@ -1162,7 +1162,7 @@ export function TasksView({
                     <div>
                       <h2 className="flex items-center gap-2 font-semibold">
                         <ChartNoAxesColumn
-                          className="size-5 text-[#087f72]"
+                          className="size-5 text-primary"
                           aria-hidden="true"
                         />
                         Participation aux routines
@@ -1227,7 +1227,7 @@ export function TasksView({
                         </div>
                         <div className="h-3 overflow-hidden rounded-full bg-muted">
                           <div
-                            className="h-full rounded-full bg-[#087f72] transition-[width]"
+                            className="h-full rounded-full bg-primary transition-[width]"
                             style={{
                               width: `${(total / maximumStatistic) * 100}%`,
                             }}
@@ -1327,7 +1327,7 @@ function TaskCard({
     <Card className="gap-3 py-4">
       <CardContent className="px-4 sm:px-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e7f5f2] text-[#087f72]">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
             {task.kind === 'SCHEDULED' ? (
               <CalendarClock aria-hidden="true" />
             ) : task.kind === 'OPEN_CHORE' ? (
@@ -1415,7 +1415,7 @@ function TaskCard({
                 size="sm"
                 disabled={busy}
                 onClick={onComplete}
-                className="bg-[#087f72] hover:bg-[#076d63]"
+                className="bg-primary hover:bg-primary/80"
               >
                 <Check aria-hidden="true" /> Fait
               </Button>
@@ -1454,7 +1454,7 @@ function EmptyTasks() {
   return (
     <Card className="border-dashed bg-muted/20">
       <CardContent className="flex flex-col items-center py-12 text-center">
-        <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-[#e7f5f2] text-[#087f72]">
+        <span className="mb-4 grid size-12 place-items-center rounded-2xl bg-secondary text-secondary-foreground">
           <Check aria-hidden="true" />
         </span>
         <h2 className="font-semibold">Rien à faire pour le moment</h2>

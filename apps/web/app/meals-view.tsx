@@ -661,7 +661,7 @@ export function MealsView({
       <section>
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-1 text-sm font-medium text-[#087f72]">À table</p>
+            <p className="mb-1 text-sm font-medium text-primary">À table</p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
               Repas
             </h1>
@@ -672,7 +672,7 @@ export function MealsView({
           </div>
           <Button
             onClick={() => openMealEditor()}
-            className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+            className="rounded-xl bg-primary hover:bg-primary/80"
           >
             <Plus aria-hidden="true" /> Ajouter un plat
           </Button>
@@ -916,7 +916,7 @@ function Planner({
             return (
               <Card
                 key={date}
-                className={`gap-3 py-3 ${today ? 'border-[#0d9b8b] bg-[#f2fbf9]' : ''}`}
+                className={`gap-3 py-3 ${today ? 'border-primary bg-accent/45' : ''}`}
               >
                 <CardContent className="px-3">
                   <div className="mb-3 flex items-center justify-between">
@@ -946,7 +946,7 @@ function Planner({
                             className="w-full text-left"
                             onClick={() => onEdit(entry)}
                           >
-                            <span className="block text-xs font-medium text-[#087f72]">
+                            <span className="block text-xs font-medium text-primary">
                               {entry.slot === 'OTHER'
                                 ? entry.slotLabel
                                 : slotLabels[entry.slot]}
@@ -1173,7 +1173,7 @@ function MealList({
                             <button
                               type="button"
                               aria-label={`Aperçu de ${meal.name}`}
-                              className="max-w-56 truncate text-left font-semibold underline-offset-4 hover:text-[#087f72] hover:underline focus-visible:text-[#087f72] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="max-w-56 truncate text-left font-semibold underline-offset-4 hover:text-primary hover:underline focus-visible:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
                           }
                         >
@@ -1216,7 +1216,7 @@ function MealList({
                       <Button
                         size="sm"
                         onClick={() => onPlan(meal)}
-                        className="bg-[#087f72] hover:bg-[#076d63]"
+                        className="bg-primary hover:bg-primary/80"
                       >
                         <CalendarPlus aria-hidden="true" /> Planifier
                       </Button>
@@ -1503,7 +1503,7 @@ function MealCard({
           <Button
             size="sm"
             onClick={onPlan}
-            className="bg-[#087f72] hover:bg-[#076d63]"
+            className="bg-primary hover:bg-primary/80"
           >
             <CalendarPlus /> Planifier
           </Button>
@@ -1736,7 +1736,7 @@ function MealComposer({
           <Button
             type="submit"
             disabled={submitting}
-            className="w-full bg-[#087f72] hover:bg-[#076d63]"
+            className="w-full bg-primary hover:bg-primary/80"
           >
             {submitting ? (
               <LoaderCircle className="animate-spin" />
@@ -1878,7 +1878,7 @@ function PlanDialog({
               <Button
                 type="submit"
                 disabled={submitting || !mealId}
-                className="flex-1 bg-[#087f72] hover:bg-[#076d63]"
+                className="flex-1 bg-primary hover:bg-primary/80"
               >
                 {submitting ? (
                   <LoaderCircle className="animate-spin" />
@@ -1976,7 +1976,7 @@ function ShoppingDialog({
               })}
             </div>
             <Button
-              className="w-full bg-[#087f72] hover:bg-[#076d63]"
+              className="w-full bg-primary hover:bg-primary/80"
               disabled={submitting || !selected.size}
               onClick={onSubmit}
             >

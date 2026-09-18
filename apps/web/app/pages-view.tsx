@@ -485,7 +485,7 @@ export function PagesView({
       <section>
         <div className="mb-5 flex items-end justify-between gap-3">
           <div>
-            <p className="mb-1 text-sm font-medium text-[#087f72]">
+            <p className="mb-1 text-sm font-medium text-primary">
               Mémoire du foyer
             </p>
             <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -494,7 +494,7 @@ export function PagesView({
           </div>
           <Button
             onClick={openNew}
-            className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+            className="rounded-xl bg-primary hover:bg-primary/80"
           >
             <Plus aria-hidden="true" /> Nouvelle page
           </Button>
@@ -568,7 +568,7 @@ export function PagesView({
                 key={`folder:${item}`}
                 size="sm"
                 variant={folder === item ? 'default' : 'outline'}
-                className={folder === item ? 'bg-[#087f72]' : ''}
+                className={folder === item ? 'bg-primary' : ''}
                 onClick={() => setFolder(folder === item ? '' : item)}
               >
                 <Folder aria-hidden="true" /> {item}
@@ -579,7 +579,7 @@ export function PagesView({
                 key={`tag:${item}`}
                 size="sm"
                 variant={tag === item ? 'default' : 'outline'}
-                className={tag === item ? 'bg-[#087f72]' : ''}
+                className={tag === item ? 'bg-primary' : ''}
                 onClick={() => setTag(tag === item ? '' : item)}
               >
                 #{item}
@@ -605,7 +605,7 @@ export function PagesView({
                     key={page.id}
                     type="button"
                     onClick={() => setSelectedId(page.id)}
-                    className={`w-full px-4 py-4 text-left transition-colors hover:bg-muted/55 ${selectedId === page.id ? 'bg-[#e7f5f2]' : ''}`}
+                    className={`w-full px-4 py-4 text-left transition-colors hover:bg-muted/55 ${selectedId === page.id ? 'bg-secondary' : ''}`}
                   >
                     <span className="line-clamp-1 font-medium">
                       {page.title}
@@ -642,7 +642,7 @@ export function PagesView({
             ) : (
               <div className="flex flex-col items-center p-8 text-center">
                 <BookOpenText
-                  className="mb-3 text-[#087f72]"
+                  className="mb-3 text-primary"
                   aria-hidden="true"
                 />
                 <p className="font-medium">Aucune page</p>
@@ -980,7 +980,7 @@ function PageEditorDialog({
                 (visibility === 'GROUPS' && !selectedGroups.length) ||
                 (visibility === 'SELECTED_USERS' && !selectedMembers.length)
               }
-              className="bg-[#087f72] hover:bg-[#076d63]"
+              className="bg-primary hover:bg-primary/80"
             >
               {submitting ? (
                 <LoaderCircle className="animate-spin" aria-hidden="true" />

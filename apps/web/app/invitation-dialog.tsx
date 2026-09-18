@@ -145,7 +145,7 @@ export function InvitationDialog({
               <Button
                 type="button"
                 onClick={() => void copyLink()}
-                className="w-full bg-[#087f72] hover:bg-[#076d63]"
+                className="w-full bg-primary hover:bg-primary/80"
               >
                 {copied ? (
                   <Check aria-hidden="true" />
@@ -191,7 +191,7 @@ export function InvitationDialog({
               <Button
                 type="submit"
                 disabled={submitting || !csrfToken}
-                className="w-full bg-[#087f72] hover:bg-[#076d63]"
+                className="w-full bg-primary hover:bg-primary/80"
               >
                 {submitting ? (
                   <LoaderCircle className="animate-spin" aria-hidden="true" />

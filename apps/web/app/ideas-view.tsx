@@ -550,7 +550,7 @@ export function IdeasView({
     <section>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-1 text-sm font-medium text-[#087f72]">
+          <p className="mb-1 text-sm font-medium text-primary">
             Envies du foyer
           </p>
           <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -562,7 +562,7 @@ export function IdeasView({
         </div>
         <Button
           onClick={openComposer}
-          className="rounded-xl bg-[#087f72] hover:bg-[#076d63]"
+          className="rounded-xl bg-primary hover:bg-primary/80"
         >
           <Plus />
           Proposer une idée
@@ -778,7 +778,7 @@ function IdeaCard({
   const CategoryIcon = category.icon;
   return (
     <Card
-      className={`overflow-hidden py-0 ${idea.status === 'RETAINED' ? 'ring-1 ring-[#087f72]/25' : ''}`}
+      className={`overflow-hidden py-0 ${idea.status === 'RETAINED' ? 'ring-1 ring-primary/25' : ''}`}
     >
       <CardContent className="p-5">
         <div className="flex items-start gap-3">
@@ -828,7 +828,7 @@ function IdeaCard({
             disabled={busy}
             onClick={() => onReact(1)}
             className={
-              idea.myReaction === 1 ? 'bg-[#087f72] hover:bg-[#076d63]' : ''
+              idea.myReaction === 1 ? 'bg-primary hover:bg-primary/80' : ''
             }
           >
             <ThumbsUp />
@@ -945,7 +945,7 @@ function IdeaCard({
                   size="sm"
                   disabled={busy}
                   onClick={() => onStatus('RETAINED')}
-                  className="bg-[#087f72] hover:bg-[#076d63]"
+                  className="bg-primary hover:bg-primary/80"
                 >
                   <CheckCircle2 />
                   Retenir
@@ -966,7 +966,7 @@ function IdeaCard({
                   size="sm"
                   disabled={busy}
                   onClick={onConvert}
-                  className="bg-[#087f72] hover:bg-[#076d63]"
+                  className="bg-primary hover:bg-primary/80"
                 >
                   <Sparkles />
                   Concrétiser
@@ -1095,7 +1095,7 @@ function IdeaEditorDialog({
             <Button
               type="submit"
               disabled={submitting}
-              className="bg-[#087f72] hover:bg-[#076d63]"
+              className="bg-primary hover:bg-primary/80"
             >
               {submitting ? (
                 <LoaderCircle className="animate-spin" />
@@ -1244,7 +1244,7 @@ function ConversionDialog({
                 submitting ||
                 (target === 'COLLECTION_ITEM' && !collections.length)
               }
-              className="bg-[#087f72] hover:bg-[#076d63]"
+              className="bg-primary hover:bg-primary/80"
             >
               {submitting ? (
                 <LoaderCircle className="animate-spin" />
