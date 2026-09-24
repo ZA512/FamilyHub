@@ -135,6 +135,7 @@ export function MealsView({
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [shoppingEnabled, setShoppingEnabled] = useState(true);
   const [weekStartsOn, setWeekStartsOn] = useState<WeekStartsOn>(1);
+  const [mealReferencePortions, setMealReferencePortions] = useState(4);
   const [weekStart, setWeekStart] = useState(() =>
     startOfMealWeek(new Date(), 1),
   );
@@ -159,7 +160,9 @@ export function MealsView({
   const [planMealId, setPlanMealId] = useState('');
   const [planSlot, setPlanSlot] = useState<MealSlot>('DINNER');
   const [shoppingMeal, setShoppingMeal] = useState<FamilyMeal | null>(null);
-  const [shoppingPortions, setShoppingPortions] = useState(4);
+  const [shoppingPortions, setShoppingPortions] = useState(
+    mealReferencePortions,
+  );
   const [selectedIngredients, setSelectedIngredients] = useState<Set<string>>(
     new Set(),
   );
@@ -184,6 +187,28 @@ export function MealsView({
       preference: preferenceFilter,
     });
   }, [mealQuery, meals, memberFilter, members, preferenceFilter]);
+  const ingredientSuggestions = useMemo(
+    () =>
+      [
+        ...new Set(
+          meals.flatMap((meal) =>
+            meal.ingredients.map((ingredient) => ingredient.name),
+          ),
+        ),
+      ].sort((a, b) => a.localeCompare(b, localeTag())),
+    [meals],
+  );
+  const unitSuggestions = useMemo(
+    () =>
+      [
+        ...new Set(
+          meals.flatMap((meal) =>
+            meal.ingredients.map((ingredient) => ingredient.unit),
+          ),
+        ),
+      ].sort((a, b) => a.localeCompare(b, localeTag())),
+    [meals],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -209,6 +234,10 @@ export function MealsView({
           settingsPayload?.settings.mealPlanWeekStartsOn,
         );
         setWeekStartsOn(firstDay);
+        if (settingsPayload)
+          setMealReferencePortions(
+            settingsPayload.settings.mealReferencePortions,
+          );
         setWeekStart(startOfMealWeek(new Date(), firstDay));
         if (!mealsResponse.ok)
           throw new Error('Impossible de charger les plats.');
@@ -597,6 +626,9 @@ export function MealsView({
         open={composerOpen}
         meal={editingMeal}
         ingredients={ingredients}
+        ingredientSuggestions={ingredientSuggestions}
+        unitSuggestions={unitSuggestions}
+        defaultPortions={mealReferencePortions}
         visibility={visibility}
         submitting={submitting}
         error={error}
@@ -613,6 +645,7 @@ export function MealsView({
         open={planOpen}
         entry={editingEntry}
         meals={meals}
+        defaultPortions={mealReferencePortions}
         date={planDate}
         mealId={planMealId}
         slot={planSlot}
@@ -1537,6 +1570,9 @@ function MealComposer({
   open,
   meal,
   ingredients,
+  ingredientSuggestions,
+  unitSuggestions,
+  defaultPortions,
   visibility,
   submitting,
   error,
@@ -1548,6 +1584,9 @@ function MealComposer({
   open: boolean;
   meal: FamilyMeal | null;
   ingredients: IngredientDraft[];
+  ingredientSuggestions: string[];
+  unitSuggestions: string[];
+  defaultPortions: number;
   visibility: 'PRIVATE' | 'ALL_MEMBERS';
   submitting: boolean;
   error: string;
@@ -1593,7 +1632,8 @@ function MealComposer({
               type="number"
               min={1}
               max={100}
-              defaultValue={meal?.referencePortions ?? 4}
+              key={meal?.id ?? `new-${defaultPortions}`}
+              defaultValue={meal?.referencePortions ?? defaultPortions}
             />
           </div>
           <TextField
@@ -1614,6 +1654,20 @@ function MealComposer({
           />
           <fieldset className="space-y-3 rounded-2xl border p-4">
             <legend className="px-1 text-sm font-semibold">Ingrédients</legend>
+            <datalist id="meal-ingredient-suggestions">
+              {ingredientSuggestions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </datalist>
+            <datalist id="meal-unit-suggestions">
+              {unitSuggestions.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit}
+                </option>
+              ))}
+            </datalist>
             {ingredients.map((ingredient, index) => (
               <div
                 key={ingredient.key}
@@ -1622,6 +1676,7 @@ function MealComposer({
                 <Input
                   aria-label={`Ingrédient ${index + 1}`}
                   value={ingredient.name}
+                  list="meal-ingredient-suggestions"
                   onChange={(event) =>
                     updateIngredient(ingredient.key, 'name', event.target.value)
                   }
@@ -1649,6 +1704,7 @@ function MealComposer({
                 <Input
                   aria-label={`Unité ${index + 1}`}
                   value={ingredient.unit}
+                  list="meal-unit-suggestions"
                   onChange={(event) =>
                     updateIngredient(ingredient.key, 'unit', event.target.value)
                   }
@@ -1755,6 +1811,7 @@ function PlanDialog({
   open,
   entry,
   meals,
+  defaultPortions,
   date,
   mealId,
   slot,
@@ -1770,6 +1827,7 @@ function PlanDialog({
   open: boolean;
   entry: MealPlanEntry | null;
   meals: FamilyMeal[];
+  defaultPortions: number;
   date: string;
   mealId: string;
   slot: MealSlot;
@@ -1862,7 +1920,8 @@ function PlanDialog({
             type="number"
             min={1}
             max={100}
-            defaultValue={entry?.portions ?? 4}
+            key={entry?.id ?? `new-${defaultPortions}`}
+            defaultValue={entry?.portions ?? defaultPortions}
             disabled={readOnly}
           />
           <TextField

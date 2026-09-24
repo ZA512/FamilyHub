@@ -52,6 +52,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  groupPendingShoppingItems,
   shoppingHistoryItems,
   sortPendingShoppingItems,
   type ShoppingHistoryScope,
@@ -219,6 +220,7 @@ export function ShoppingView({
   const visiblePending = pending.filter(
     (item) => scope === 'all' || item.requestedBy === currentMemberId,
   );
+  const pendingGroups = groupPendingShoppingItems(visiblePending);
   const now = new Date();
   const recentHistory = shoppingHistoryItems(
     items,
@@ -582,8 +584,8 @@ export function ShoppingView({
               Courses
             </h1>
             <p className="mt-1 text-base text-muted-foreground">
-              {visiblePending.length
-                ? `${visiblePending.length} article${visiblePending.length > 1 ? 's' : ''} à acheter`
+              {pendingGroups.length
+                ? `${pendingGroups.length} article${pendingGroups.length > 1 ? 's' : ''} à acheter`
                 : 'La liste est à jour'}
             </p>
           </div>
@@ -673,22 +675,53 @@ export function ShoppingView({
           </Card>
         ) : visiblePending.length ? (
           <Card className="gap-0 overflow-hidden py-0">
-            {visiblePending.map((item, index) => (
-              <ShoppingRow
-                key={item.id}
-                item={item}
-                busy={busyId === item.id}
-                divided={index > 0}
-                editable={item.requestedBy === currentMemberId}
-                requesterAvatarUrl={
-                  item.requestedBy === currentMemberId
-                    ? currentMemberAvatarUrl
-                    : item.requestedByAvatarUrl
-                }
-                onToggle={() => setPurchased(item, true)}
-                onEdit={() => setEditedItem(item)}
-                onDelete={() => setToDelete(item)}
-              />
+            {pendingGroups.map((group, index) => (
+              <div
+                key={group.items[0]!.id}
+                className={index > 0 ? 'border-t' : ''}
+              >
+                {group.items.length > 1 ? (
+                  <details>
+                    <summary className="cursor-pointer px-4 py-4 font-medium">
+                      {group.items.length} {group.name} ({group.summary})
+                    </summary>
+                    <div className="border-t bg-muted/10">
+                      {group.items.map((item, itemIndex) => (
+                        <ShoppingRow
+                          key={item.id}
+                          item={item}
+                          busy={busyId === item.id}
+                          divided={itemIndex > 0}
+                          editable={item.requestedBy === currentMemberId}
+                          requesterAvatarUrl={
+                            item.requestedBy === currentMemberId
+                              ? currentMemberAvatarUrl
+                              : item.requestedByAvatarUrl
+                          }
+                          onToggle={() => setPurchased(item, true)}
+                          onEdit={() => setEditedItem(item)}
+                          onDelete={() => setToDelete(item)}
+                        />
+                      ))}
+                    </div>
+                  </details>
+                ) : (
+                  <ShoppingRow
+                    item={group.items[0]!}
+                    busy={busyId === group.items[0]!.id}
+                    divided={false}
+                    editable={group.items[0]!.requestedBy === currentMemberId}
+                    requesterAvatarUrl={
+                      group.items[0]!.requestedBy === currentMemberId
+                        ? currentMemberAvatarUrl
+                        : group.items[0]!.requestedByAvatarUrl
+                    }
+                    onToggle={() => setPurchased(group.items[0]!, true)}
+                    onEdit={() => setEditedItem(group.items[0]!)}
+                    onDelete={() => setToDelete(group.items[0]!)}
+                  />
+                )}
+              </div>
             ))}
           </Card>
         ) : (

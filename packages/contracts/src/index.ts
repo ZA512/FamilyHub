@@ -74,6 +74,7 @@ export const instanceSettingsUpdateSchema = z.object({
   apiRateLimitPerMinute: z.number().int().min(300).max(10_000),
   storageQuotaBytes: z.number().int().min(104_857_600).max(10_995_116_277_760),
   mealPlanWeekStartsOn: weekStartsOnSchema,
+  mealReferencePortions: z.number().int().min(1).max(100),
 });
 
 export type InstanceSettings = z.infer<typeof instanceSettingsUpdateSchema>;

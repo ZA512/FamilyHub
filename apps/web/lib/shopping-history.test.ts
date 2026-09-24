@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ShoppingItem } from '@familyhub/contracts';
 
 import {
+  groupPendingShoppingItems,
   shoppingHistoryItems,
   sortPendingShoppingItems,
 } from './shopping-history';
@@ -52,6 +53,38 @@ const items = [
 ];
 
 describe('shopping history', () => {
+  it('regroupe les noms identiques, additionne une unité commune et garde les unités différentes', () => {
+    const entries = [
+      {
+        ...item('a', 'MEAL', 'parent', now.toISOString()),
+        name: 'Crème fraîche',
+        quantity: '1 pot',
+      },
+      {
+        ...item('b', 'MEAL', 'parent', now.toISOString()),
+        name: 'crème fraîche',
+        quantity: '50 cl',
+      },
+      {
+        ...item('c', 'MEAL', 'parent', now.toISOString()),
+        name: 'Œufs',
+        quantity: '2 pièce',
+      },
+      {
+        ...item('d', 'MEAL', 'parent', now.toISOString()),
+        name: 'œufs',
+        quantity: '3 pièce',
+      },
+    ];
+    const groups = groupPendingShoppingItems(entries);
+    expect(
+      groups.map((group) => [group.name, group.items.length, group.summary]),
+    ).toEqual([
+      ['Crème fraîche', 2, '1 pot / 50 cl'],
+      ['Œufs', 2, '5 pièce'],
+    ]);
+  });
+
   it('places explicit requests before meal ingredients in the active list', () => {
     expect(sortPendingShoppingItems(items).map((entry) => entry.id)).toEqual([
       'manual-pending',

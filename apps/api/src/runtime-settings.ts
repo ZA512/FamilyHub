@@ -1,6 +1,7 @@
 export const DEFAULT_API_RATE_LIMIT_PER_MINUTE = 1_200;
 export const DEFAULT_STORAGE_QUOTA_BYTES = 10_737_418_240;
 export const DEFAULT_MEAL_PLAN_WEEK_STARTS_ON = 1;
+export const DEFAULT_MEAL_REFERENCE_PORTIONS = 4;
 
 export type RuntimeSettings = {
   apiRateLimitPerMinute: number;
@@ -25,4 +26,10 @@ export function readMealPlanWeekStartsOn(value: unknown): number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 6
     ? value
     : DEFAULT_MEAL_PLAN_WEEK_STARTS_ON;
+}
+
+export function readMealReferencePortions(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 100
+    ? value
+    : DEFAULT_MEAL_REFERENCE_PORTIONS;
 }

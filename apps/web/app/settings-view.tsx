@@ -970,6 +970,7 @@ function HouseholdSettings({
   const [limit, setLimit] = useState(1_200);
   const [quotaGiB, setQuotaGiB] = useState(10);
   const [mealPlanWeekStartsOn, setMealPlanWeekStartsOn] = useState(1);
+  const [mealReferencePortions, setMealReferencePortions] = useState(4);
   const [usage, setUsage] = useState<StorageUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -994,6 +995,9 @@ function HouseholdSettings({
         setLimit(settingsPayload.settings.apiRateLimitPerMinute);
         setQuotaGiB(settingsPayload.settings.storageQuotaBytes / 1_073_741_824);
         setMealPlanWeekStartsOn(settingsPayload.settings.mealPlanWeekStartsOn);
+        setMealReferencePortions(
+          settingsPayload.settings.mealReferencePortions,
+        );
         setUsage(usagePayload.usage);
       })
       .catch((reason: unknown) => {
@@ -1026,6 +1030,7 @@ function HouseholdSettings({
           apiRateLimitPerMinute: limit,
           storageQuotaBytes: Math.round(quotaGiB * 1_073_741_824),
           mealPlanWeekStartsOn,
+          mealReferencePortions,
         }),
       });
       if (!response.ok)
@@ -1034,6 +1039,7 @@ function HouseholdSettings({
       setLimit(payload.settings.apiRateLimitPerMinute);
       setQuotaGiB(payload.settings.storageQuotaBytes / 1_073_741_824);
       setMealPlanWeekStartsOn(payload.settings.mealPlanWeekStartsOn);
+      setMealReferencePortions(payload.settings.mealReferencePortions);
       setUsage((current) =>
         current
           ? { ...current, quotaBytes: payload.settings.storageQuotaBytes }
@@ -1127,6 +1133,26 @@ function HouseholdSettings({
               les membres du foyer.
             </p>
           </div>
+          <div className="max-w-sm space-y-2">
+            <Label htmlFor="meal-reference-portions">
+              Portions de référence
+            </Label>
+            <Input
+              id="meal-reference-portions"
+              type="number"
+              min={1}
+              max={100}
+              step={1}
+              value={mealReferencePortions}
+              disabled={loading || role !== 'ADMIN'}
+              onChange={(event) =>
+                setMealReferencePortions(Number(event.target.value))
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Valeur proposée pour les nouveaux plats et les repas planifiés.
+            </p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
             <div className="space-y-2">
               <Label
@@ -1171,7 +1197,10 @@ function HouseholdSettings({
                   limit < 300 ||
                   limit > 10_000 ||
                   quotaGiB < 0.1 ||
-                  quotaGiB > 10_240
+                  quotaGiB > 10_240 ||
+                  !Number.isInteger(mealReferencePortions) ||
+                  mealReferencePortions < 1 ||
+                  mealReferencePortions > 100
                 }
               >
                 {saving ? (

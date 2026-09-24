@@ -9,11 +9,13 @@ describe('instance settings contracts', () => {
         apiRateLimitPerMinute: 2_500,
         storageQuotaBytes: 5_368_709_120,
         mealPlanWeekStartsOn: 6,
+        mealReferencePortions: 6,
       }),
     ).toEqual({
       apiRateLimitPerMinute: 2_500,
       storageQuotaBytes: 5_368_709_120,
       mealPlanWeekStartsOn: 6,
+      mealReferencePortions: 6,
     });
   });
 
@@ -23,6 +25,7 @@ describe('instance settings contracts', () => {
         apiRateLimitPerMinute,
         storageQuotaBytes: 5_368_709_120,
         mealPlanWeekStartsOn: 1,
+        mealReferencePortions: 4,
       }),
     ).toThrow();
   });
@@ -35,6 +38,7 @@ describe('instance settings contracts', () => {
           apiRateLimitPerMinute: 1_200,
           storageQuotaBytes,
           mealPlanWeekStartsOn: 1,
+          mealReferencePortions: 4,
         }),
       ).toThrow();
     },
@@ -46,7 +50,17 @@ describe('instance settings contracts', () => {
         apiRateLimitPerMinute: 1_200,
         storageQuotaBytes: 5_368_709_120,
         mealPlanWeekStartsOn,
+        mealReferencePortions: 4,
       }),
     ).toThrow();
+  });
+
+  it.each([0, 101, 1.5])('refuse %s portions de référence', (mealReferencePortions) => {
+    expect(() => instanceSettingsUpdateSchema.parse({
+      apiRateLimitPerMinute: 1_200,
+      storageQuotaBytes: 5_368_709_120,
+      mealPlanWeekStartsOn: 1,
+      mealReferencePortions,
+    })).toThrow();
   });
 });

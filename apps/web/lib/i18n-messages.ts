@@ -345,6 +345,8 @@ export const englishMessages: Record<string, string> = {
   'Décrivez le plat et les quantités pour les portions de référence.':
     'Describe the dish and quantities for the reference servings.',
   'Portions de référence': 'Reference servings',
+  'Valeur proposée pour les nouveaux plats et les repas planifiés.':
+    'Suggested value for new dishes and planned meals.',
   'Adresse de la photo (facultatif)': 'Photo URL (optional)',
   'Ajouter un ingrédient': 'Add ingredient',
   'Tags, séparés par des virgules': 'Tags, comma-separated',

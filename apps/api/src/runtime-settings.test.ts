@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_API_RATE_LIMIT_PER_MINUTE,
   DEFAULT_MEAL_PLAN_WEEK_STARTS_ON,
+  DEFAULT_MEAL_REFERENCE_PORTIONS,
   DEFAULT_STORAGE_QUOTA_BYTES,
   readApiRateLimit,
   readMealPlanWeekStartsOn,
+  readMealReferencePortions,
   readStorageQuota,
 } from './runtime-settings.js';
 
@@ -40,5 +42,16 @@ describe('readStorageQuota', () => {
   it('falls back for malformed or unsafe values', () => {
     expect(readStorageQuota('large')).toBe(DEFAULT_STORAGE_QUOTA_BYTES);
     expect(readStorageQuota(1)).toBe(DEFAULT_STORAGE_QUOTA_BYTES);
+  });
+});
+
+describe('readMealReferencePortions', () => {
+  it('accepte une valeur valide et conserve la valeur historique par défaut', () => {
+    expect(readMealReferencePortions(6)).toBe(6);
+    expect(readMealReferencePortions(undefined)).toBe(DEFAULT_MEAL_REFERENCE_PORTIONS);
+  });
+
+  it.each([0, 101, 2.5, '6'])('écarte une valeur invalide %s', (value) => {
+    expect(readMealReferencePortions(value)).toBe(DEFAULT_MEAL_REFERENCE_PORTIONS);
   });
 });

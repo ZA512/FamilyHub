@@ -49,6 +49,7 @@ import { registerDocumentRoutes } from './document-routes.js';
 import { registerExportRoutes } from './export-routes.js';
 import {
   readMealPlanWeekStartsOn,
+  readMealReferencePortions,
   readStorageQuota,
   type RuntimeSettings,
 } from './runtime-settings.js';
@@ -364,9 +365,11 @@ export async function registerRoutes(
     const stored = await pool.query<{
       storageQuota: unknown;
       mealPlanWeekStartsOn: unknown;
+      mealReferencePortions: unknown;
     }>(
       `SELECT settings -> 'storageQuotaBytes' AS "storageQuota",
-              settings -> 'mealPlanWeekStartsOn' AS "mealPlanWeekStartsOn"
+              settings -> 'mealPlanWeekStartsOn' AS "mealPlanWeekStartsOn",
+              settings -> 'mealReferencePortions' AS "mealReferencePortions"
          FROM module_config WHERE instance_id = $1 AND module_key = 'settings'`,
       [request.session?.instanceId],
     );
@@ -375,6 +378,7 @@ export async function registerRoutes(
         apiRateLimitPerMinute: runtimeSettings.apiRateLimitPerMinute,
         storageQuotaBytes: readStorageQuota(stored.rows[0]?.storageQuota),
         mealPlanWeekStartsOn: readMealPlanWeekStartsOn(stored.rows[0]?.mealPlanWeekStartsOn),
+        mealReferencePortions: readMealReferencePortions(stored.rows[0]?.mealReferencePortions),
       } satisfies InstanceSettings,
     };
   });
@@ -395,14 +399,17 @@ export async function registerRoutes(
       const client = await pool.connect();
       let previousStorageQuota = readStorageQuota(undefined);
       let previousMealPlanWeekStartsOn = 1;
+      let previousMealReferencePortions = readMealReferencePortions(undefined);
       try {
         await client.query('BEGIN');
         const previous = await client.query<{
           storageQuota: unknown;
           mealPlanWeekStartsOn: unknown;
+          mealReferencePortions: unknown;
         }>(
           `SELECT settings -> 'storageQuotaBytes' AS "storageQuota",
-                  settings -> 'mealPlanWeekStartsOn' AS "mealPlanWeekStartsOn"
+                  settings -> 'mealPlanWeekStartsOn' AS "mealPlanWeekStartsOn",
+                  settings -> 'mealReferencePortions' AS "mealReferencePortions"
            FROM module_config
            WHERE instance_id = $1 AND module_key = 'settings'
            FOR UPDATE`,
@@ -412,21 +419,28 @@ export async function registerRoutes(
         previousMealPlanWeekStartsOn = readMealPlanWeekStartsOn(
           previous.rows[0]?.mealPlanWeekStartsOn,
         );
+        previousMealReferencePortions = readMealReferencePortions(
+          previous.rows[0]?.mealReferencePortions,
+        );
         await client.query(
           `UPDATE module_config
            SET settings = jsonb_set(
                  jsonb_set(
-                   jsonb_set(settings, '{apiRateLimitPerMinute}', to_jsonb($1::integer)),
-                   '{storageQuotaBytes}', to_jsonb($2::bigint)
+                   jsonb_set(
+                     jsonb_set(settings, '{apiRateLimitPerMinute}', to_jsonb($1::integer)),
+                     '{storageQuotaBytes}', to_jsonb($2::bigint)
+                   ),
+                   '{mealPlanWeekStartsOn}', to_jsonb($3::integer)
                  ),
-                 '{mealPlanWeekStartsOn}', to_jsonb($3::integer)
+                 '{mealReferencePortions}', to_jsonb($4::integer)
                ),
                updated_at = now()
-           WHERE instance_id = $4 AND module_key = 'settings'`,
+           WHERE instance_id = $5 AND module_key = 'settings'`,
           [
             parsed.data.apiRateLimitPerMinute,
             parsed.data.storageQuotaBytes,
             parsed.data.mealPlanWeekStartsOn,
+            parsed.data.mealReferencePortions,
             request.session.instanceId,
           ],
         );
@@ -450,6 +464,10 @@ export async function registerRoutes(
                 before: previousMealPlanWeekStartsOn,
                 after: parsed.data.mealPlanWeekStartsOn,
               },
+              mealReferencePortions: {
+                before: previousMealReferencePortions,
+                after: parsed.data.mealReferencePortions,
+              },
             }),
           ],
         );
@@ -466,6 +484,7 @@ export async function registerRoutes(
           apiRateLimitPerMinute: runtimeSettings.apiRateLimitPerMinute,
           storageQuotaBytes: parsed.data.storageQuotaBytes,
           mealPlanWeekStartsOn: parsed.data.mealPlanWeekStartsOn,
+          mealReferencePortions: parsed.data.mealReferencePortions,
         } satisfies InstanceSettings,
       };
     },
