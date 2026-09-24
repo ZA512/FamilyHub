@@ -1347,6 +1347,21 @@ export const collectionItemCreateSchema = collectionItemFieldsSchema.and(
   z.object({ clientMutationId: z.string().uuid() }),
 );
 
+export const collectionItemImportSchema = z
+  .object({ items: z.array(collectionItemCreateSchema).min(1).max(200) })
+  .superRefine((value, context) => {
+    const ids = value.items.map((item) => item.clientMutationId);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message: 'Chaque ligne doit avoir un identifiant de mutation distinct.',
+      });
+    }
+  });
+
+export type CollectionItemCreate = z.infer<typeof collectionItemCreateSchema>;
+
 export const collectionItemUpdateSchema = collectionItemFieldsSchema.and(
   z.object({ version: z.number().int().positive() }),
 );

@@ -2,6 +2,7 @@ import {
   collectionCommentCreateSchema,
   collectionCreateSchema,
   collectionItemCreateSchema,
+  collectionItemImportSchema,
   collectionItemUpdateSchema,
   collectionPreferenceSchema,
   collectionsQuerySchema,
@@ -753,6 +754,105 @@ export async function registerCollectionRoutes(app: FastifyInstance, pool: Pool)
         await client.query('COMMIT');
         return reply.code(201).send({
           item: await loadItem(pool, itemId, collection, session.id),
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
+
+  app.post(
+    '/api/v1/collections/:id/items/import',
+    { preHandler: [requireSession, requireCsrf], bodyLimit: 3_000_000 },
+    async (request, reply) => {
+      if (!(await requireCollectionsModule(request, reply, pool))) return;
+      const id = idSchema.safeParse((request.params as { id?: string }).id);
+      const parsed = collectionItemImportSchema.safeParse(request.body);
+      if (!id.success || !parsed.success) {
+        return reply.code(400).send({ error: 'INVALID_REQUEST', details: parsed.error?.flatten() });
+      }
+      const session = request.session!;
+      const collection = await loadCollection(pool, id.data, session.instanceId, session.id);
+      if (!collection) return reply.code(404).send({ error: 'COLLECTION_NOT_FOUND' });
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const mutationIds = parsed.data.items.map((item) => item.clientMutationId);
+        const existing = await client.query<{ clientMutationId: string; collectionId: string }>(
+          `SELECT client_mutation_id AS "clientMutationId", collection_id AS "collectionId"
+           FROM collection_item
+           WHERE instance_id = $1 AND client_mutation_id = ANY($2::uuid[])
+           FOR UPDATE`,
+          [session.instanceId, mutationIds],
+        );
+        const known = new Map(existing.rows.map((row) => [row.clientMutationId, row.collectionId]));
+        if ([...known.values()].some((collectionId) => collectionId !== collection.id)) {
+          await client.query('ROLLBACK');
+          return reply.code(409).send({ error: 'MUTATION_ID_REUSED' });
+        }
+
+        let addedCount = 0;
+        let firstTitle = '';
+        for (const item of parsed.data.items) {
+          if (known.has(item.clientMutationId)) continue;
+          const inserted = await client.query<{ id: string }>(
+            `INSERT INTO collection_item
+               (collection_id, instance_id, title, subtitle, description, url, image_url,
+                metadata_json, added_by, client_mutation_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
+             ON CONFLICT (instance_id, client_mutation_id) DO NOTHING
+             RETURNING id`,
+            [
+              collection.id,
+              session.instanceId,
+              item.title,
+              item.subtitle ?? null,
+              item.description ?? null,
+              item.url ?? null,
+              item.imageUrl ?? null,
+              JSON.stringify(item.metadata),
+              session.id,
+              item.clientMutationId,
+            ],
+          );
+          const itemId = inserted.rows[0]?.id;
+          if (!itemId) {
+            const conflict = await client.query<{ collectionId: string }>(
+              `SELECT collection_id AS "collectionId" FROM collection_item
+               WHERE instance_id = $1 AND client_mutation_id = $2`,
+              [session.instanceId, item.clientMutationId],
+            );
+            if (conflict.rows[0]?.collectionId !== collection.id) {
+              await client.query('ROLLBACK');
+              return reply.code(409).send({ error: 'MUTATION_ID_REUSED' });
+            }
+            continue;
+          }
+          await replaceItemTags(client, itemId, session.instanceId, session.id, item.tags);
+          addedCount += 1;
+          if (!firstTitle) firstTitle = item.title;
+        }
+        if (addedCount) {
+          await client.query('UPDATE collection SET updated_at = now() WHERE id = $1', [collection.id]);
+          await client.query('UPDATE resource SET updated_at = now() WHERE id = $1', [collection.id]);
+          await notifyCollectionAudience(
+            client,
+            collection.id,
+            session.id,
+            session.firstName,
+            'COLLECTION_ITEM_ADDED',
+            collection.name,
+            addedCount === 1 ? firstTitle : `${addedCount} éléments`,
+          );
+        }
+        await client.query('COMMIT');
+        return reply.code(201).send({
+          addedCount,
+          skippedCount: parsed.data.items.length - addedCount,
         });
       } catch (error) {
         await client.query('ROLLBACK');

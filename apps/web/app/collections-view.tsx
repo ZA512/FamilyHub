@@ -3,6 +3,7 @@ import { localeTag } from '@/lib/i18n';
 import {
   ArrowLeft,
   BookOpen,
+  Download,
   ExternalLink,
   Film,
   Gamepad2,
@@ -25,6 +26,7 @@ import {
   Tv,
   Users,
   Utensils,
+  Upload,
   X,
   Video,
   Lock,
@@ -73,6 +75,13 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  collectionCsvTemplate,
+  MAX_COLLECTION_CSV_BYTES,
+  metadataColumnsFromHint,
+  parseCollectionCsv,
+} from '@/lib/collection-csv';
+import type { CollectionItemCreate } from '@familyhub/contracts';
 
 type CollectionScope = 'all' | 'mine' | 'shared';
 
@@ -242,6 +251,11 @@ export function CollectionsView({
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [itemComposerOpen, setItemComposerOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importNotice, setImportNotice] = useState<{
+    collectionId: string;
+    message: string;
+  } | null>(null);
   const [editedItem, setEditedItem] = useState<FamilyCollectionItem | null>(
     null,
   );
@@ -713,6 +727,25 @@ export function CollectionsView({
         />
       ) : null}
 
+      {importOpen && selected ? (
+        <CollectionImportDialog
+          key={selected.id}
+          collection={selected}
+          csrfToken={csrfToken}
+          onClose={() => setImportOpen(false)}
+          onImported={(addedCount, skippedCount) => {
+            setImportOpen(false);
+            setReloadToken((value) => value + 1);
+            setImportNotice({
+              collectionId: selected.id,
+              message: skippedCount
+                ? `${addedCount} élément${addedCount > 1 ? 's' : ''} importé${addedCount > 1 ? 's' : ''}, ${skippedCount} déjà présent${skippedCount > 1 ? 's' : ''}.`
+                : `${addedCount} élément${addedCount > 1 ? 's' : ''} importé${addedCount > 1 ? 's' : ''}.`,
+            });
+          }}
+        />
+      ) : null}
+
       {focusedItem && selected ? (
         <ItemDetailDialog
           item={focusedItem}
@@ -787,6 +820,11 @@ export function CollectionsView({
           >
             {error}
           </p>
+        ) : null}
+        {importNotice?.collectionId === selectedId ? (
+          <output className="mb-4 block rounded-xl border bg-muted/30 px-4 py-3 text-sm text-primary">
+            {importNotice.message}
+          </output>
         ) : null}
 
         <div className="mb-4 grid gap-3 lg:grid-cols-[auto_minmax(15rem,1fr)_13rem] lg:items-center">
@@ -945,6 +983,11 @@ export function CollectionsView({
                   setDeleteTarget({ kind: 'collection', collection: selected })
                 }
                 onAddItem={() => openItemComposer()}
+                onImport={() => {
+                  setError('');
+                  setImportNotice(null);
+                  setImportOpen(true);
+                }}
                 onOpenItem={setFocusedItemId}
                 onPreference={(item, value) =>
                   void updatePreference(item, value)
@@ -973,6 +1016,7 @@ function CollectionReader({
   onEdit,
   onDelete,
   onAddItem,
+  onImport,
   onOpenItem,
   onPreference,
 }: {
@@ -983,6 +1027,7 @@ function CollectionReader({
   onEdit: () => void;
   onDelete: () => void;
   onAddItem: () => void;
+  onImport: () => void;
   onOpenItem: (id: string) => void;
   onPreference: (item: FamilyCollectionItem, value: -1 | 0 | 1) => void;
 }) {
@@ -1073,16 +1118,21 @@ function CollectionReader({
             </div>
           </div>
         </div>
-        <div className="mt-5 flex items-center justify-between gap-3">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p className="font-medium">
             {items.length} élément{items.length > 1 ? 's' : ''}
           </p>
-          <Button
-            onClick={onAddItem}
-            className="rounded-xl bg-primary hover:bg-primary/80"
-          >
-            <Plus aria-hidden="true" /> Ajouter un {config.itemLabel}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={onImport}>
+              <Upload aria-hidden="true" /> Importer
+            </Button>
+            <Button
+              onClick={onAddItem}
+              className="rounded-xl bg-primary hover:bg-primary/80"
+            >
+              <Plus aria-hidden="true" /> Ajouter un {config.itemLabel}
+            </Button>
+          </div>
         </div>
       </div>
       <div className="p-4 sm:p-6">
@@ -1447,6 +1497,217 @@ function AudienceFields({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function CollectionImportDialog({
+  collection,
+  csrfToken,
+  onClose,
+  onImported,
+}: {
+  collection: FamilyCollection;
+  csrfToken: string;
+  onClose: () => void;
+  onImported: (addedCount: number, skippedCount: number) => void;
+}) {
+  const metadataColumns = metadataColumnsFromHint(
+    typeConfig(collection.type).metadataHint,
+  );
+  const [fileName, setFileName] = useState('');
+  const [items, setItems] = useState<CollectionItemCreate[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [reading, setReading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  function downloadTemplate() {
+    const blob = new Blob([collectionCsvTemplate(metadataColumns)], {
+      type: 'text/csv;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${collection.type.toLowerCase()}-modele.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  async function inspectFile(file: File | undefined) {
+    setFileName(file?.name ?? '');
+    setItems([]);
+    setErrors([]);
+    if (!file) return;
+    if (file.size > MAX_COLLECTION_CSV_BYTES) {
+      setErrors(['Le fichier dépasse 1 Mo. Divisez-le en plusieurs imports.']);
+      return;
+    }
+    setReading(true);
+    try {
+      const parsed = parseCollectionCsv(await file.text(), metadataColumns);
+      setItems(parsed.items);
+      setErrors(parsed.errors);
+    } catch {
+      setErrors(['Impossible de lire ce fichier CSV.']);
+    } finally {
+      setReading(false);
+    }
+  }
+
+  async function submitImport() {
+    if (!items.length || reading || submitting) return;
+    setSubmitting(true);
+    setErrors([]);
+    try {
+      const response = await fetch(
+        `/api/v1/collections/${collection.id}/items/import`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify({ items }),
+        },
+      );
+      if (response.status === 400)
+        throw new Error(
+          'Le serveur a refusé la structure du fichier. Vérifiez les colonnes et les lignes.',
+        );
+      if (response.status === 409)
+        throw new Error(
+          'Un identifiant d’import est déjà utilisé dans une autre collection. Rechargez le fichier.',
+        );
+      if (!response.ok)
+        throw new Error(
+          'Import impossible. Aucun élément du fichier n’a été ajouté.',
+        );
+      const result = (await response.json()) as {
+        addedCount: number;
+        skippedCount: number;
+      };
+      onImported(result.addedCount, result.skippedCount);
+    } catch (reason) {
+      setErrors([
+        reason instanceof Error ? reason.message : 'Import impossible.',
+      ]);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && !submitting && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Importer des éléments</DialogTitle>
+          <DialogDescription>
+            Importez plusieurs éléments dans « {collection.name} » en une fois.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <p className="mb-2 font-medium">
+              Modèle pour {typeConfig(collection.type).label.toLowerCase()}
+            </p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Colonnes :{' '}
+              {[
+                'Titre',
+                'Sous-titre',
+                'Description',
+                'Lien',
+                'Image',
+                'Étiquettes',
+                ...metadataColumns,
+              ].join(' · ')}
+              . Gardez toutes les colonnes du modèle ; seule la valeur du titre
+              est obligatoire.
+            </p>
+            <Button type="button" variant="outline" onClick={downloadTemplate}>
+              <Download aria-hidden="true" /> Télécharger le CSV vierge
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Fichier UTF-8, séparé par « ; » ou « , ». Si une valeur contient le
+            séparateur, des guillemets ou un retour à la ligne, entourez-la de
+            guillemets doubles. Séparez les étiquettes par des virgules dans
+            leur cellule. Jusqu’à 200 lignes et 1 Mo par fichier.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="collection-csv-file">Fichier CSV à importer</Label>
+            <Input
+              id="collection-csv-file"
+              type="file"
+              accept=".csv,text/csv"
+              disabled={reading || submitting}
+              onChange={(event) => {
+                void inspectFile(event.currentTarget.files?.[0]);
+                event.currentTarget.value = '';
+              }}
+            />
+            {fileName ? (
+              <p className="text-xs text-muted-foreground">{fileName}</p>
+            ) : null}
+          </div>
+          {reading ? (
+            <p className="text-sm text-muted-foreground">
+              Vérification du fichier…
+            </p>
+          ) : null}
+          {errors.length ? (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            >
+              <p className="font-medium">
+                Import arrêté : corrigez le fichier.
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {errors.map((message, index) => (
+                  <li key={`${index}:${message}`}>{message}</li>
+                ))}
+              </ul>
+            </div>
+          ) : items.length ? (
+            <output className="block rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+              {items.length} élément{items.length > 1 ? 's' : ''} vérifié
+              {items.length > 1 ? 's' : ''}, prêt{items.length > 1 ? 's' : ''} à
+              importer. L’import sera effectué en une seule fois.
+            </output>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={submitting}
+          >
+            Annuler
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void submitImport()}
+            disabled={
+              !items.length || reading || submitting || errors.length > 0
+            }
+            className="bg-primary hover:bg-primary/80"
+          >
+            {submitting ? (
+              <LoaderCircle className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Upload aria-hidden="true" />
+            )}
+            Importer{' '}
+            {items.length
+              ? `${items.length} élément${items.length > 1 ? 's' : ''}`
+              : ''}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

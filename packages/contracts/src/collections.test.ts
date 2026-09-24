@@ -4,6 +4,7 @@ import {
   collectionCommentCreateSchema,
   collectionCreateSchema,
   collectionItemCreateSchema,
+  collectionItemImportSchema,
   collectionPreferenceSchema,
   collectionsQuerySchema,
 } from './index.js';
@@ -41,6 +42,19 @@ describe('collection contracts', () => {
         clientMutationId: mutationId,
       }).success,
     ).toBe(false);
+  });
+
+  it('valide le lot complet et limite les lignes importées', () => {
+    expect(collectionItemImportSchema.safeParse({ items: [{ title: 'Un livre', clientMutationId: mutationId }] }).success).toBe(true);
+    expect(collectionItemImportSchema.safeParse({ items: [
+      { title: 'Un livre', clientMutationId: mutationId },
+      { title: 'Un autre', clientMutationId: mutationId },
+    ] }).success).toBe(false);
+    expect(collectionItemImportSchema.safeParse({ items: [] }).success).toBe(false);
+    expect(collectionItemImportSchema.safeParse({ items: Array.from({ length: 201 }, (_, index) => ({
+      title: `Élément ${index}`,
+      clientMutationId: mutationId,
+    })) }).success).toBe(false);
   });
 
   it('requires recipients for targeted sharing', () => {

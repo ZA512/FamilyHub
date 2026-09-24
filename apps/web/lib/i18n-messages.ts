@@ -523,6 +523,13 @@ export const englishMessages: Record<string, string> = {
   'Supprimer le commentaire': 'Delete comment',
   'Aucun commentaire pour le moment.': 'No comments yet.',
   'Nouveau commentaire': 'New comment',
+  'Importer des éléments': 'Import items',
+  'Télécharger le CSV vierge': 'Download blank CSV',
+  'Fichier CSV à importer': 'CSV file to import',
+  'Vérification du fichier…': 'Checking the file…',
+  'Import arrêté : corrigez le fichier.': 'Import stopped: correct the file.',
+  'Fichier UTF-8, séparé par « ; » ou « , ». Si une valeur contient le séparateur, des guillemets ou un retour à la ligne, entourez-la de guillemets doubles. Séparez les étiquettes par des virgules dans leur cellule. Jusqu’à 200 lignes et 1 Mo par fichier.':
+    'Use a UTF-8 file separated by ";" or ",". Enclose values containing the separator, quotes or a line break in double quotes. Separate labels with commas within their cell. Up to 200 rows and 1 MB per file.',
 
   // Polls and ideas
   'Décider ensemble': 'Decide together',
