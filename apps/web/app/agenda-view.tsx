@@ -4,11 +4,9 @@ import '@fullcalendar/react/themes/forma/theme.css';
 import '@fullcalendar/react/themes/forma/palettes/blue.css';
 
 import FullCalendar, {
-  type CalendarRef,
   type DateClickInfo,
   type EventClickInfo,
   type EventInput,
-  type EventSourceFuncInfo,
 } from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/react/daygrid';
 import interactionPlugin from '@fullcalendar/react/interaction';
@@ -18,6 +16,7 @@ import frLocale from '@fullcalendar/react/locales/fr';
 import timeGridPlugin from '@fullcalendar/react/timegrid';
 import formaTheme from '@fullcalendar/react/themes/forma';
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -81,6 +80,13 @@ import { localeTag, useLocale } from '@/lib/i18n';
 const FamilyCalendar = FullCalendar as unknown as ComponentType<
   Record<string, unknown>
 >;
+const calendarPlugins = [
+  formaTheme,
+  dayGridPlugin,
+  timeGridPlugin,
+  listPlugin,
+  interactionPlugin,
+];
 
 type AgendaViewProps = {
   currentMemberId: string;
@@ -122,7 +128,13 @@ export function AgendaView({
 }: AgendaViewProps) {
   const locale = useLocale();
   const sessionKey = `${instanceId}:${currentMemberId}`;
-  const calendarRef = useRef<CalendarRef>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  const rangeRef = useRef<{
+    start: string;
+    end: string;
+    sessionKey: string;
+  } | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<EventInput[]>([]);
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [selected, setSelected] = useState<AgendaEntry | null>(null);
   const [composer, setComposer] = useState<ComposerState>({
@@ -150,54 +162,87 @@ export function AgendaView({
     onComposerOpenChange(true);
   }
 
-  async function loadEntries(
-    info: EventSourceFuncInfo,
-    success: (events: EventInput[]) => void,
-    failure: (error: Error) => void,
-  ) {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `/api/v1/agenda?start=${encodeURIComponent(info.startStr)}&end=${encodeURIComponent(info.endStr)}`,
+  const loadEntries = useCallback(
+    async (start: string, end: string) => {
+      requestRef.current?.abort();
+      const controller = new AbortController();
+      requestRef.current = controller;
+      rangeRef.current = { start, end, sessionKey };
+      setLoading(true);
+      const cached = await readAgendaCache(sessionKey, start, end).catch(
+        () => null,
       );
-      if (!response.ok) throw new Error('Impossible de charger l’agenda.');
-      const payload = (await response.json()) as { entries: AgendaEntry[] };
-      success(payload.entries.map(toCalendarEvent));
-      await writeAgendaCache(
-        sessionKey,
-        info.startStr,
-        info.endStr,
-        payload.entries,
-      ).catch(() => undefined);
-      setError('');
-    } catch (reason) {
-      const cached = await readAgendaCache(
-        sessionKey,
-        info.startStr,
-        info.endStr,
-      ).catch(() => null);
-      if (cached) {
-        success(cached.map(toCalendarEvent));
-        setError(
-          'Agenda affiché depuis cet appareil · lecture seule hors connexion.',
-        );
-        return;
+      if (controller.signal.aborted) return;
+      if (cached !== null) {
+        setCalendarEvents(cached.map(toCalendarEvent));
+        setLoading(false);
+        setError('');
       }
-      const message =
-        reason instanceof Error ? reason.message : 'Agenda indisponible.';
-      setError(message);
-      failure(new Error(message));
-    } finally {
-      setLoading(false);
+      try {
+        const response = await fetch(
+          `/api/v1/agenda?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+          { signal: controller.signal },
+        );
+        if (!response.ok) throw new Error('Impossible de charger l’agenda.');
+        const payload = (await response.json()) as { entries: AgendaEntry[] };
+        if (controller.signal.aborted) return;
+        setCalendarEvents(payload.entries.map(toCalendarEvent));
+        setError('');
+        void writeAgendaCache(sessionKey, start, end, payload.entries).catch(
+          () => undefined,
+        );
+      } catch (reason) {
+        if (controller.signal.aborted) return;
+        if (cached !== null) {
+          setError(
+            'Agenda affiché depuis cet appareil · lecture seule hors connexion.',
+          );
+          return;
+        }
+        const message =
+          reason instanceof Error ? reason.message : 'Agenda indisponible.';
+        setError(message);
+        setCalendarEvents([]);
+      } finally {
+        if (requestRef.current === controller) {
+          requestRef.current = null;
+          setLoading(false);
+        }
+      }
+    },
+    [sessionKey],
+  );
+
+  const handleDatesSet = useCallback(
+    (info: { startStr: string; endStr: string }) => {
+      if (
+        rangeRef.current?.start === info.startStr &&
+        rangeRef.current.end === info.endStr &&
+        rangeRef.current.sessionKey === sessionKey
+      )
+        return;
+      void loadEntries(info.startStr, info.endStr);
+    },
+    [loadEntries, sessionKey],
+  );
+
+  useEffect(() => () => requestRef.current?.abort(), []);
+
+  useEffect(() => {
+    const range = rangeRef.current;
+    if (range && range.sessionKey !== sessionKey) {
+      setCalendarEvents([]);
+      void loadEntries(range.start, range.end);
     }
-  }
+  }, [loadEntries, sessionKey]);
 
   function handleEventClick(info: EventClickInfo) {
     setSelected(info.event.extendedProps.entry as AgendaEntry);
   }
 
   function refresh() {
-    calendarRef.current?.getApi().refetchEvents();
+    const range = rangeRef.current;
+    if (range) void loadEntries(range.start, range.end);
   }
 
   async function respond(responseValue: AgendaResponse) {
@@ -359,14 +404,7 @@ export function AgendaView({
             </span>
           ) : null}
           <FamilyCalendar
-            ref={calendarRef}
-            plugins={[
-              formaTheme,
-              dayGridPlugin,
-              timeGridPlugin,
-              listPlugin,
-              interactionPlugin,
-            ]}
+            plugins={calendarPlugins}
             themeSystem="forma"
             locale={locale === 'en' ? enGbLocale : frLocale}
             initialView={initialView}
@@ -381,7 +419,8 @@ export function AgendaView({
               week: 'Semaine',
               list: 'Liste',
             }}
-            events={loadEntries}
+            events={calendarEvents}
+            datesSet={handleDatesSet}
             eventClick={handleEventClick}
             dateClick={(info: DateClickInfo) =>
               openComposer({ start: info.dateStr, allDay: info.allDay })

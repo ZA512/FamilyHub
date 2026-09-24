@@ -303,6 +303,13 @@ describe('offline shopping helpers', () => {
         '2026-09-21T00:00:00.000Z',
       ),
     ).toEqual([entry]);
+    expect(
+      await readAgendaCache(
+        sessionKey,
+        '2026-11-01T00:00:00.000Z',
+        '2026-12-01T00:00:00.000Z',
+      ),
+    ).toBeNull();
   });
 
   it('conserve les plats et le planning hebdomadaire en lecture locale', async () => {

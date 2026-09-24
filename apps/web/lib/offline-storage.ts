@@ -1086,7 +1086,14 @@ export async function readAgendaCache(
   const requestedStart = Date.parse(start);
   const requestedEnd = Date.parse(end);
   const entries = new Map<string, AgendaEntry>();
+  let overlappingRange = false;
   for (const range of ranges) {
+    if (
+      Date.parse(range.start) >= requestedEnd ||
+      Date.parse(range.end) <= requestedStart
+    )
+      continue;
+    overlappingRange = true;
     for (const entry of range.entries) {
       const entryStart = Date.parse(entry.startAt);
       const entryEnd = Date.parse(entry.endAt ?? entry.startAt);
@@ -1095,7 +1102,7 @@ export async function readAgendaCache(
       }
     }
   }
-  return [...entries.values()];
+  return overlappingRange ? [...entries.values()] : null;
 }
 
 export async function writeMealsCache(
