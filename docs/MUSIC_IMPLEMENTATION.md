@@ -6,6 +6,8 @@ Le dépôt ne contient aucun jeton développeur Spotify. Chaque installation ren
 
 ## Mise en service
 
+Le parcours complet pour le propriétaire de l'application, les cinq comptes du foyer et le NAS est décrit dans [Configurer Spotify pour FamilyHub](SPOTIFY_SETUP.md).
+
 1. Créer une application dans le [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
 2. Ajouter exactement l'URI `https://votre-domaine/api/v1/music/spotify/callback` aux redirect URIs Spotify. En développement local, utiliser une origine `http://127.0.0.1:PORT` pour FamilyHub et l'URI de retour ; `localhost` n'est pas accepté par Spotify.
 3. Définir `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` (32 octets hexadécimaux) et `SPOTIFY_REDIRECT_URI` dans `.env`, puis redémarrer l'application. Garder la clé de chiffrement stable : la changer rend les connexions existantes illisibles et impose leur reconnexion.
@@ -29,7 +31,7 @@ Une fois la version Musique publiée dans l'image `latest`, exécuter `docker co
 
 ## Limites externes et arbitrage produit
 
-- Le mode développement Spotify est limité à cinq comptes Spotify authentifiés. Ce plafond est externe à FamilyHub et n'est pas codé comme une limite de membres du foyer.
+- Le mode développement Spotify est limité à cinq comptes Spotify authentifiés, propriétaire inclus s'il relie son compte à FamilyHub. Le propriétaire doit également être ajouté à « User Management » pour utiliser l'application. Ce plafond est externe à FamilyHub et n'est pas codé comme une limite de membres du foyer.
 - Spotify exige une redirect URI HTTPS hors adresses loopback. L'application doit donc être servie sous HTTPS sur le NAS ou un domaine public pour un vrai usage multi-appareils.
 - Les refresh tokens Spotify expirent au bout de 180 jours. FamilyHub retire la connexion et les favoris locaux si Spotify répond `invalid_grant` au renouvellement ; le membre peut ensuite reconnecter son compte pour réimporter ses favoris.
 - Le PRD demande à la fois une sélection FamilyHub sans création de playlist Spotify et un lien ouvrant toute la sélection dans Spotify. Spotify ne fournit pas de lien direct vers une liste arbitraire de titres. FamilyHub peut lancer cette liste via l'API de lecture sur un appareil actif ; le fallback ouvre un titre individuel. Un lien vers la sélection entière nécessiterait la création d'une playlist Spotify, exclue de la V1.

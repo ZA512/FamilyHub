@@ -1,6 +1,6 @@
 # FamilyHub
 
-L'intégration Musique/Spotify est décrite dans [docs/MUSIC_IMPLEMENTATION.md](docs/MUSIC_IMPLEMENTATION.md).
+Configuration Spotify : [guide de mise en service](docs/SPOTIFY_SETUP.md).
 
 [![CI](https://github.com/ZA512/FamilyHub/actions/workflows/ci.yml/badge.svg)](https://github.com/ZA512/FamilyHub/actions/workflows/ci.yml)
 
