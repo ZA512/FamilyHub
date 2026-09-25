@@ -14,13 +14,13 @@ Le parcours complet pour le propriétaire de l'application, les cinq comptes du 
 4. En développement direct, exécuter les migrations avec `npm run db:migrate`. Dans l'image Docker, elles sont exécutées au démarrage. Pour tester les changements locaux avec Compose, utiliser `docker compose -f compose.yaml -f compose.build.yaml up --build` ; `compose.yaml` seul récupère l'image publiée et ne contient pas les modifications locales.
 5. En mode développement Spotify, ajouter chaque compte participant à l'allowlist. Le propriétaire de l'application doit avoir Spotify Premium. La lecture à distance demande aussi Premium pour le membre qui la lance.
 
-### Instance familyhub.jateroka.fr
+### Déploiement sur un domaine HTTPS
 
-L'application Spotify FamilyHub est enregistrée avec l'URI de retour `https://familyhub.jateroka.fr/api/v1/music/spotify/callback`. Cette route n'a pas besoin de répondre lors de l'enregistrement sur le portail Spotify ; elle doit répondre après le déploiement, au moment où un membre autorise son compte.
+Chaque installation doit enregistrer dans Spotify son URI de retour exacte, par exemple `https://famille.example.net/api/v1/music/spotify/callback`. Cette route n'a pas besoin de répondre lors de l'enregistrement sur le portail Spotify ; elle doit répondre après le déploiement, au moment où un membre autorise son compte.
 
-Sur le NAS, mettre à jour les sources contenant `compose.yaml` et renseigner dans le `.env` **du NAS** `FAMILYHUB_ORIGIN=https://familyhub.jateroka.fr` ainsi que les quatre variables `SPOTIFY_*` ci-dessus. Le fichier `.env.spotify.production` conservé uniquement sur le poste de développement peut servir à transférer ces quatre valeurs de façon privée ; il n'est ni publié par Git ni copié automatiquement sur le NAS. Garder le même `SPOTIFY_TOKEN_ENCRYPTION_KEY` lors des mises à jour.
+Sur le serveur ou NAS, mettre à jour les sources contenant `compose.yaml` et renseigner dans son `.env` `FAMILYHUB_ORIGIN=https://famille.example.net` ainsi que les quatre variables `SPOTIFY_*` ci-dessus, en remplaçant le domaine d'exemple par celui de l'installation. Transférer les identifiants par un canal privé : ils ne sont ni publiés par Git ni copiés automatiquement depuis le poste de développement. Garder le même `SPOTIFY_TOKEN_ENCRYPTION_KEY` lors des mises à jour.
 
-Une fois la version Musique publiée dans l'image `latest`, exécuter `docker compose pull app` puis `docker compose up -d` depuis le répertoire Compose du NAS. L'image applique la migration de base de données au démarrage. Vérifier ensuite que la page `/music` s'ouvre sous le domaine HTTPS, puis connecter chaque compte depuis cette page. Une réponse HTTP 401 de `/api/v1/music/spotify/status` sans session est normale ; une réponse 404 indique que l'ancienne version tourne encore.
+Une fois la version Musique publiée dans l'image `latest`, exécuter `docker compose pull app` puis `docker compose up -d` depuis le répertoire Compose du serveur. L'image applique la migration de base de données au démarrage. Vérifier ensuite que la page `/music` s'ouvre sous le domaine HTTPS, puis connecter chaque compte depuis cette page. Une réponse HTTP 401 de `/api/v1/music/spotify/status` sans session est normale ; une réponse 404 indique que l'ancienne version tourne encore.
 
 ## Comportement livré
 
