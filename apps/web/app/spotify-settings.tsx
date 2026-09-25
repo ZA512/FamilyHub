@@ -18,11 +18,18 @@ export function SpotifySettings({ csrfToken }: { csrfToken: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+
+  const retryAt = status?.connection?.lastSyncAt ? Date.parse(status.connection.lastSyncAt) + 15 * 60_000 : 0;
+  const coolingDown = retryAt > now;
 
   async function load() {
     const response = await fetch('/api/v1/music/spotify/status');
     if (!response.ok) throw new Error('État Spotify indisponible.');
-    setStatus(await response.json() as Status);
+    const payload = await response.json() as Status;
+    setStatus(payload);
+    setNow(Date.now());
+    return payload;
   }
 
   useEffect(() => {
@@ -37,6 +44,18 @@ export function SpotifySettings({ csrfToken }: { csrfToken: string }) {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (!status?.connection?.syncing) return;
+    const timer = window.setInterval(() => { void load().catch(() => undefined); }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [status?.connection?.syncing]);
+
+  useEffect(() => {
+    if (!coolingDown) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), retryAt - now + 1_000);
+    return () => window.clearTimeout(timer);
+  }, [coolingDown, retryAt, now]);
+
   async function mutate(url: string, method: 'POST' | 'PATCH', body?: unknown) {
     setBusy(true); setError(''); setMessage('');
     try {
@@ -45,8 +64,16 @@ export function SpotifySettings({ csrfToken }: { csrfToken: string }) {
         body: body ? JSON.stringify(body) : undefined });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({})) as { error?: string };
-        throw new Error(payload.error === 'SYNC_COOLDOWN' ?
-          'Une synchronisation est déjà en cours ou a été lancée récemment.' :
+        if (payload.error === 'SYNC_COOLDOWN') {
+          const current = await load().catch(() => null);
+          if (current?.connection?.syncing) throw new Error('Une synchronisation est déjà en cours.');
+          if (current?.connection?.lastSyncAt) {
+            const next = new Date(Date.parse(current.connection.lastSyncAt) + 15 * 60_000);
+            throw new Error(`Synchronisation lancée récemment. Réessayez après ${next.toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit' })}.`);
+          }
+          throw new Error('Une synchronisation est déjà en cours ou a été lancée récemment.');
+        }
+        throw new Error(
           payload.error === 'SPOTIFY_RATE_LIMITED' || payload.error === 'SPOTIFY_QUOTA_EXCEEDED' ?
             'Limite Spotify atteinte. Réessayez plus tard.' :
             'Cette action Spotify a échoué. Réessayez plus tard.');
@@ -90,8 +117,9 @@ export function SpotifySettings({ csrfToken }: { csrfToken: string }) {
             <label htmlFor="spotify-share">Partager mes goûts musicaux avec la famille</label>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" disabled={busy || status.connection.syncing} onClick={() => void mutate('/api/v1/music/spotify/sync', 'POST')}>
+            <Button variant="outline" disabled={busy || status.connection.syncing || coolingDown} onClick={() => void mutate('/api/v1/music/spotify/sync', 'POST')}>
               <RefreshCw className="size-4" />Synchroniser maintenant</Button>
+            {coolingDown && !status.connection.syncing ? <p className="self-center text-xs text-muted-foreground">Nouvelle synchronisation possible à {new Date(retryAt).toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit' })}.</p> : null}
             {['SPOTIFY_REAUTHORIZE', 'AUTHORIZATION_FAILED'].includes(status.connection.syncError ?? '') ?
               <Button variant="outline" disabled={busy} onClick={() => {
                 setBusy(true); void startSpotifyConnection(csrfToken).catch(() => {

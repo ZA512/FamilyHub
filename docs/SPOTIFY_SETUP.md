@@ -63,6 +63,7 @@ Chaque membre ouvre FamilyHub avec **son propre compte FamilyHub**, va dans **Pa
 | « L’administrateur du serveur doit configurer les identifiants Spotify » | Les quatre `SPOTIFY_*` doivent être présents ensemble dans le `.env` **du NAS** ; redémarrez l'application après modification. |
 | Spotify refuse l'URI de retour | Comparez caractère par caractère l'URI du portail, `SPOTIFY_REDIRECT_URI` et `FAMILYHUB_ORIGIN`. |
 | Spotify refuse l'accès ou renvoie 403 | Vérifiez le compte Spotify effectivement utilisé et son inscription dans **User Management**. |
+| « Synchronisation déjà en cours » ou `SYNC_COOLDOWN` | Attendez la fin de la synchronisation en cours ou 15 minutes après la dernière tentative avant de la relancer manuellement. Le bouton indique quand un nouvel essai est possible. |
 | L'autorisation a expiré | Utilisez **Reconnecter Spotify**. Spotify peut demander une nouvelle autorisation après expiration du jeton de renouvellement. |
 | La lecture ne démarre pas | Vérifiez qu'un appareil Spotify est actif et que le compte qui lance la lecture est Premium. |
 | La limite de requêtes est atteinte | Réessayez plus tard ; les données précédemment synchronisées restent disponibles. |
