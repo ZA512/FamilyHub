@@ -12,6 +12,14 @@ Le dépôt ne contient aucun jeton développeur Spotify. Chaque installation ren
 4. En développement direct, exécuter les migrations avec `npm run db:migrate`. Dans l'image Docker, elles sont exécutées au démarrage. Pour tester les changements locaux avec Compose, utiliser `docker compose -f compose.yaml -f compose.build.yaml up --build` ; `compose.yaml` seul récupère l'image publiée et ne contient pas les modifications locales.
 5. En mode développement Spotify, ajouter chaque compte participant à l'allowlist. Le propriétaire de l'application doit avoir Spotify Premium. La lecture à distance demande aussi Premium pour le membre qui la lance.
 
+### Instance familyhub.jateroka.fr
+
+L'application Spotify FamilyHub est enregistrée avec l'URI de retour `https://familyhub.jateroka.fr/api/v1/music/spotify/callback`. Cette route n'a pas besoin de répondre lors de l'enregistrement sur le portail Spotify ; elle doit répondre après le déploiement, au moment où un membre autorise son compte.
+
+Sur le NAS, mettre à jour les sources contenant `compose.yaml` et renseigner dans le `.env` **du NAS** `FAMILYHUB_ORIGIN=https://familyhub.jateroka.fr` ainsi que les quatre variables `SPOTIFY_*` ci-dessus. Le fichier `.env.spotify.production` conservé uniquement sur le poste de développement peut servir à transférer ces quatre valeurs de façon privée ; il n'est ni publié par Git ni copié automatiquement sur le NAS. Garder le même `SPOTIFY_TOKEN_ENCRYPTION_KEY` lors des mises à jour.
+
+Une fois la version Musique publiée dans l'image `latest`, exécuter `docker compose pull app` puis `docker compose up -d` depuis le répertoire Compose du NAS. L'image applique la migration de base de données au démarrage. Vérifier ensuite que la page `/music` s'ouvre sous le domaine HTTPS, puis connecter chaque compte depuis cette page. Une réponse HTTP 401 de `/api/v1/music/spotify/status` sans session est normale ; une réponse 404 indique que l'ancienne version tourne encore.
+
 ## Comportement livré
 
 - Connexion Authorization Code avec `state` lié à la session et à usage unique, refresh token chiffré AES-256-GCM et scopes limités au PRD.
@@ -29,6 +37,6 @@ Le dépôt ne contient aucun jeton développeur Spotify. Chaque installation ren
 
 ## Validation restante avant usage réel
 
-Le typage, le lint, le build et les 185 tests automatisés passent. La migration `0021_music.sql` a été appliquée sur un PostgreSQL 16 jetable ; un scénario SQL avec cinq membres a confirmé l'agrégation de dix titres, la stabilité de la sélection hebdomadaire et le retrait des titres d'un membre dès la désactivation du partage.
+Le typage, le lint, le build et les 186 tests automatisés passent. La migration `0021_music.sql` a été appliquée sur un PostgreSQL 16 jetable ; un scénario SQL avec cinq membres a confirmé l'agrégation de dix titres, la stabilité de la sélection hebdomadaire et le retrait des titres d'un membre dès la désactivation du partage.
 
 Il reste à vérifier avec l'application Spotify et les comptes du foyer : le retour OAuth sous l'URL HTTPS définitive, l'import réel des favoris, la synchronisation et la lecture sur un appareil actif. Ces essais nécessitent `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, la clé de chiffrement et une origine FamilyHub accessible aux cinq membres.
