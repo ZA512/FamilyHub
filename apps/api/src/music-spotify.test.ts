@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Pool } from 'pg';
-import { loadConfig } from '@familyhub/config';
+import { loadConfig } from '../../../packages/config/src/index.js';
 import { decryptRefreshToken, encryptRefreshToken, refreshAccessToken } from './music-spotify.js';
 
 const config = loadConfig({
