@@ -9,11 +9,11 @@ import { startSpotifyConnection } from '@/lib/music';
 
 type Member = { id: string; firstName: string; shareEnabled: boolean };
 type Artist = { id: string; name: string; url: string; imageUrl: string | null;
-  memberIds: string[]; totalTracks: number; lastAddedAt: string; firstAddedAt: string;
+  memberIds: string[]; totalTracks: number; uniqueTracks: number; lastAddedAt: string; firstAddedAt: string;
   memberCounts: { memberId: string; count: number }[];
   memberFirstAddedAt: { memberId: string; addedAt: string }[] };
 type Track = { id: string; name: string; uri: string; url: string; imageUrl: string | null;
-  memberIds: string[]; artistIds: string[] };
+  addedAt: string; memberIds: string[]; artistIds: string[] };
 type Overview = { discoveries: Artist[]; common: Artist[]; recent: Artist[];
   members: Member[]; activity: string[]; newForMembers: {
     artistId: string; artistName: string; memberId: string; memberName: string; addedAt: string;
@@ -50,8 +50,8 @@ function ArtistArtwork({ artist }: { artist: Artist }) {
     <span className="grid size-14 shrink-0 place-items-center rounded-xl bg-accent text-primary"><Music2 /></span>;
 }
 
-export function MusicView({ csrfToken, memberId, onOpenSettings }: {
-  csrfToken: string; memberId: string; onOpenSettings: () => void;
+export function MusicView({ csrfToken, onOpenSettings }: {
+  csrfToken: string; onOpenSettings: () => void;
 }) {
   const [path, setPath] = useState<MusicPath>(readPath);
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -191,7 +191,7 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
         <ArtistArtwork artist={artist} />
         <span className="min-w-0 flex-1"><strong className="block truncate font-medium">{artist.name}</strong>
           <span className="block truncate text-sm text-muted-foreground">{names.join(' · ') || 'Artiste à découvrir'}</span>
-          <span className="block text-xs text-muted-foreground">{artist.totalTracks} titre{artist.totalTracks > 1 ? 's' : ''} enregistré{artist.totalTracks > 1 ? 's' : ''}</span>
+          <span className="block text-xs text-muted-foreground">{artist.uniqueTracks} titre{artist.uniqueTracks > 1 ? 's' : ''} aimé{artist.uniqueTracks > 1 ? 's' : ''}</span>
         </span>
       </button>
       <a href={artist.url} target="_blank" rel="noopener noreferrer" aria-label={`Ouvrir ${artist.name} dans Spotify`}
@@ -199,14 +199,14 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
     </div>;
   }
 
-  function trackRow(track: Track | Mix['items'][number], source?: string) {
-    return <div key={`${track.id}:${source ?? ''}`} className="flex items-center gap-3 border-b py-3 last:border-b-0">
+  function trackRow(track: Track | Mix['items'][number], detailLine?: string) {
+    return <div key={`${track.id}:${detailLine ?? ''}`} className="flex items-center gap-3 border-b py-3 last:border-b-0">
       {track.imageUrl ?
         // oxlint-disable-next-line next/no-img-element
         <img src={track.imageUrl} alt="" className="size-11 rounded-lg object-cover" /> :
         <span className="grid size-11 place-items-center rounded-lg bg-accent"><Music2 className="size-4" /></span>}
       <div className="min-w-0 flex-1"><p className="truncate font-medium">{track.name}</p>
-        {source ? <p className="text-xs text-muted-foreground">Proposé par {source}</p> : null}</div>
+        {detailLine ? <p className="text-xs text-muted-foreground">{detailLine}</p> : null}</div>
       <Button size="icon" variant="ghost" disabled={!connected || busy} aria-label={`Lire ${track.name}`}
         onClick={() => void play([track.uri], track.url)}><Play className="size-4" /></Button>
       <a href={track.url} target="_blank" rel="noopener noreferrer" aria-label={`Ouvrir ${track.name} dans Spotify`}
@@ -264,16 +264,20 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
       <Button variant="ghost" className="mb-4" onClick={() => go('/music/artists')}><ArrowLeft /> Artistes</Button>
       <Card className="mb-6"><CardContent className="flex flex-wrap items-center gap-5 pt-6"><ArtistArtwork artist={detail.artist} />
         <div className="flex-1"><h2 className="text-2xl font-semibold">{detail.artist.name}</h2>
-          <p className="text-sm text-muted-foreground">{detail.artist.totalTracks} titres enregistrés dans la famille</p></div>
+          <p className="text-sm text-muted-foreground">{detail.artist.uniqueTracks} titre{detail.artist.uniqueTracks > 1 ? 's' : ''} aimé{detail.artist.uniqueTracks > 1 ? 's' : ''} dans la famille</p></div>
         <a href={detail.artist.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted"><ExternalLink className="size-4" />Ouvrir dans Spotify</a>
       </CardContent></Card>
       <Card className="mb-6"><CardHeader><CardTitle>Dans la famille</CardTitle></CardHeader><CardContent className="space-y-2">
         {detail.artist.memberCounts.map((entry) => <button key={entry.memberId} type="button" onClick={() => go(`/music/members/${entry.memberId}`)}
           className="flex w-full justify-between rounded-lg p-2 text-left hover:bg-muted"><span>{detail.members.find((item) => item.id === entry.memberId)?.firstName}</span><span className="text-muted-foreground">{entry.count} titres</span></button>)}
       </CardContent></Card>
-      <Card><CardHeader><CardTitle>À découvrir pour toi</CardTitle><CardDescription>Quelques titres enregistrés par les autres membres.</CardDescription></CardHeader>
-        <CardContent>{detail.tracks.filter((track) => !track.memberIds.includes(memberId)).slice(0, 8).map((track) => trackRow(track, detail.members.filter((item) => track.memberIds.includes(item.id)).map((item) => item.firstName).join(', ')))}
-          {detail.tracks.every((track) => track.memberIds.includes(memberId)) ? <p className="text-sm text-muted-foreground">Aucun titre à découvrir pour l’instant.</p> : null}</CardContent></Card>
+      <Card><CardHeader><CardTitle>Titres aimés dans la famille</CardTitle>
+        <CardDescription>{detail.tracks.length < detail.artist.uniqueTracks ?
+          `Les ${detail.tracks.length} titres les plus récemment aimés sur ${detail.artist.uniqueTracks}.` :
+          'Chaque titre peut être écouté séparément ou ouvert directement dans Spotify.'}</CardDescription></CardHeader>
+        <CardContent>{detail.tracks.map((track) => trackRow(track,
+          `Aimé par ${detail.members.filter((item) => track.memberIds.includes(item.id)).map((item) => item.firstName).join(', ')}`))}
+          {!detail.tracks.length ? <p className="text-sm text-muted-foreground">Aucun titre disponible pour cet artiste.</p> : null}</CardContent></Card>
     </div> : null}
 
     {!loading && path.memberId && memberDetail ? <div>
@@ -330,7 +334,7 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
           {busy ? <LoaderCircle className="animate-spin" /> : <Play />} Lire la sélection sur Spotify</Button>
         {mix?.items.length ? <span className="text-sm text-muted-foreground">{mix.items.length} titres · {new Set(mix.items.map((item) => item.sourceMemberId)).size} membres</span> : null}
       </div>
-        {mix?.items.map((item) => trackRow(item, item.sourceMemberName))}
+        {mix?.items.map((item) => trackRow(item, `Proposé par ${item.sourceMemberName}`))}
         {!mix?.items.length ? <p className="text-sm text-muted-foreground">La sélection apparaîtra lorsque des membres partageront leurs favoris.</p> : null}
       </CardContent></Card> : null}
   </section>;

@@ -901,7 +901,7 @@ export default function DashboardPage({
               </Suspense>
             ) : activeView === 'music' ? (
               <Suspense fallback={<div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground"><LoaderCircle className="animate-spin" aria-hidden="true" />Chargement de la musique…</div>}>
-                <MusicView csrfToken={csrfToken} memberId={memberId} onOpenSettings={() => navigate('settings')} />
+                <MusicView csrfToken={csrfToken} onOpenSettings={() => navigate('settings')} />
               </Suspense>
             ) : activeView === 'members' ? (
               <MembersView

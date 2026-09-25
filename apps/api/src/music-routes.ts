@@ -202,7 +202,8 @@ export async function registerMusicRoutes(app: FastifyInstance, pool: Pool, conf
     const data = await loadLibrary(pool, request.session!.instanceId, request.session!.id);
     const artist = data.artists.find((item) => item.id === parsed.data.id);
     if (!artist) return reply.code(404).send({ error: 'NOT_FOUND' });
-    const tracks = data.tracks.filter((item) => item.artistIds.includes(artist.id)).slice(0, 30);
+    const tracks = data.tracks.filter((item) => item.artistIds.includes(artist.id))
+      .sort((a, b) => b.addedAt.localeCompare(a.addedAt)).slice(0, 30);
     return { artist, tracks, members: data.members };
   });
 
