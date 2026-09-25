@@ -25,6 +25,7 @@ const moduleKeys = new Set<ModuleKey>([
   'ideas',
   'contacts',
   'documents',
+  'music',
 ]);
 
 export function preferencesStorageKey(instanceId: string, memberId: string) {

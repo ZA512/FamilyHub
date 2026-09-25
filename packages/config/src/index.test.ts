@@ -67,4 +67,22 @@ describe('loadConfig', () => {
       loadConfig({ ...baseEnvironment, SMTP_HOST: 'smtp.example.com' }),
     ).toThrow(/SMTP_FROM/);
   });
+
+  it('exige une configuration Spotify complète et un retour autorisé', () => {
+    expect(() => loadConfig({ ...baseEnvironment, SPOTIFY_CLIENT_ID: 'client' })).toThrow(
+      /quatre paramètres Spotify/,
+    );
+    expect(() => loadConfig({ ...baseEnvironment,
+      SPOTIFY_CLIENT_ID: 'client', SPOTIFY_CLIENT_SECRET: 'secret',
+      SPOTIFY_TOKEN_ENCRYPTION_KEY: 'a'.repeat(64),
+      SPOTIFY_REDIRECT_URI: 'http://localhost:3000/api/v1/music/spotify/callback',
+    })).toThrow(/loopback/);
+    const valid = loadConfig({ ...baseEnvironment,
+      FAMILYHUB_ORIGIN: 'http://127.0.0.1:3000',
+      SPOTIFY_CLIENT_ID: 'client', SPOTIFY_CLIENT_SECRET: 'secret',
+      SPOTIFY_TOKEN_ENCRYPTION_KEY: 'a'.repeat(64),
+      SPOTIFY_REDIRECT_URI: 'http://127.0.0.1:3000/api/v1/music/spotify/callback',
+    });
+    expect(valid.SPOTIFY_CLIENT_ID).toBe('client');
+  });
 });

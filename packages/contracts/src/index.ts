@@ -59,6 +59,7 @@ export const functionalModuleKeys = [
   'ideas',
   'contacts',
   'documents',
+  'music',
 ] as const;
 
 export const moduleKeys = [...essentialModuleKeys, ...functionalModuleKeys] as const;
@@ -126,6 +127,7 @@ export type FamilyMember = {
   lastName: string | null;
   email: string | null;
   avatarUrl?: string | null;
+  musicShareEnabled?: boolean;
   role: 'ADMIN' | 'MEMBER';
   status: 'ACTIVE' | 'INACTIVE';
   joinedAt: string;
