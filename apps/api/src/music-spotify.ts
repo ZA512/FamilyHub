@@ -214,12 +214,14 @@ async function persistSavedTracks(client: PoolClient, memberId: string, tracks: 
 }
 
 export async function synchronizeMember(pool: Pool, config: AppConfig, memberId: string, force = false) {
+  // Keep PostgreSQL's microseconds; node-postgres converts timestamptz to a millisecond Date.
   const lock = await pool.query<{ member_id: string; instance_id: string; share_enabled: boolean;
-    connected_at: Date; sync_started_at: Date; last_successful_sync_at: Date | null }>(
+    connected_at: string; sync_started_at: string; last_successful_sync_at: Date | null }>(
     `UPDATE spotify_connection SET sync_started_at=now(), sync_error=NULL
      WHERE member_id=$1 AND (sync_started_at IS NULL OR sync_started_at < now()-interval '30 minutes')
        AND ($2::boolean OR last_sync_at IS NULL OR last_sync_at < now()-interval '15 minutes')
-     RETURNING member_id, instance_id, share_enabled, connected_at, sync_started_at,
+     RETURNING member_id, instance_id, share_enabled, connected_at::text AS connected_at,
+       sync_started_at::text AS sync_started_at,
        last_successful_sync_at`, [memberId, force]);
   if (!lock.rowCount) throw new SpotifyFailure('SYNC_COOLDOWN', 409);
   const lease = lock.rows[0]!;
