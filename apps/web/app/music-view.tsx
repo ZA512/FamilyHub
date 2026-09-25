@@ -229,7 +229,7 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
       {syncing ? <p className="mt-1 text-xs text-muted-foreground">Synchronisation Spotify en cours…</p> : null}
     </div>
     {notice ? <output className="mb-4 block rounded-xl border bg-accent px-4 py-3 text-sm text-accent-foreground">{notice}</output> : null}
-    {connected && syncing && !lastSync ? <p className="mb-4 rounded-xl border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">Premier import de vos favoris Spotify en cours. Les découvertes apparaîtront une fois l’import terminé.</p> : null}
+    {connected && syncing && !lastSync ? <p className="mb-4 rounded-xl border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">Premier import de vos favoris Spotify en cours. Les artistes seront visibles après la synchronisation ; les découvertes nécessitent aussi les goûts d’autres membres.</p> : null}
     {connected && syncError ? <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm">
       <span className="flex-1">{syncError === 'SPOTIFY_FORBIDDEN' ? 'Spotify refuse l’accès. Vérifiez que ce compte figure dans les utilisateurs autorisés de l’application.' :
         syncError === 'SPOTIFY_REAUTHORIZE' || syncError === 'AUTHORIZATION_FAILED' ? 'L’autorisation Spotify a expiré. Reconnectez votre compte.' :
