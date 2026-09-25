@@ -24,6 +24,8 @@ type Detail = { artist: Artist; tracks: Track[]; members: Member[] };
 type MemberDetail = { member: { id: string; firstName: string }; discoveries: Artist[];
   common: Artist[]; members: Member[] };
 type MusicPath = { tab: 'overview' | 'artists' | 'playlist'; artistId?: string; memberId?: string };
+type SpotifyStatus = { configured: boolean; connection: { lastSuccessfulSyncAt: string | null;
+  syncing: boolean; shareEnabled: boolean; syncError: string | null } | null };
 
 function readPath(): MusicPath {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -63,6 +65,7 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
   const [configured, setConfigured] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -105,7 +108,7 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
     const endpoint = path.artistId ? `/api/v1/music/artists/${encodeURIComponent(path.artistId)}` :
       path.memberId ? `/api/v1/music/members/${encodeURIComponent(path.memberId)}` : null;
     void Promise.all([
-      getJson<{ configured: boolean; connection: { lastSuccessfulSyncAt: string | null; syncing: boolean; shareEnabled: boolean } | null }>('/api/v1/music/spotify/status'),
+      getJson<SpotifyStatus>('/api/v1/music/spotify/status'),
       path.tab === 'overview' && !path.memberId ? getJson<Overview>('/api/v1/music/overview') : Promise.resolve(null),
       path.tab === 'artists' && !path.artistId ? getJson<{ artists: Artist[]; members: Member[] }>('/api/v1/music/artists') : Promise.resolve(null),
       path.tab === 'playlist' ? getJson<Mix>('/api/v1/music/weekly-mix') : Promise.resolve(null),
@@ -117,6 +120,7 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
       setSharing(Boolean(status.connection?.shareEnabled));
       setLastSync(status.connection?.lastSuccessfulSyncAt ?? null);
       setSyncing(Boolean(status.connection?.syncing));
+      setSyncError(status.connection?.syncError ?? null);
       if (nextOverview) { setOverview(nextOverview); setMembers(nextOverview.members); }
       if (nextArtists) { setArtists(nextArtists.artists); setMembers(nextArtists.members); }
       if (nextMix) setMix(nextMix);
@@ -135,17 +139,15 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
   useEffect(() => {
     if (!connected || !syncing) return;
     const timer = window.setInterval(() => {
-      void getJson<{ connection: { lastSuccessfulSyncAt: string | null; syncing: boolean } | null }>(
-        '/api/v1/music/spotify/status').then((status) => {
-          if (status.connection?.lastSuccessfulSyncAt && status.connection.lastSuccessfulSyncAt !== lastSync) {
-            setReload((value) => value + 1);
-          } else if (!status.connection?.syncing && syncing) {
-            setSyncing(false);
-          }
-        }).catch(() => undefined);
-    }, 5_000);
+      void getJson<SpotifyStatus>('/api/v1/music/spotify/status').then((status) => {
+        if (!status.connection?.syncing) {
+          setSyncing(false);
+          setReload((value) => value + 1);
+        }
+      }).catch(() => undefined);
+    }, 10_000);
     return () => window.clearInterval(timer);
-  }, [connected, syncing, lastSync]);
+  }, [connected, syncing]);
 
   const visibleArtists = useMemo(() => {
     const list = artists.filter((artist) =>
@@ -227,6 +229,15 @@ export function MusicView({ csrfToken, memberId, onOpenSettings }: {
       {syncing ? <p className="mt-1 text-xs text-muted-foreground">Synchronisation Spotify en cours…</p> : null}
     </div>
     {notice ? <output className="mb-4 block rounded-xl border bg-accent px-4 py-3 text-sm text-accent-foreground">{notice}</output> : null}
+    {connected && syncing && !lastSync ? <p className="mb-4 rounded-xl border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">Premier import de vos favoris Spotify en cours. Les artistes seront visibles après la synchronisation ; les découvertes nécessitent aussi les goûts d’autres membres.</p> : null}
+    {connected && syncError ? <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm">
+      <span className="flex-1">{syncError === 'SPOTIFY_FORBIDDEN' ? 'Spotify refuse l’accès. Vérifiez que ce compte figure dans les utilisateurs autorisés de l’application.' :
+        syncError === 'SPOTIFY_REAUTHORIZE' || syncError === 'AUTHORIZATION_FAILED' ? 'L’autorisation Spotify a expiré. Reconnectez votre compte.' :
+          syncError === 'SPOTIFY_RATE_LIMITED' || syncError === 'SPOTIFY_QUOTA_EXCEEDED' ? 'Limite Spotify atteinte. Réessayez plus tard.' :
+            'La synchronisation Spotify a échoué. Réessayez depuis les paramètres.'}</span>
+      <Button size="sm" variant="outline" onClick={onOpenSettings}>Gérer Spotify</Button>
+    </div> : null}
+    {connected && !syncing && !lastSync && !syncError ? <p className="mb-4 rounded-xl border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">Aucun import Spotify terminé. Vous pouvez lancer une synchronisation depuis les paramètres.</p> : null}
     {error ? <p role="alert" className="mb-4 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</p> : null}
     {retryPlayback ? <Button className="mb-4" variant="outline" disabled={busy} onClick={() => void play(retryPlayback.uris, retryPlayback.fallbackUrl)}><RefreshCw className="size-4" />Réessayer</Button> : null}
     {fallbackUrl ? <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className="mb-4 inline-block text-sm font-medium text-primary underline">Ouvrir ce titre dans Spotify</a> : null}
