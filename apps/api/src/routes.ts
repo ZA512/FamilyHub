@@ -47,6 +47,7 @@ import { registerImportRoutes } from './import-routes.js';
 import { registerContactRoutes } from './contact-routes.js';
 import { registerDocumentRoutes } from './document-routes.js';
 import { registerExportRoutes } from './export-routes.js';
+import { registerMusicRoutes } from './music-routes.js';
 import {
   readMealPlanWeekStartsOn,
   readMealReferencePortions,
@@ -512,4 +513,5 @@ export async function registerRoutes(
   await registerContactRoutes(app, pool);
   await registerDocumentRoutes(app, pool);
   await registerExportRoutes(app, pool, config);
+  await registerMusicRoutes(app, pool, config);
 }

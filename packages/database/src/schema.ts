@@ -730,3 +730,66 @@ export const memberProfilePreferences = pgTable('member_profile_preference', {
   visibility: text('visibility').notNull().default('ALL_MEMBERS'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const spotifyConnections = pgTable('spotify_connection', {
+  memberId: uuid('member_id').primaryKey().references(() => instanceMembers.id, { onDelete: 'cascade' }),
+  instanceId: uuid('instance_id').notNull().references(() => instances.id, { onDelete: 'cascade' }),
+  spotifyAccountId: text('spotify_account_id').notNull().unique(),
+  spotifyDisplayName: text('spotify_display_name'),
+  encryptedRefreshToken: text('encrypted_refresh_token').notNull(),
+  grantedScopes: text('granted_scopes').notNull(),
+  shareEnabled: boolean('share_enabled').notNull().default(false),
+  connectedAt: timestamp('connected_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
+  lastSuccessfulSyncAt: timestamp('last_successful_sync_at', { withTimezone: true }),
+  syncStartedAt: timestamp('sync_started_at', { withTimezone: true }),
+  syncError: text('sync_error'),
+}, (table) => [index('spotify_connection_instance_idx').on(table.instanceId)]);
+
+export const spotifyOAuthStates = pgTable('spotify_oauth_state', {
+  stateHash: text('state_hash').primaryKey(),
+  memberId: uuid('member_id').notNull().references(() => instanceMembers.id, { onDelete: 'cascade' }),
+  sessionId: uuid('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, (table) => [index('spotify_oauth_state_expiry_idx').on(table.expiresAt)]);
+
+export const spotifyArtists = pgTable('spotify_artist', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  spotifyUri: text('spotify_uri').notNull(),
+  spotifyUrl: text('spotify_url').notNull(),
+});
+export const spotifyTracks = pgTable('spotify_track', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  spotifyUri: text('spotify_uri').notNull(),
+  spotifyUrl: text('spotify_url').notNull(),
+  albumName: text('album_name'),
+  albumImageUrl: text('album_image_url'),
+  durationMs: integer('duration_ms').notNull(),
+  explicit: boolean('explicit').notNull().default(false),
+});
+export const spotifyTrackArtists = pgTable('spotify_track_artist', {
+  trackId: text('track_id').notNull().references(() => spotifyTracks.id, { onDelete: 'cascade' }),
+  artistId: text('artist_id').notNull().references(() => spotifyArtists.id, { onDelete: 'cascade' }),
+}, (table) => [primaryKey({ columns: [table.trackId, table.artistId] }), index('spotify_track_artist_artist_idx').on(table.artistId)]);
+export const memberSavedTracks = pgTable('member_saved_track', {
+  memberId: uuid('member_id').notNull().references(() => instanceMembers.id, { onDelete: 'cascade' }),
+  trackId: text('track_id').notNull().references(() => spotifyTracks.id, { onDelete: 'cascade' }),
+  spotifyAddedAt: timestamp('spotify_added_at', { withTimezone: true }).notNull(),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.memberId, table.trackId] }), index('member_saved_track_track_idx').on(table.trackId)]);
+export const weeklyMusicMixes = pgTable('weekly_music_mix', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  instanceId: uuid('instance_id').notNull().references(() => instances.id, { onDelete: 'cascade' }),
+  weekStart: date('week_start').notNull(),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
+  algorithmVersion: integer('algorithm_version').notNull().default(1),
+}, (table) => [uniqueIndex('weekly_music_mix_instance_week_uq').on(table.instanceId, table.weekStart)]);
+export const weeklyMusicMixItems = pgTable('weekly_music_mix_item', {
+  mixId: uuid('mix_id').notNull().references(() => weeklyMusicMixes.id, { onDelete: 'cascade' }),
+  trackId: text('track_id').notNull().references(() => spotifyTracks.id, { onDelete: 'cascade' }),
+  sourceMemberId: uuid('source_member_id').notNull().references(() => instanceMembers.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull(),
+}, (table) => [primaryKey({ columns: [table.mixId, table.position] }), index('weekly_music_mix_item_track_idx').on(table.trackId)]);

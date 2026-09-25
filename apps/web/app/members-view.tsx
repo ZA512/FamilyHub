@@ -42,12 +42,14 @@ type MembersViewProps = {
   role: 'ADMIN' | 'MEMBER';
   currentMemberId: string;
   csrfToken: string;
+  musicEnabled: boolean;
 };
 
 export function MembersView({
   role,
   currentMemberId,
   csrfToken,
+  musicEnabled,
 }: MembersViewProps) {
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [groups, setGroups] = useState<FamilyGroup[]>([]);
@@ -531,6 +533,7 @@ export function MembersView({
                       role === 'ADMIN' && member.id !== currentMemberId
                     }
                     busy={busyMemberId === member.id}
+                    musicEnabled={musicEnabled}
                     onUpdate={updateMember}
                   />
                 ))}
@@ -656,12 +659,14 @@ function MemberCard({
   groups,
   canAdminister,
   busy,
+  musicEnabled,
   onUpdate,
 }: {
   member: FamilyMember;
   groups: FamilyGroup[];
   canAdminister: boolean;
   busy: boolean;
+  musicEnabled: boolean;
   onUpdate: (
     member: FamilyMember,
     update: Partial<Pick<FamilyMember, 'role' | 'status'>>,
@@ -714,6 +719,11 @@ function MemberCard({
               </Badge>
             ))}
           </div>
+          {musicEnabled && member.status === 'ACTIVE' && member.musicShareEnabled ? (
+            <a href={`/music/members/${member.id}`} className="mt-3 inline-block text-sm font-medium text-primary hover:underline">
+              Explorer ses goûts musicaux
+            </a>
+          ) : null}
           {canAdminister ? (
             <div className="mt-4 flex flex-wrap gap-2 border-t pt-3">
               <Button

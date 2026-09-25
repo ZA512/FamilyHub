@@ -1,5 +1,7 @@
 # FamilyHub
 
+L'intégration Musique/Spotify est décrite dans [docs/MUSIC_IMPLEMENTATION.md](docs/MUSIC_IMPLEMENTATION.md).
+
 [![CI](https://github.com/ZA512/FamilyHub/actions/workflows/ci.yml/badge.svg)](https://github.com/ZA512/FamilyHub/actions/workflows/ci.yml)
 
 FamilyHub est une PWA privée pour organiser la vie d'un foyer ou d'un petit groupe. Le

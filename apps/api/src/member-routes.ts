@@ -37,6 +37,7 @@ export async function registerMemberRoutes(app: FastifyInstance, pool: Pool) {
       last_name: string | null;
       email: string | null;
       avatar_id: string | null;
+      music_share_enabled: boolean;
       role: 'ADMIN' | 'MEMBER';
       status: 'ACTIVE' | 'INACTIVE';
       joined_at: Date;
@@ -47,14 +48,15 @@ export async function registerMemberRoutes(app: FastifyInstance, pool: Pool) {
                 THEN u.email ELSE NULL END AS email,
               CASE WHEN m.id = $2 OR $3 = 'ADMIN' OR COALESCE(p.visibility, 'ALL_MEMBERS') = 'ALL_MEMBERS'
                 THEN p.avatar_attachment_id ELSE NULL END AS avatar_id,
-              m.role, m.status, m.joined_at,
+              m.role, m.status, m.joined_at, COALESCE(c.share_enabled, false) AS music_share_enabled,
               COALESCE(array_agg(gm.group_id) FILTER (WHERE gm.group_id IS NOT NULL), '{}') AS group_ids
        FROM instance_member m
        JOIN app_user u ON u.id = m.user_id
        LEFT JOIN member_profile_preference p ON p.member_id = m.id
+       LEFT JOIN spotify_connection c ON c.member_id = m.id
        LEFT JOIN group_membership gm ON gm.member_id = m.id
        WHERE m.instance_id = $1
-       GROUP BY m.id, u.id, p.visibility, p.avatar_attachment_id
+       GROUP BY m.id, u.id, p.visibility, p.avatar_attachment_id, c.share_enabled
        ORDER BY (m.status = 'ACTIVE') DESC, lower(u.first_name), lower(u.email)`,
       [request.session?.instanceId, request.session?.id, request.session?.role],
     );
@@ -67,6 +69,7 @@ export async function registerMemberRoutes(app: FastifyInstance, pool: Pool) {
           lastName: row.last_name,
           email: row.email,
           avatarUrl: row.avatar_id ? `/api/v1/attachments/${row.avatar_id}/content` : null,
+          musicShareEnabled: row.music_share_enabled,
           role: row.role,
           status: row.status,
           joinedAt: row.joined_at.toISOString(),

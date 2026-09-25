@@ -794,9 +794,110 @@ export const englishMessages: Record<string, string> = {
   'Navigation principale': 'Main navigation',
   'Hors connexion · courses et tâches modifiables, agenda et repas consultables':
     'Offline · shopping and tasks remain editable; calendar and meals remain available',
+  Musique: 'Music',
+  'Chargement de la musique…': 'Loading music…',
+  'La connexion à Spotify ne peut pas démarrer.': 'Could not start Spotify connection.',
+  'Découvertes à partir des favoris Spotify partagés.': 'Discoveries from shared Spotify favourites.',
+  'Explorer ses goûts musicaux': 'Explore their music tastes',
+  'Découvrez ce qui plaît à la famille.': 'Discover what your family enjoys.',
+  'Vue d’ensemble': 'Overview',
+  Artistes: 'Artists',
+  Playlist: 'Playlist',
+  'À découvrir pour toi': 'For you to discover',
+  'Des artistes enregistrés par les autres, absents de tes favoris.':
+    'Artists saved by others that are missing from your favourites.',
+  'En commun': 'In common',
+  'Nouveaux dans la famille': 'New to the family',
+  'Nouveaux chez les membres': 'New for family members',
+  'Premiers titres enregistrés ces 14 derniers jours.': 'First tracks saved in the past 14 days.',
+  'Playlist de la semaine': 'This week’s playlist',
+  'Deux titres par membre participant, selon les favoris disponibles.':
+    'Two tracks per participating member, when enough favourites are available.',
+  'Voir la sélection': 'View the selection',
+  'Ça bouge': 'What’s new',
+  'Rien de nouveau cette semaine.': 'Nothing new this week.',
+  Nouveaux: 'New',
+  'Pertinence familiale': 'Family relevance',
+  Récents: 'Recent',
+  'A → Z': 'A → Z',
+  'Aucun artiste pour ce filtre.': 'No artists match this filter.',
+  'Dans la famille': 'In the family',
+  'Quelques titres enregistrés par les autres membres.': 'A few tracks saved by other members.',
+  'Aucun titre à découvrir pour l’instant.': 'No tracks to discover yet.',
+  'Vous avez aussi en commun': 'You also have in common',
+  'Aucune nouvelle découverte pour l’instant.': 'No new discoveries yet.',
+  'Découvertes de la famille': 'Family discoveries',
+  'Lire la sélection sur Spotify': 'Play the selection on Spotify',
+  'La sélection apparaîtra lorsque des membres partageront leurs favoris.':
+    'The selection will appear when members share their favourites.',
+  'Découvrez les goûts musicaux de la famille': 'Discover your family’s music tastes',
+  'Connectez Spotify pour retrouver vos artistes favoris et découvrir ceux des autres. Le partage reste désactivé jusqu’à votre choix.':
+    'Connect Spotify to find your favourite artists and discover what others like. Sharing stays off until you choose it.',
+  'Connecter Spotify': 'Connect Spotify',
+  'L’intégration Spotify doit être configurée par l’administrateur du serveur.':
+    'The server administrator must configure the Spotify integration.',
+  'Vos favoris sont privés. Vous pouvez activer le partage familial dans les paramètres.':
+    'Your favourites are private. You can enable family sharing in settings.',
+  'Gérer le partage': 'Manage sharing',
+  'Dès qu’un autre membre partagera ses goûts, les découvertes apparaîtront ici.':
+    'Discoveries will appear here once another member shares their tastes.',
+  'Aucun artiste commun pour l’instant. Voilà justement quelques univers à explorer.':
+    'No artists in common yet. That leaves new sounds to explore.',
+  'Ouvrir dans Spotify': 'Open in Spotify',
+  Réessayer: 'Retry',
+  'Ouvrir ce titre dans Spotify': 'Open this track in Spotify',
+  'Intégrations · Spotify': 'Integrations · Spotify',
+  'FamilyHub utilise les morceaux enregistrés dans votre bibliothèque pour révéler les artistes appréciés par la famille. Votre historique d’écoute et votre activité en temps réel ne sont pas importés.':
+    'FamilyHub uses the tracks saved in your library to reveal artists your family enjoys. Listening history and live activity are not imported.',
+  'L’administrateur du serveur doit configurer les identifiants Spotify.':
+    'The server administrator must configure Spotify credentials.',
+  'Synchronisation en cours…': 'Sync in progress…',
+  'La dernière synchronisation a échoué. Les données précédentes restent disponibles.':
+    'The last sync failed. Previous data is still available.',
+  'Spotify refuse l’accès. Vérifiez les autorisations et l’allowlist de l’application.':
+    'Spotify denied access. Check the permissions and the app allowlist.',
+  'L’autorisation Spotify a expiré. Reconnectez votre compte.':
+    'Spotify authorisation expired. Reconnect your account.',
+  'Limite Spotify atteinte. Les données précédentes restent disponibles.':
+    'Spotify limit reached. Previous data is still available.',
+  'Reconnecter Spotify': 'Reconnect Spotify',
+  'Partager mes goûts musicaux avec la famille': 'Share my music tastes with the family',
+  'Synchroniser maintenant': 'Sync now',
+  'Déconnecter Spotify': 'Disconnect Spotify',
+  'Préférence de partage enregistrée.': 'Sharing preference saved.',
+  'Favoris synchronisés.': 'Favourites synced.',
+  'Spotify déconnecté.': 'Spotify disconnected.',
+  'État Spotify indisponible.': 'Spotify status is unavailable.',
+  'Une synchronisation est déjà en cours ou a été lancée récemment.':
+    'A sync is already running or was started recently.',
+  'Limite Spotify atteinte. Réessayez plus tard.': 'Spotify limit reached. Try again later.',
+  'Cette action Spotify a échoué. Réessayez plus tard.': 'This Spotify action failed. Try again later.',
+  'La connexion Spotify ne peut pas démarrer.': 'Could not start Spotify connection.',
+  'Les données musicales ne sont pas disponibles.': 'Music data is unavailable.',
+  'Aucun appareil Spotify actif. Ouvrez Spotify sur votre téléphone, ordinateur ou enceinte puis réessayez.':
+    'No active Spotify device. Open Spotify on your phone, computer or speaker, then try again.',
+  'La lecture à distance nécessite Spotify Premium et les autorisations de lecture.':
+    'Remote playback requires Spotify Premium and playback permission.',
+  'La lecture n’a pas pu démarrer. Réessayez dans Spotify.':
+    'Playback could not start. Try again in Spotify.',
+  'Spotify est momentanément indisponible.': 'Spotify is temporarily unavailable.',
+  'Spotify est connecté. La première synchronisation démarre.':
+    'Spotify is connected. The first sync is starting.',
+  'Connexion Spotify annulée.': 'Spotify connection cancelled.',
+  'Ce compte Spotify est déjà associé à un autre membre.':
+    'This Spotify account is already linked to another member.',
+  'La connexion Spotify a échoué. Réessayez.': 'Spotify connection failed. Try again.',
 };
 
 export const englishTemplateMessages: Record<string, string> = {
+  'Lecture lancée sur « {0} ».': 'Playback started on “{0}”.',
+  'À découvrir chez {0}': 'Discover from {0}',
+  'Proposé par {0}': 'Shared by {0}',
+  'Connecté en tant que {0}': 'Connected as {0}',
+  'Données Spotify synchronisées le {0}.': 'Spotify data synced on {0}.',
+  '{0} a enregistré ses premiers titres de {1}.': '{0} saved their first tracks by {1}.',
+  'Dernière synchronisation réussie : {0}': 'Last successful sync: {0}',
+  'Semaine du {0}': 'Week of {0}',
   'Une conversation avec ces participants existe déjà : « {0} ». Vous pouvez l’ouvrir ou en créer une autre.':
     'A conversation with these participants already exists: “{0}”. You can open it or create another one.',
   'Rejoindre {0}': 'Join {0}',

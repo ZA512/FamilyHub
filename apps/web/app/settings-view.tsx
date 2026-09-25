@@ -13,6 +13,7 @@ import {
   ListChecks,
   LoaderCircle,
   MessageCircle,
+  Music2,
   NotebookText,
   Palette,
   ShieldCheck,
@@ -51,6 +52,7 @@ import type { PersonalPreferences } from '@/lib/personal-preferences';
 import { urlBase64ToUint8Array } from '@/lib/push';
 import { Switch } from '@/components/ui/switch';
 import { ProfileSettings } from './profile-settings';
+import { SpotifySettings } from './spotify-settings';
 
 const functionalModules = [
   {
@@ -125,6 +127,12 @@ const functionalModules = [
     description: 'Fichiers et documents partagés.',
     icon: FileText,
   },
+  {
+    key: 'music' as const,
+    label: 'Musique',
+    description: 'Découvertes à partir des favoris Spotify partagés.',
+    icon: Music2,
+  },
 ];
 
 type SettingsViewProps = {
@@ -196,6 +204,8 @@ export function SettingsView({
       />
 
       <NotificationSettings csrfToken={csrfToken} />
+
+      <SpotifySettings csrfToken={csrfToken} />
 
       <Card className="mb-8">
         <CardHeader className="flex-row items-start gap-4">

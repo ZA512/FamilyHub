@@ -36,6 +36,13 @@ const configSchema = z
     SMTP_USER: optionalSecret(1),
     SMTP_PASSWORD: optionalSecret(1),
     SMTP_FROM: optionalSecret(3),
+    SPOTIFY_CLIENT_ID: optionalSecret(1),
+    SPOTIFY_CLIENT_SECRET: optionalSecret(1),
+    SPOTIFY_TOKEN_ENCRYPTION_KEY: optionalSecret(64),
+    SPOTIFY_REDIRECT_URI: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().url().optional(),
+    ),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
@@ -90,6 +97,29 @@ const configSchema = z
         message: 'SMTP_FROM doit contenir une adresse email.',
         path: ['SMTP_FROM'],
       });
+    }
+    const spotifyValues = [config.SPOTIFY_CLIENT_ID, config.SPOTIFY_CLIENT_SECRET,
+      config.SPOTIFY_TOKEN_ENCRYPTION_KEY, config.SPOTIFY_REDIRECT_URI];
+    if (spotifyValues.some(Boolean) && !spotifyValues.every(Boolean)) {
+      context.addIssue({ code: z.ZodIssueCode.custom,
+        message: 'Les quatre paramètres Spotify doivent être fournis ensemble.',
+        path: ['SPOTIFY_CLIENT_ID'] });
+    }
+    if (config.SPOTIFY_TOKEN_ENCRYPTION_KEY && !/^[a-f\d]{64}$/i.test(config.SPOTIFY_TOKEN_ENCRYPTION_KEY)) {
+      context.addIssue({ code: z.ZodIssueCode.custom,
+        message: 'La clé de chiffrement Spotify doit contenir 64 caractères hexadécimaux.',
+        path: ['SPOTIFY_TOKEN_ENCRYPTION_KEY'] });
+    }
+    if (config.SPOTIFY_REDIRECT_URI) {
+      const redirect = new URL(config.SPOTIFY_REDIRECT_URI);
+      const origin = new URL(config.FAMILYHUB_ORIGIN);
+      if (redirect.origin !== origin.origin || redirect.pathname !== '/api/v1/music/spotify/callback' ||
+        redirect.search || redirect.hash ||
+        (redirect.protocol !== 'https:' && !['127.0.0.1', '[::1]'].includes(redirect.hostname))) {
+        context.addIssue({ code: z.ZodIssueCode.custom,
+          message: 'SPOTIFY_REDIRECT_URI doit correspondre à l’origine FamilyHub et utiliser HTTPS ou une adresse loopback.',
+          path: ['SPOTIFY_REDIRECT_URI'] });
+      }
     }
 
     if (config.NODE_ENV === 'production') {

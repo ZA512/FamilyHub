@@ -18,6 +18,7 @@ import {
   Lightbulb,
   LoaderCircle,
   MessageCircle,
+  Music2,
   NotebookText,
   Plus,
   Search,
@@ -113,6 +114,9 @@ const DocumentsView = lazy(() =>
     default: module.DocumentsView,
   })),
 );
+const MusicView = lazy(() =>
+  import('./music-view').then((module) => ({ default: module.MusicView })),
+);
 
 type ViewId =
   | 'home'
@@ -128,6 +132,7 @@ type ViewId =
   | 'ideas'
   | 'contacts'
   | 'documents'
+  | 'music'
   | 'members'
   | 'settings'
   | 'notifications'
@@ -160,6 +165,7 @@ const secondaryNavigation = [
   { id: 'ideas' as const, label: 'Boîte à idées', icon: Lightbulb },
   { id: 'contacts' as const, label: 'Contacts', icon: ContactRound },
   { id: 'documents' as const, label: 'Documents', icon: FileText },
+  { id: 'music' as const, label: 'Musique', icon: Music2 },
   { id: 'members' as const, label: 'Membres', icon: Users },
 ];
 
@@ -245,7 +251,8 @@ export default function DashboardPage({
   const [ideaComposerOpen, setIdeaComposerOpen] = useState(false);
   const [contactComposerOpen, setContactComposerOpen] = useState(false);
   const [documentComposerOpen, setDocumentComposerOpen] = useState(false);
-  const [activeView, setActiveView] = useState<ViewId>('home');
+  const [activeView, setActiveView] = useState<ViewId>(() =>
+    window.location.pathname.startsWith('/music') ? 'music' : 'home');
   const [modules, setModules] = useState<ModuleConfig[] | null>(null);
   const [modulesError, setModulesError] = useState('');
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
@@ -275,10 +282,21 @@ export default function DashboardPage({
     secondaryNavigation.some((item) => item.id === activeView);
 
   function navigate(view: ViewId) {
+    if (view === 'music') {
+      window.history.pushState({}, '', '/music');
+    } else if (window.location.pathname.startsWith('/music')) {
+      window.history.pushState({}, '', '/');
+    }
     setActiveView(view);
     setQuickAddOpen(false);
     setMoreNavigationOpen(false);
   }
+
+  useEffect(() => {
+    const onPop = () => setActiveView(window.location.pathname.startsWith('/music') ? 'music' : 'home');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   function startCreation(view: ViewId) {
     navigate(view);
@@ -881,11 +899,16 @@ export default function DashboardPage({
                   onComposerOpenChange={setDocumentComposerOpen}
                 />
               </Suspense>
+            ) : activeView === 'music' ? (
+              <Suspense fallback={<div className="flex min-h-[55vh] items-center justify-center gap-3 text-muted-foreground"><LoaderCircle className="animate-spin" aria-hidden="true" />Chargement de la musique…</div>}>
+                <MusicView csrfToken={csrfToken} memberId={memberId} onOpenSettings={() => navigate('settings')} />
+              </Suspense>
             ) : activeView === 'members' ? (
               <MembersView
                 role={role}
                 currentMemberId={memberId}
                 csrfToken={csrfToken}
+                musicEnabled={moduleVisible('music')}
               />
             ) : activeView === 'notifications' ? (
               <NotificationsView
