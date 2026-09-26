@@ -22,6 +22,7 @@ const recommendationBody = z.object({
   recipientIds: z.array(z.string().uuid()).min(1).max(20)
     .refine((ids) => new Set(ids).size === ids.length),
 });
+const recommendationQuery = z.object({ page: z.coerce.number().int().min(1).max(10_000).default(1) });
 const callbackQuery = z.object({ state: z.string().min(20).max(200),
   code: z.string().max(2048).optional(), error: z.string().max(100).optional() });
 
@@ -32,32 +33,26 @@ type MusicRecommendationRow = {
   createdAt: Date;
 };
 
-async function purgeMusicRecommendations(client: Pool | PoolClient, instanceId?: string,
-  recipientIds?: string[]) {
+async function purgeExpiredMusicRecommendations(client: Pool | PoolClient, instanceId?: string) {
   await client.query(
     `DELETE FROM music_recommendation
      WHERE expires_at<=now() AND ($1::uuid IS NULL OR instance_id=$1)`,
     [instanceId ?? null],
   );
-  await client.query(
-    `DELETE FROM music_recommendation recommendation
-     WHERE recommendation.id IN (
-       SELECT ranked.id FROM (
-         SELECT id, row_number() OVER (
-           PARTITION BY recipient_member_id ORDER BY created_at DESC, id DESC
-         ) AS position
-         FROM music_recommendation
-         WHERE ($1::uuid IS NULL OR instance_id=$1)
-           AND ($2::uuid[] IS NULL OR recipient_member_id=ANY($2::uuid[]))
-       ) ranked
-       WHERE ranked.position>12
-     )`,
-    [instanceId ?? null, recipientIds ?? null],
-  );
 }
 
-async function loadMusicRecommendations(pool: Pool, instanceId: string, recipientId: string) {
-  await purgeMusicRecommendations(pool, instanceId, [recipientId]);
+async function loadMusicRecommendations(pool: Pool, instanceId: string, recipientId: string,
+  requestedPage = 1) {
+  await purgeExpiredMusicRecommendations(pool, instanceId);
+  const pageSize = 12;
+  const count = await pool.query<{ total: string }>(
+    `SELECT count(*)::text AS total FROM music_recommendation
+     WHERE instance_id=$1 AND recipient_member_id=$2 AND expires_at>now()`,
+    [instanceId, recipientId],
+  );
+  const total = Number(count.rows[0]?.total ?? 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
   const result = await pool.query<MusicRecommendationRow>(
     `SELECT r.id, r.kind, sender_user.first_name AS "senderName",
             CASE WHEN r.kind='ARTIST' THEN artist.id ELSE track.id END AS "targetId",
@@ -87,10 +82,13 @@ async function loadMusicRecommendations(pool: Pool, instanceId: string, recipien
        ORDER BY artwork_track.id LIMIT 1
      ) artist_artwork ON true
      WHERE r.instance_id=$1 AND r.recipient_member_id=$2 AND r.expires_at>now()
-     ORDER BY r.created_at DESC LIMIT 12`,
-    [instanceId, recipientId],
+     ORDER BY r.created_at DESC, r.id DESC LIMIT $3 OFFSET $4`,
+    [instanceId, recipientId, pageSize, (page - 1) * pageSize],
   );
-  return result.rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+  return {
+    items: result.rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
+    page, pageSize, total, totalPages,
+  };
 }
 
 function sendMusicError(error: unknown, reply: FastifyReply) {
@@ -256,6 +254,13 @@ export async function registerMusicRoutes(app: FastifyInstance, pool: Pool, conf
     return { members: result.rows };
   });
 
+  app.get('/api/v1/music/recommendations', { preHandler: requireSession }, async (request, reply) => {
+    const parsed = recommendationQuery.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'INVALID_REQUEST' });
+    return loadMusicRecommendations(pool, request.session!.instanceId, request.session!.id,
+      parsed.data.page);
+  });
+
   app.post('/api/v1/music/recommendations', {
     preHandler: [requireSession, requireCsrf],
     config: { rateLimit: { max: 30, timeWindow: '1 hour' } },
@@ -316,7 +321,7 @@ export async function registerMusicRoutes(app: FastifyInstance, pool: Pool, conf
         [session.instanceId, session.id, parsed.data.targetType, parsed.data.targetId,
           parsed.data.recipientIds],
       );
-      await purgeMusicRecommendations(client, session.instanceId, parsed.data.recipientIds);
+      await purgeExpiredMusicRecommendations(client, session.instanceId);
       const recommendationIds = inserted.rows.map((row) => row.id);
       await client.query(
         `DELETE FROM notification WHERE resource_type='music_recommendation'
@@ -455,7 +460,7 @@ export async function registerMusicRoutes(app: FastifyInstance, pool: Pool, conf
   });
 
   const recommendationCleanupTimer = setInterval(() => {
-    void purgeMusicRecommendations(pool).catch((error) =>
+    void purgeExpiredMusicRecommendations(pool).catch((error) =>
       app.log.warn({ error }, 'Expired music recommendation cleanup failed'));
   }, 60 * 60_000);
   recommendationCleanupTimer.unref();

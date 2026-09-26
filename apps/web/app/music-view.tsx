@@ -20,8 +20,10 @@ type Track = { id: string; name: string; uri: string; url: string; imageUrl: str
 type MusicRecommendation = { id: string; kind: 'ARTIST' | 'TRACK'; senderName: string;
   targetId: string; targetName: string; spotifyUrl: string; spotifyUri: string | null;
   imageUrl: string | null; artistId: string | null; createdAt: string };
+type MusicRecommendationPage = { items: MusicRecommendation[]; page: number; pageSize: number;
+  total: number; totalPages: number };
 type Overview = { discoveries: Artist[]; common: Artist[]; recent: Artist[];
-  recommendations: MusicRecommendation[]; members: Member[]; activity: string[]; newForMembers: {
+  recommendations: MusicRecommendationPage; members: Member[]; activity: string[]; newForMembers: {
     artistId: string; artistName: string; memberId: string; memberName: string; addedAt: string;
   }[] };
 type Mix = { weekStart: string; items: { id: string; name: string; uri: string; url: string;
@@ -74,6 +76,7 @@ export function MusicView({ csrfToken, onOpenSettings }: {
   const [memberDetail, setMemberDetail] = useState<MemberDetail | null>(null);
   const [recommendationRecipients, setRecommendationRecipients] = useState<RecommendationRecipient[]>([]);
   const [recommendationTarget, setRecommendationTarget] = useState<RecommendationTarget | null>(null);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [configured, setConfigured] = useState(false);
@@ -201,6 +204,18 @@ export function MusicView({ csrfToken, onOpenSettings }: {
       setNotice(`Lecture lancée sur « ${result.deviceName} ».`);
     } catch { setError('Spotify est momentanément indisponible.'); }
     finally { setBusy(false); }
+  }
+
+  async function showRecommendationPage(page: number) {
+    setRecommendationsLoading(true); setError('');
+    try {
+      const recommendations = await getJson<MusicRecommendationPage>(
+        `/api/v1/music/recommendations?page=${page}`,
+      );
+      setOverview((current) => current ? { ...current, recommendations } : current);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Chargement impossible.');
+    } finally { setRecommendationsLoading(false); }
   }
 
   function artistCard(artist: Artist, familyMembers = members) {
@@ -341,9 +356,18 @@ export function MusicView({ csrfToken, onOpenSettings }: {
 
     {!loading && path.tab === 'overview' && !path.memberId && overview ? <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="space-y-6">
-        {overview.recommendations.length ? <Card><CardHeader><CardTitle>Recommandé pour toi</CardTitle>
-          <CardDescription>Les recommandations reçues restent visibles pendant 30 jours.</CardDescription></CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">{overview.recommendations.map(recommendationRow)}</CardContent></Card> : null}
+        {overview.recommendations.items.length ? <Card><CardHeader><CardTitle>Recommandé pour toi</CardTitle>
+          <CardDescription>{overview.recommendations.total} recommandation{overview.recommendations.total > 1 ? 's' : ''} · 12 par page · supprimées après 30 jours.</CardDescription></CardHeader>
+          <CardContent><div className="grid gap-3 sm:grid-cols-2">
+            {overview.recommendations.items.map(recommendationRow)}</div>
+            {overview.recommendations.totalPages > 1 ? <div className="mt-4 flex items-center justify-center gap-3">
+              <Button size="sm" variant="outline" disabled={recommendationsLoading || overview.recommendations.page <= 1}
+                onClick={() => void showRecommendationPage(overview.recommendations.page - 1)}>Précédent</Button>
+              <span className="text-sm text-muted-foreground">Page {overview.recommendations.page} sur {overview.recommendations.totalPages}</span>
+              <Button size="sm" variant="outline" disabled={recommendationsLoading || overview.recommendations.page >= overview.recommendations.totalPages}
+                onClick={() => void showRecommendationPage(overview.recommendations.page + 1)}>Suivant</Button>
+            </div> : null}
+          </CardContent></Card> : null}
         <Card><CardHeader><CardTitle>À découvrir pour toi</CardTitle><CardDescription>Des artistes enregistrés par les autres, absents de tes favoris.</CardDescription></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">{overview.discoveries.map((artist) => artistCard(artist, overview.members))}
             {!overview.discoveries.length ? <p className="text-sm text-muted-foreground">Dès qu’un autre membre partagera ses goûts, les découvertes apparaîtront ici.</p> : null}</CardContent></Card>
