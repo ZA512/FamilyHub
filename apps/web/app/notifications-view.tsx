@@ -12,6 +12,7 @@ import {
   CheckCheck,
   LoaderCircle,
   LibraryBig,
+  Music2,
   ShoppingBasket,
 } from 'lucide-react';
 
@@ -246,6 +247,8 @@ function NotificationRow({
           <ContactRound className="size-4" aria-hidden="true" />
         ) : notification.moduleKey === 'documents' ? (
           <FileText className="size-4" aria-hidden="true" />
+        ) : notification.moduleKey === 'music' ? (
+          <Music2 className="size-4" aria-hidden="true" />
         ) : (
           <Bell className="size-4" aria-hidden="true" />
         )}

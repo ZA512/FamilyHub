@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -780,6 +781,27 @@ export const memberSavedTracks = pgTable('member_saved_track', {
   firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [primaryKey({ columns: [table.memberId, table.trackId] }), index('member_saved_track_track_idx').on(table.trackId)]);
+export const musicRecommendations = pgTable('music_recommendation', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  instanceId: uuid('instance_id').notNull().references(() => instances.id, { onDelete: 'cascade' }),
+  senderMemberId: uuid('sender_member_id').notNull().references(() => instanceMembers.id, { onDelete: 'cascade' }),
+  recipientMemberId: uuid('recipient_member_id').notNull().references(() => instanceMembers.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  artistId: text('artist_id').references(() => spotifyArtists.id, { onDelete: 'cascade' }),
+  trackId: text('track_id').references(() => spotifyTracks.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+    .default(sql`now() + interval '30 days'`),
+}, (table) => [
+  check('music_recommendation_distinct_members', sql`${table.senderMemberId} <> ${table.recipientMemberId}`),
+  check('music_recommendation_target_valid', sql`(${table.kind} = 'ARTIST' AND ${table.artistId} IS NOT NULL AND ${table.trackId} IS NULL) OR (${table.kind} = 'TRACK' AND ${table.trackId} IS NOT NULL AND ${table.artistId} IS NULL)`),
+  uniqueIndex('music_recommendation_artist_uq').on(table.senderMemberId, table.recipientMemberId, table.artistId)
+    .where(sql`${table.artistId} IS NOT NULL`),
+  uniqueIndex('music_recommendation_track_uq').on(table.senderMemberId, table.recipientMemberId, table.trackId)
+    .where(sql`${table.trackId} IS NOT NULL`),
+  index('music_recommendation_recipient_created_idx').on(table.recipientMemberId, table.createdAt),
+  index('music_recommendation_expiry_idx').on(table.expiresAt),
+]);
 export const weeklyMusicMixes = pgTable('weekly_music_mix', {
   id: uuid('id').primaryKey().defaultRandom(),
   instanceId: uuid('instance_id').notNull().references(() => instances.id, { onDelete: 'cascade' }),

@@ -40,4 +40,18 @@ describe('notification copy', () => {
       }).body,
     ).toBe('On mange à quelle heure ?');
   });
+
+  it('translates music recommendation copy while preserving its name', () => {
+    expect(
+      localizeNotification('en', {
+        type: 'MUSIC_RECOMMENDATION',
+        title: 'Nouvelle recommandation musicale',
+        body: 'Jade vous recommande le titre « Le dîner »',
+      }),
+    ).toEqual({
+      type: 'MUSIC_RECOMMENDATION',
+      title: 'New music recommendation',
+      body: 'Jade recommends “Le dîner”',
+    });
+  });
 });

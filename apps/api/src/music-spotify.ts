@@ -21,9 +21,11 @@ export type SavedTrack = { added_at: string; track: SpotifyTrack | null };
 export async function purgeOrphanedMusic(client: PoolClient) {
   await client.query(`DELETE FROM spotify_track t WHERE NOT EXISTS (
     SELECT 1 FROM member_saved_track s WHERE s.track_id=t.id) AND NOT EXISTS (
-    SELECT 1 FROM weekly_music_mix_item i WHERE i.track_id=t.id)`);
+    SELECT 1 FROM weekly_music_mix_item i WHERE i.track_id=t.id) AND NOT EXISTS (
+    SELECT 1 FROM music_recommendation r WHERE r.track_id=t.id AND r.expires_at>now())`);
   await client.query(`DELETE FROM spotify_artist a WHERE NOT EXISTS (
-    SELECT 1 FROM spotify_track_artist ta WHERE ta.artist_id=a.id)`);
+    SELECT 1 FROM spotify_track_artist ta WHERE ta.artist_id=a.id) AND NOT EXISTS (
+    SELECT 1 FROM music_recommendation r WHERE r.artist_id=a.id AND r.expires_at>now())`);
 }
 
 export class SpotifyFailure extends Error {

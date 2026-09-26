@@ -8,6 +8,7 @@ const englishTitles: Record<string, string> = {
   CONTACT_SHARED: 'New shared contact',
   DOCUMENT_SHARED: 'New shared document',
   IDEA_SHARED: 'New idea',
+  MUSIC_RECOMMENDATION: 'New music recommendation',
   PAGE_SHARED: 'Shared page',
   POLL_SHARED: 'New poll',
   SHOPPING_REQUEST_ADDED: 'New shopping request',
@@ -23,6 +24,8 @@ const englishBodies: Partial<Record<string, (body: string) => string>> = {
     replace(body, /^(.+) partage le contact « (.*) »$/s, '$1 shared the contact “$2”'),
   DOCUMENT_SHARED: (body) => replace(body, /^(.+) partage « (.*) »$/s, '$1 shared “$2”'),
   IDEA_SHARED: (body) => replace(body, /^(.+) propose : « (.*) »$/s, '$1 suggests: “$2”'),
+  MUSIC_RECOMMENDATION: (body) => replace(body,
+    /^(.+) vous recommande (?:l’artiste|le titre) « (.*) »$/s, '$1 recommends “$2”'),
   PAGE_SHARED: (body) => replace(body, /^(.+) a partagé : (.*)$/s, '$1 shared: $2'),
   POLL_SHARED: (body) =>
     replace(body, /^(.+) vous propose : « (.*) »$/s, '$1 asks you: “$2”'),

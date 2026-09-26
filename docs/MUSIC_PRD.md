@@ -24,6 +24,7 @@ La fonctionnalité doit permettre à un membre de :
 - découvrir les artistes appréciés par les autres qu'il ne connaît pas ;
 - identifier les nouveaux artistes qui apparaissent dans les favoris familiaux ;
 - explorer les goûts musicaux d'un membre ;
+- recommander explicitement un artiste ou un titre à un ou plusieurs membres ;
 - obtenir chaque semaine une sélection musicale équitable provenant de plusieurs membres ;
 - lancer un morceau ou la sélection FamilyHub sur Spotify ;
 - ouvrir directement un morceau/artiste dans Spotify.
@@ -41,7 +42,6 @@ Ne pas implémenter dans cette première version :
 - Top Artists / Top Tracks Spotify ;
 - statistiques de durée d'écoute ;
 - score de compatibilité entre membres ;
-- recommandations manuelles ;
 - commentaires ;
 - réactions ;
 - lecteur audio intégré ;
@@ -196,7 +196,9 @@ La structure peut reprendre la logique visuelle actuelle de FamilyHub :
 ```text
 ┌────────────────────────────────────────────┬──────────────────────┐
 │                                            │                      │
-│  À découvrir pour toi                     │     Ça bouge         │
+│  Recommandé pour toi                       │     Ça bouge         │
+│                                            │                      │
+│  À découvrir pour toi                      │                      │
 │                                            │                      │
 │  En commun                                 │                      │
 │                                            │                      │
@@ -347,6 +349,30 @@ Ne pas publier ces événements dans l'activité générale FamilyHub en V1.
 
 ---
 
+# 12 bis. Recommandations entre membres
+
+Un membre peut recommander un artiste ou un titre visible dans FamilyHub à un ou plusieurs autres membres actifs du même foyer.
+
+Une recommandation affiche :
+
+```text
+Nom de l'artiste ou du titre
+Recommandé par Jade
+[Lire si c'est un titre] [Ouvrir dans Spotify]
+```
+
+Règles V1 :
+
+- chaque destinataire conserve au maximum ses 12 recommandations les plus récentes, affichées sur la vue d'ensemble Musique ;
+- une recommandation expire et est supprimée après 30 jours ;
+- recommander à nouveau la même cible au même destinataire renouvelle sa date au lieu de créer un doublon ;
+- le destinataire reçoit une notification FamilyHub, sauf si ses préférences masquent le module Musique ;
+- le backend vérifie que chaque destinataire est actif et appartient au même foyer ;
+- le backend vérifie que l'artiste ou le titre est accessible à l'émetteur ;
+- recommander un élément constitue un partage explicite de cet élément, indépendamment des futures modifications de favoris.
+
+---
+
 # 13. Vue Artistes
 
 Route indicative :
@@ -354,6 +380,8 @@ Route indicative :
 ```text
 /music/artists
 ```
+
+Ajouter une recherche locale par nom d'artiste, insensible à la casse et aux accents, qui se combine avec les filtres par membre et par catégorie.
 
 Filtres :
 
@@ -520,6 +548,8 @@ Route :
 ```
 
 La sélection appartient conceptuellement à **FamilyHub**, pas à Spotify.
+
+Elle est générée automatiquement à partir des titres aimés et partagés. Les membres n'ajoutent pas manuellement des titres dans cette sélection.
 
 Nom :
 
@@ -1029,6 +1059,8 @@ GET  /api/music/artists
 GET  /api/music/artists/:id
 GET  /api/music/members/:memberId
 GET  /api/music/weekly-mix
+GET  /api/music/recommendation-recipients
+POST /api/music/recommendations
 
 GET  /api/music/spotify/devices
 POST /api/music/spotify/play
@@ -1080,7 +1112,12 @@ La fonctionnalité sera considérée comme complète lorsque :
 17. aucun mini-player n'existe ;
 18. la déconnexion Spotify supprime correctement les credentials et données personnelles associées ;
 19. les pages restent utilisables avec les dernières données synchronisées lorsque Spotify est indisponible ;
-20. les limites et erreurs Spotify sont gérées proprement.
+20. les limites et erreurs Spotify sont gérées proprement ;
+21. un artiste ou un titre peut être recommandé à plusieurs membres du même foyer ;
+22. les 12 recommandations reçues les plus récentes sont visibles sur l'accueil Musique ;
+23. les recommandations expirent après 30 jours et un nouvel envoi identique renouvelle l'existant ;
+24. la liste des artistes peut être filtrée par une recherche textuelle ;
+25. l'interface explique que la playlist hebdomadaire est générée automatiquement.
 
 ---
 

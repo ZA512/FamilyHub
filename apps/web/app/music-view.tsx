@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ExternalLink, LoaderCircle, Music2, Play, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ExternalLink, LoaderCircle, Music2, Play, RefreshCw, Search, Send } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { localeTag } from '@/lib/i18n';
 import { startSpotifyConnection } from '@/lib/music';
@@ -14,8 +17,11 @@ type Artist = { id: string; name: string; url: string; imageUrl: string | null;
   memberFirstAddedAt: { memberId: string; addedAt: string }[] };
 type Track = { id: string; name: string; uri: string; url: string; imageUrl: string | null;
   addedAt: string; memberIds: string[]; artistIds: string[] };
+type MusicRecommendation = { id: string; kind: 'ARTIST' | 'TRACK'; senderName: string;
+  targetId: string; targetName: string; spotifyUrl: string; spotifyUri: string | null;
+  imageUrl: string | null; artistId: string | null; createdAt: string };
 type Overview = { discoveries: Artist[]; common: Artist[]; recent: Artist[];
-  members: Member[]; activity: string[]; newForMembers: {
+  recommendations: MusicRecommendation[]; members: Member[]; activity: string[]; newForMembers: {
     artistId: string; artistName: string; memberId: string; memberName: string; addedAt: string;
   }[] };
 type Mix = { weekStart: string; items: { id: string; name: string; uri: string; url: string;
@@ -26,6 +32,12 @@ type MemberDetail = { member: { id: string; firstName: string }; discoveries: Ar
 type MusicPath = { tab: 'overview' | 'artists' | 'playlist'; artistId?: string; memberId?: string };
 type SpotifyStatus = { configured: boolean; connection: { lastSuccessfulSyncAt: string | null;
   syncing: boolean; shareEnabled: boolean; syncError: string | null } | null };
+type RecommendationRecipient = { id: string; firstName: string };
+type RecommendationTarget = { targetType: 'ARTIST' | 'TRACK'; targetId: string; name: string };
+
+function normalizeSearch(value: string) {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase(localeTag());
+}
 
 function readPath(): MusicPath {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -60,6 +72,8 @@ export function MusicView({ csrfToken, onOpenSettings }: {
   const [mix, setMix] = useState<Mix | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [memberDetail, setMemberDetail] = useState<MemberDetail | null>(null);
+  const [recommendationRecipients, setRecommendationRecipients] = useState<RecommendationRecipient[]>([]);
+  const [recommendationTarget, setRecommendationTarget] = useState<RecommendationTarget | null>(null);
   const [connected, setConnected] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [configured, setConfigured] = useState(false);
@@ -74,6 +88,7 @@ export function MusicView({ csrfToken, onOpenSettings }: {
   const [retryPlayback, setRetryPlayback] = useState<{ uris: string[]; fallbackUrl?: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [artistFilter, setArtistFilter] = useState<'all' | 'common' | 'new'>('all');
+  const [artistQuery, setArtistQuery] = useState('');
   const [memberFilter, setMemberFilter] = useState('all');
   const [sort, setSort] = useState<'relevance' | 'recent' | 'az'>('relevance');
   const [filterNow] = useState(() => Date.now());
@@ -109,11 +124,12 @@ export function MusicView({ csrfToken, onOpenSettings }: {
       path.memberId ? `/api/v1/music/members/${encodeURIComponent(path.memberId)}` : null;
     void Promise.all([
       getJson<SpotifyStatus>('/api/v1/music/spotify/status'),
+      getJson<{ members: RecommendationRecipient[] }>('/api/v1/music/recommendation-recipients'),
       path.tab === 'overview' && !path.memberId ? getJson<Overview>('/api/v1/music/overview') : Promise.resolve(null),
       path.tab === 'artists' && !path.artistId ? getJson<{ artists: Artist[]; members: Member[] }>('/api/v1/music/artists') : Promise.resolve(null),
       path.tab === 'playlist' ? getJson<Mix>('/api/v1/music/weekly-mix') : Promise.resolve(null),
       endpoint ? getJson<Detail | MemberDetail>(endpoint) : Promise.resolve(null),
-    ]).then(([status, nextOverview, nextArtists, nextMix, nextDetail]) => {
+    ]).then(([status, recipients, nextOverview, nextArtists, nextMix, nextDetail]) => {
       if (!active) return;
       setConfigured(status.configured);
       setConnected(Boolean(status.connection));
@@ -121,6 +137,7 @@ export function MusicView({ csrfToken, onOpenSettings }: {
       setLastSync(status.connection?.lastSuccessfulSyncAt ?? null);
       setSyncing(Boolean(status.connection?.syncing));
       setSyncError(status.connection?.syncError ?? null);
+      setRecommendationRecipients(recipients.members);
       if (nextOverview) { setOverview(nextOverview); setMembers(nextOverview.members); }
       if (nextArtists) { setArtists(nextArtists.artists); setMembers(nextArtists.members); }
       if (nextMix) setMix(nextMix);
@@ -150,14 +167,16 @@ export function MusicView({ csrfToken, onOpenSettings }: {
   }, [connected, syncing]);
 
   const visibleArtists = useMemo(() => {
+    const query = normalizeSearch(artistQuery.trim());
     const list = artists.filter((artist) =>
       (artistFilter !== 'common' || artist.memberIds.length >= 2) &&
       (artistFilter !== 'new' || filterNow - Date.parse(artist.firstAddedAt) <= 14 * 86_400_000) &&
-      (memberFilter === 'all' || artist.memberIds.includes(memberFilter)));
+      (memberFilter === 'all' || artist.memberIds.includes(memberFilter)) &&
+      (!query || normalizeSearch(artist.name).includes(query)));
     if (sort === 'recent') list.sort((a, b) => b.lastAddedAt.localeCompare(a.lastAddedAt));
     if (sort === 'az') list.sort((a, b) => a.name.localeCompare(b.name, 'fr'));
     return list;
-  }, [artists, artistFilter, memberFilter, sort, filterNow]);
+  }, [artists, artistFilter, artistQuery, memberFilter, sort, filterNow]);
 
   async function play(uris: string[], fallbackUrl?: string) {
     setBusy(true); setError(''); setNotice(''); setFallbackUrl(null); setRetryPlayback(null);
@@ -199,7 +218,7 @@ export function MusicView({ csrfToken, onOpenSettings }: {
     </div>;
   }
 
-  function trackRow(track: Track | Mix['items'][number], detailLine?: string) {
+  function trackRow(track: Track | Mix['items'][number], detailLine?: string, recommendable = false) {
     return <div key={`${track.id}:${detailLine ?? ''}`} className="flex items-center gap-3 border-b py-3 last:border-b-0">
       {track.imageUrl ?
         // oxlint-disable-next-line next/no-img-element
@@ -209,8 +228,36 @@ export function MusicView({ csrfToken, onOpenSettings }: {
         {detailLine ? <p className="text-xs text-muted-foreground">{detailLine}</p> : null}</div>
       <Button size="icon" variant="ghost" disabled={!connected || busy} aria-label={`Lire ${track.name}`}
         onClick={() => void play([track.uri], track.url)}><Play className="size-4" /></Button>
+      {recommendable ? <Button size="icon" variant="ghost" aria-label={`Recommander ${track.name}`}
+        onClick={() => setRecommendationTarget({ targetType: 'TRACK', targetId: track.id, name: track.name })}>
+        <Send className="size-4" /></Button> : null}
       <a href={track.url} target="_blank" rel="noopener noreferrer" aria-label={`Ouvrir ${track.name} dans Spotify`}
         className="grid size-9 place-items-center rounded-lg hover:bg-muted"><ExternalLink className="size-4" /></a>
+    </div>;
+  }
+
+  function recommendationRow(recommendation: MusicRecommendation) {
+    return <div key={recommendation.id} className="flex items-center gap-3 rounded-xl border bg-background p-3">
+      {recommendation.imageUrl ?
+        // Spotify artwork is served from Spotify's CDN; this Vite app has no image optimizer.
+        // oxlint-disable-next-line next/no-img-element
+        <img src={recommendation.imageUrl} alt="" className="size-12 shrink-0 rounded-lg object-cover" /> :
+        <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-accent"><Music2 className="size-4" /></span>}
+      {recommendation.kind === 'ARTIST' ? <button type="button" className="min-w-0 flex-1 text-left"
+        onClick={() => go(`/music/artists/${recommendation.targetId}`)}>
+        <strong className="block truncate font-medium">{recommendation.targetName}</strong>
+        <span className="block text-xs text-muted-foreground">Artiste recommandé par {recommendation.senderName}</span>
+      </button> : <div className="min-w-0 flex-1">
+        <strong className="block truncate font-medium">{recommendation.targetName}</strong>
+        <span className="block text-xs text-muted-foreground">Titre recommandé par {recommendation.senderName}</span>
+      </div>}
+      {recommendation.spotifyUri ? <Button size="icon" variant="ghost" disabled={!connected || busy}
+        aria-label={`Lire ${recommendation.targetName}`}
+        onClick={() => void play([recommendation.spotifyUri!], recommendation.spotifyUrl)}>
+        <Play className="size-4" /></Button> : null}
+      <a href={recommendation.spotifyUrl} target="_blank" rel="noopener noreferrer"
+        aria-label={`Ouvrir ${recommendation.targetName} dans Spotify`}
+        className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-muted"><ExternalLink className="size-4" /></a>
     </div>;
   }
 
@@ -265,6 +312,9 @@ export function MusicView({ csrfToken, onOpenSettings }: {
       <Card className="mb-6"><CardContent className="flex flex-wrap items-center gap-5 pt-6"><ArtistArtwork artist={detail.artist} />
         <div className="flex-1"><h2 className="text-2xl font-semibold">{detail.artist.name}</h2>
           <p className="text-sm text-muted-foreground">{detail.artist.uniqueTracks} titre{detail.artist.uniqueTracks > 1 ? 's' : ''} aimé{detail.artist.uniqueTracks > 1 ? 's' : ''} dans la famille</p></div>
+        <Button variant="outline" onClick={() => setRecommendationTarget({
+          targetType: 'ARTIST', targetId: detail.artist.id, name: detail.artist.name,
+        })}><Send className="size-4" />Recommander</Button>
         <a href={detail.artist.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted"><ExternalLink className="size-4" />Ouvrir dans Spotify</a>
       </CardContent></Card>
       <Card className="mb-6"><CardHeader><CardTitle>Dans la famille</CardTitle></CardHeader><CardContent className="space-y-2">
@@ -276,7 +326,7 @@ export function MusicView({ csrfToken, onOpenSettings }: {
           `Les ${detail.tracks.length} titres les plus récemment aimés sur ${detail.artist.uniqueTracks}.` :
           'Chaque titre peut être écouté séparément ou ouvert directement dans Spotify.'}</CardDescription></CardHeader>
         <CardContent>{detail.tracks.map((track) => trackRow(track,
-          `Aimé par ${detail.members.filter((item) => track.memberIds.includes(item.id)).map((item) => item.firstName).join(', ')}`))}
+          `Aimé par ${detail.members.filter((item) => track.memberIds.includes(item.id)).map((item) => item.firstName).join(', ')}`, true))}
           {!detail.tracks.length ? <p className="text-sm text-muted-foreground">Aucun titre disponible pour cet artiste.</p> : null}</CardContent></Card>
     </div> : null}
 
@@ -291,6 +341,9 @@ export function MusicView({ csrfToken, onOpenSettings }: {
 
     {!loading && path.tab === 'overview' && !path.memberId && overview ? <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="space-y-6">
+        {overview.recommendations.length ? <Card><CardHeader><CardTitle>Recommandé pour toi</CardTitle>
+          <CardDescription>Les recommandations reçues restent visibles pendant 30 jours.</CardDescription></CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">{overview.recommendations.map(recommendationRow)}</CardContent></Card> : null}
         <Card><CardHeader><CardTitle>À découvrir pour toi</CardTitle><CardDescription>Des artistes enregistrés par les autres, absents de tes favoris.</CardDescription></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">{overview.discoveries.map((artist) => artistCard(artist, overview.members))}
             {!overview.discoveries.length ? <p className="text-sm text-muted-foreground">Dès qu’un autre membre partagera ses goûts, les découvertes apparaîtront ici.</p> : null}</CardContent></Card>
@@ -304,7 +357,7 @@ export function MusicView({ csrfToken, onOpenSettings }: {
           <CardContent className="space-y-2 text-sm">{overview.newForMembers.map((item) =>
             <button key={`${item.memberId}:${item.artistId}`} type="button" onClick={() => go(`/music/artists/${item.artistId}`)}
               className="block w-full rounded-lg p-2 text-left hover:bg-muted">{item.memberName} a enregistré ses premiers titres de {item.artistName}.</button>)}</CardContent></Card> : null}
-        <Card><CardHeader><CardTitle>Playlist de la semaine</CardTitle><CardDescription>Deux titres par membre participant, selon les favoris disponibles.</CardDescription></CardHeader>
+        <Card><CardHeader><CardTitle>Playlist de la semaine</CardTitle><CardDescription>Générée automatiquement chaque semaine à partir des favoris partagés, jusqu’à deux titres par membre.</CardDescription></CardHeader>
           <CardContent><Button variant="outline" onClick={() => go('/music/playlist')}>Voir la sélection</Button></CardContent></Card>
       </div>
       <Card><CardHeader><CardTitle className="text-base">Ça bouge</CardTitle></CardHeader><CardContent className="space-y-3 text-sm text-muted-foreground">
@@ -313,6 +366,9 @@ export function MusicView({ csrfToken, onOpenSettings }: {
     </div> : null}
 
     {!loading && path.tab === 'artists' && !path.artistId ? <div>
+      <div className="relative mb-3 max-w-md"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input type="search" value={artistQuery} onChange={(event) => setArtistQuery(event.target.value)}
+          placeholder="Rechercher un artiste" aria-label="Rechercher un artiste" className="pl-9" /></div>
       <div className="mb-5 flex flex-wrap gap-2">
         {([{ id: 'all', label: 'Tous' }, { id: 'common', label: 'En commun' }, { id: 'new', label: 'Nouveaux' }] as const).map((item) =>
           <Button key={item.id} size="sm" variant={artistFilter === item.id ? 'default' : 'outline'} onClick={() => setArtistFilter(item.id)}>{item.label}</Button>)}
@@ -328,14 +384,78 @@ export function MusicView({ csrfToken, onOpenSettings }: {
     </div> : null}
 
     {!loading && path.tab === 'playlist' ? <Card><CardHeader><CardTitle>Découvertes de la famille</CardTitle>
-      <CardDescription>{mix ? `Semaine du ${formatWeek(mix.weekStart)}` : ''}</CardDescription></CardHeader>
+      <CardDescription>{mix ? `Semaine du ${formatWeek(mix.weekStart)}. ` : ''}Cette sélection est créée automatiquement à partir des titres aimés et partagés. Il n’y a rien à ajouter manuellement.</CardDescription></CardHeader>
       <CardContent><div className="mb-4 flex flex-wrap items-center gap-3">
         <Button disabled={!connected || !mix?.items.length || busy} onClick={() => mix && void play(mix.items.map((item) => item.uri), mix.items[0]?.url)}>
           {busy ? <LoaderCircle className="animate-spin" /> : <Play />} Lire la sélection sur Spotify</Button>
         {mix?.items.length ? <span className="text-sm text-muted-foreground">{mix.items.length} titres · {new Set(mix.items.map((item) => item.sourceMemberId)).size} membres</span> : null}
       </div>
-        {mix?.items.map((item) => trackRow(item, `Proposé par ${item.sourceMemberName}`))}
+        {mix?.items.map((item) => trackRow(item, `Proposé par ${item.sourceMemberName}`, true))}
         {!mix?.items.length ? <p className="text-sm text-muted-foreground">La sélection apparaîtra lorsque des membres partageront leurs favoris.</p> : null}
       </CardContent></Card> : null}
+    <RecommendationDialog target={recommendationTarget} recipients={recommendationRecipients}
+      csrfToken={csrfToken} onClose={() => setRecommendationTarget(null)} onSent={(count) => {
+        setRecommendationTarget(null);
+        setNotice(`Recommandation envoyée à ${count} personne${count > 1 ? 's' : ''}.`);
+      }} />
   </section>;
+}
+
+function RecommendationDialog({ target, recipients, csrfToken, onClose, onSent }: {
+  target: RecommendationTarget | null; recipients: RecommendationRecipient[]; csrfToken: string;
+  onClose: () => void; onSent: (count: number) => void;
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  function close() { setSelected([]); setError(''); onClose(); }
+
+  async function submit() {
+    if (!target || !selected.length) return;
+    setSubmitting(true); setError('');
+    try {
+      const response = await fetch('/api/v1/music/recommendations', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
+        body: JSON.stringify({ targetType: target.targetType, targetId: target.targetId,
+          recipientIds: selected }),
+      });
+      if (!response.ok) throw new Error('La recommandation n’a pas pu être envoyée.');
+      const payload = await response.json() as { count: number };
+      setSelected([]); onSent(payload.count);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Envoi impossible.');
+    } finally { setSubmitting(false); }
+  }
+
+  return <Dialog open={Boolean(target)} onOpenChange={(open) => { if (!open && !submitting) close(); }}>
+    {target ? <DialogContent className="sm:max-w-md"><DialogHeader>
+      <DialogTitle>Recommander {target.targetType === 'ARTIST' ? 'cet artiste' : 'ce titre'}</DialogTitle>
+      <DialogDescription>Choisissez une ou plusieurs personnes pour « {target.name} ».</DialogDescription>
+    </DialogHeader>
+      {recipients.length ? <fieldset className="space-y-2"><div className="flex items-center justify-between gap-3">
+        <legend className="text-sm font-medium">Destinataires</legend>
+        <Button type="button" variant="ghost" size="sm" onClick={() =>
+          setSelected(selected.length === recipients.length ? [] : recipients.map((member) => member.id))}>
+          {selected.length === recipients.length ? 'Tout effacer' : 'Tout sélectionner'}
+        </Button></div>
+        <div className="max-h-64 space-y-1 overflow-y-auto rounded-xl border p-2">{recipients.map((member) => {
+          const checked = selected.includes(member.id);
+          return <label key={member.id} className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-muted">
+            <Checkbox checked={checked} onCheckedChange={(value) => setSelected((current) =>
+              value ? [...current, member.id] : current.filter((id) => id !== member.id))} />
+            <span>{member.firstName}</span>
+          </label>;
+        })}</div>
+      </fieldset> : <p className="rounded-xl border bg-muted/35 p-4 text-sm text-muted-foreground">
+        Aucun autre membre actif n’est disponible dans le foyer.
+      </p>}
+      {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+      <DialogFooter><Button type="button" variant="outline" disabled={submitting} onClick={close}>Annuler</Button>
+        <Button type="button" disabled={!selected.length || submitting} onClick={() => void submit()}>
+          {submitting ? <LoaderCircle className="animate-spin" /> : <Send />}
+          Recommander{selected.length ? ` à ${selected.length}` : ''}
+        </Button></DialogFooter>
+    </DialogContent> : null}
+  </Dialog>;
 }

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { loadConfig } from '../../../packages/config/src/index.js';
-import { decryptRefreshToken, encryptRefreshToken, refreshAccessToken, synchronizeMember } from './music-spotify.js';
+import { decryptRefreshToken, encryptRefreshToken, purgeOrphanedMusic, refreshAccessToken, synchronizeMember } from './music-spotify.js';
 
 const config = loadConfig({
   DATABASE_URL: 'postgresql://familyhub:long-database-password@localhost:5432/familyhub',
@@ -22,6 +22,18 @@ describe('Spotify credential encryption', () => {
     const pieces = first.split('.');
     pieces[1] = 'A'.repeat(pieces[1]!.length);
     expect(() => decryptRefreshToken(pieces.join('.'), config)).toThrow();
+  });
+});
+
+describe('Spotify music cleanup', () => {
+  it('preserves tracks and artists referenced by an active recommendation', async () => {
+    const queries: string[] = [];
+    const client = { query: vi.fn(async (sql: string) => { queries.push(sql); return { rows: [] }; }) };
+    await purgeOrphanedMusic(client as unknown as PoolClient);
+    expect(queries).toHaveLength(2);
+    expect(queries[0]).toContain('music_recommendation');
+    expect(queries[0]).toContain('r.track_id=t.id AND r.expires_at>now()');
+    expect(queries[1]).toContain('r.artist_id=a.id AND r.expires_at>now()');
   });
 });
 
