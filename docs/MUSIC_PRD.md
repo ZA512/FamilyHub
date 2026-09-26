@@ -48,8 +48,8 @@ Ne pas implémenter dans cette première version :
 - mini-player FamilyHub ;
 - contrôle pause/suivant/précédent permanent ;
 - création automatique de playlist dans le compte Spotify ;
-- ajout d'informations musicales à l'accueil général FamilyHub ;
-- événements Spotify dans le flux global « Activité récente ».
+- ajout des écoutes ou synchronisations Spotify à l'accueil général FamilyHub ;
+- événements Spotify automatiques dans le flux global « Activité récente ».
 
 ---
 
@@ -371,6 +371,11 @@ Règles V1 :
 - le backend vérifie que chaque destinataire est actif et appartient au même foyer ;
 - le backend vérifie que l'artiste ou le titre est accessible à l'émetteur ;
 - recommander un élément constitue un partage explicite de cet élément, indépendamment des futures modifications de favoris.
+
+Sur l'accueil général FamilyHub :
+
+- la colonne « À voir » indique au destinataire combien de recommandations musicales actives il a reçues et ouvre la vue Musique ;
+- la colonne « Activité récente » indique qu'un membre a recommandé un titre ou un artiste à un autre membre, sans dévoiler le nom du titre ou de l'artiste dans ce flux général.
 
 ---
 
@@ -1119,7 +1124,8 @@ La fonctionnalité sera considérée comme complète lorsque :
 22. les recommandations reçues sont visibles sur l'accueil Musique avec une pagination de 12 éléments ;
 23. les recommandations expirent après 30 jours et un nouvel envoi identique renouvelle l'existant ;
 24. la liste des artistes peut être filtrée par une recherche textuelle ;
-25. l'interface explique que la playlist hebdomadaire est générée automatiquement.
+25. l'interface explique que la playlist hebdomadaire est générée automatiquement ;
+26. l'accueil général signale les recommandations reçues et les recommandations récentes entre membres.
 
 ---
 

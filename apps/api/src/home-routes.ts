@@ -15,7 +15,8 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
   app.get('/api/v1/home', { preHandler: requireSession }, async (request) => {
     await reopenAvailableTasks(pool, request.session!.instanceId);
-    const [unreadResult, chatResult, shoppingResult, taskResult, mealResult, activityResult] =
+    const [unreadResult, chatResult, shoppingResult, taskResult, mealResult, musicResult,
+      activityResult] =
       await Promise.all([
         pool.query<{ count: number }>(
           `SELECT count(*)::int AS count
@@ -114,6 +115,19 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              WHERE mc.instance_id = pe.instance_id
                AND mc.module_key = 'meals' AND mc.enabled = true
            )`,
+          [request.session?.instanceId, request.session?.id],
+        ),
+        pool.query<{ count: number }>(
+          `SELECT count(*)::int AS count
+           FROM music_recommendation recommendation
+           WHERE recommendation.instance_id = $1
+             AND recommendation.recipient_member_id = $2
+             AND recommendation.expires_at > now()
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = recommendation.instance_id
+                 AND mc.module_key = 'music' AND mc.enabled = true
+             )`,
           [request.session?.instanceId, request.session?.id],
         ),
         pool.query<ActivityRow>(
@@ -460,6 +474,28 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
                  WHERE rag.resource_id = r.id AND gm.member_id = $2
                )
              )
+
+           UNION ALL
+
+           SELECT concat('music.recommended:', recommendation.id) AS id,
+                  'music.recommended'::text AS type, sender.first_name AS "actorName",
+                  recommendation.sender_member_id AS "actorId",
+                  concat(
+                    CASE WHEN recommendation.kind = 'TRACK' THEN 'un titre à ' ELSE 'un artiste à ' END,
+                    recipient.first_name
+                  ) AS subject,
+                  recommendation.created_at AS "occurredAt", 'music'::text AS view
+           FROM music_recommendation recommendation
+           JOIN instance_member sender_member ON sender_member.id = recommendation.sender_member_id
+           JOIN app_user sender ON sender.id = sender_member.user_id
+           JOIN instance_member recipient_member ON recipient_member.id = recommendation.recipient_member_id
+           JOIN app_user recipient ON recipient.id = recipient_member.user_id
+           WHERE recommendation.instance_id = $1 AND recommendation.expires_at > now()
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = recommendation.instance_id
+                 AND mc.module_key = 'music' AND mc.enabled = true
+             )
          ) events
          LEFT JOIN member_profile_preference actor_profile
            ON actor_profile.member_id = events."actorId"
@@ -474,6 +510,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
     const pendingShoppingCount = shoppingResult.rows[0]?.count ?? 0;
     const activeTaskCount = taskResult.rows[0]?.count ?? 0;
     const todayMealCount = mealResult.rows[0]?.count ?? 0;
+    const musicRecommendationCount = musicResult.rows[0]?.count ?? 0;
     const attention: HomeAttention[] = [];
     const english = request.session?.locale === 'en';
 
@@ -498,6 +535,17 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
           ? `${unreadNotificationCount} new notification${unreadNotificationCount > 1 ? 's' : ''}`
           : `${unreadNotificationCount} nouvelle${unreadNotificationCount > 1 ? 's' : ''} à consulter`,
         view: 'notifications',
+      });
+    }
+    if (musicRecommendationCount) {
+      attention.push({
+        id: 'music',
+        count: musicRecommendationCount,
+        title: english ? 'Music recommendations' : 'Recommandations musicales',
+        detail: english
+          ? `${musicRecommendationCount} recommendation${musicRecommendationCount > 1 ? 's' : ''} received`
+          : `${musicRecommendationCount} recommandation${musicRecommendationCount > 1 ? 's' : ''} reçue${musicRecommendationCount > 1 ? 's' : ''}`,
+        view: 'music',
       });
     }
     if (pendingShoppingCount) {

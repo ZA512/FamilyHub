@@ -8,6 +8,7 @@ import {
   ChevronRight,
   LoaderCircle,
   MessageCircle,
+  Music2,
   ShoppingBasket,
   Sparkles,
 } from 'lucide-react';
@@ -37,7 +38,8 @@ type HomeViewProps = {
       | 'polls'
       | 'ideas'
       | 'contacts'
-      | 'documents',
+      | 'documents'
+      | 'music',
   ) => void;
   onUnreadCountChange: (count: number) => void;
 };
@@ -160,6 +162,8 @@ function AttentionSection({
               >
                 {item.id === 'notifications' ? (
                   <Bell className="size-4" aria-hidden="true" />
+                ) : item.id === 'music' ? (
+                  <Music2 className="size-4" aria-hidden="true" />
                 ) : item.id === 'tasks' ? (
                   <CheckSquare2 className="size-4" aria-hidden="true" />
                 ) : item.id === 'chat' ? (
@@ -261,6 +265,8 @@ function ActivitySection({
                                         ? 'a partagé un contact'
                                         : item.type === 'document.created'
                                           ? 'a partagé un document'
+                                          : item.type === 'music.recommended'
+                                            ? 'a recommandé'
                                           : 'a ajouté un plat'}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">

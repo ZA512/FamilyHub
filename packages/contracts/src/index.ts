@@ -315,11 +315,11 @@ export type SearchResult = {
 };
 
 export type HomeAttention = {
-  id: 'notifications' | 'shopping' | 'tasks' | 'meals' | 'chat';
+  id: 'notifications' | 'shopping' | 'tasks' | 'meals' | 'chat' | 'music';
   count: number;
   title: string;
   detail: string;
-  view: 'notifications' | 'shopping' | 'tasks' | 'meals' | 'chat';
+  view: 'notifications' | 'shopping' | 'tasks' | 'meals' | 'chat' | 'music';
 };
 
 export type HomeActivity = {
@@ -337,7 +337,8 @@ export type HomeActivity = {
     | 'poll.created'
     | 'idea.created'
     | 'contact.created'
-    | 'document.created';
+    | 'document.created'
+    | 'music.recommended';
   actorName: string;
   actorAvatarUrl?: string | null;
   subject: string;
@@ -352,7 +353,8 @@ export type HomeActivity = {
     | 'polls'
     | 'ideas'
     | 'contacts'
-    | 'documents';
+    | 'documents'
+    | 'music';
 };
 
 export type HomeSummary = {
