@@ -490,6 +490,13 @@ export const englishMessages: Record<string, string> = {
   'Filtrer par type': 'Filter by type',
   'Tous les types': 'All types',
   'Filtrer par étiquette': 'Filter by label',
+  'Rechercher dans la collection…': 'Search this collection…',
+  'Rechercher dans la collection': 'Search this collection',
+  'Filtrer les éléments par étiquette': 'Filter items by label',
+  'Toutes les étiquettes': 'All labels',
+  'Aucun élément trouvé': 'No items found',
+  'Modifiez la recherche ou l’étiquette sélectionnée.':
+    'Change the search or selected label.',
   'Liste des collections': 'Collection list',
   élément: 'item',
   'Aucune collection': 'No collections',

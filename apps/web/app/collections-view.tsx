@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
-import { localeTag } from '@/lib/i18n';
+import { localeTag, t } from '@/lib/i18n';
 import {
   ArrowLeft,
   BookOpen,
@@ -81,6 +81,10 @@ import {
   metadataColumnsFromHint,
   parseCollectionCsv,
 } from '@/lib/collection-csv';
+import {
+  collectionItemTags,
+  filterCollectionItems,
+} from '@/lib/collection-items';
 import type { CollectionItemCreate } from '@familyhub/contracts';
 
 type CollectionScope = 'all' | 'mine' | 'shared';
@@ -974,6 +978,7 @@ export function CollectionsView({
               </div>
             ) : selectedId && selected?.id === selectedId ? (
               <CollectionReader
+                key={selected.id}
                 collection={selected}
                 items={items}
                 busyId={busyId}
@@ -1033,6 +1038,20 @@ function CollectionReader({
 }) {
   const config = typeConfig(collection.type);
   const Icon = config.icon;
+  const [itemQuery, setItemQuery] = useState('');
+  const [itemTag, setItemTag] = useState('');
+  const availableItemTags = useMemo(() => collectionItemTags(items), [items]);
+  const activeItemTag = availableItemTags.includes(itemTag) ? itemTag : '';
+  const filteredItems = useMemo(
+    () =>
+      filterCollectionItems(items, {
+        query: itemQuery,
+        tag: activeItemTag,
+      }),
+    [activeItemTag, itemQuery, items],
+  );
+  const filtersActive = Boolean(itemQuery.trim() || activeItemTag);
+
   return (
     <div>
       <div className="border-b p-4 sm:p-6">
@@ -1134,11 +1153,80 @@ function CollectionReader({
             </Button>
           </div>
         </div>
+        {items.length ? (
+          <div className="mt-4">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem]">
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  type="search"
+                  value={itemQuery}
+                  onChange={(event) => setItemQuery(event.target.value)}
+                  placeholder="Rechercher dans la collection…"
+                  aria-label="Rechercher dans la collection"
+                  className="pl-9 pr-9"
+                />
+                {itemQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setItemQuery('')}
+                    aria-label="Effacer la recherche"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                ) : null}
+              </div>
+              <Select
+                value={activeItemTag || 'ALL'}
+                onValueChange={(value) =>
+                  setItemTag(!value || value === 'ALL' ? '' : value)
+                }
+              >
+                <SelectTrigger aria-label="Filtrer les éléments par étiquette">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Toutes les étiquettes</SelectItem>
+                  {availableItemTags.map((entry) => (
+                    <SelectItem key={entry} value={entry}>
+                      #{entry}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {filtersActive ? (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span aria-live="polite">
+                  {t('{0} résultats sur {1}', {
+                    0: filteredItems.length,
+                    1: items.length,
+                  })}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setItemQuery('');
+                    setItemTag('');
+                  }}
+                >
+                  <X aria-hidden="true" /> Réinitialiser les filtres
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div className="p-4 sm:p-6">
-        {items.length ? (
+        {filteredItems.length ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <Card
                 key={item.id}
                 className="group gap-0 overflow-hidden py-0 transition-shadow hover:shadow-md"
@@ -1221,6 +1309,31 @@ function CollectionReader({
                 </div>
               </Card>
             ))}
+          </div>
+        ) : items.length ? (
+          <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed bg-muted/15 text-center">
+            <div>
+              <Search
+                className="mx-auto mb-3 text-primary"
+                aria-hidden="true"
+              />
+              <p className="font-medium">Aucun élément trouvé</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Modifiez la recherche ou l’étiquette sélectionnée.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => {
+                  setItemQuery('');
+                  setItemTag('');
+                }}
+              >
+                Réinitialiser les filtres
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed bg-muted/15 text-center">
