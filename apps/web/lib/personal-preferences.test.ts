@@ -13,9 +13,26 @@ describe('personal preferences', () => {
         JSON.stringify({
           theme: 'dark',
           hiddenModules: ['chat', 'chat', 'tasks', 'unknown'],
+          showMobileQuickAdd: false,
         }),
       ),
-    ).toEqual({ theme: 'dark', hiddenModules: ['chat', 'tasks'] });
+    ).toEqual({
+      theme: 'dark',
+      hiddenModules: ['chat', 'tasks'],
+      showMobileQuickAdd: false,
+    });
+  });
+
+  it('affiche le bouton d’ajout mobile lors de la migration des anciennes préférences', () => {
+    expect(
+      parsePersonalPreferences(
+        JSON.stringify({ theme: 'light', hiddenModules: [] }),
+      ),
+    ).toEqual({
+      theme: 'light',
+      hiddenModules: [],
+      showMobileQuickAdd: true,
+    });
   });
 
   it('falls back safely when local storage is invalid', () => {

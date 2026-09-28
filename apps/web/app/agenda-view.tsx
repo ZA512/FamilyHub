@@ -15,6 +15,7 @@ import enGbLocale from '@fullcalendar/react/locales/en-gb';
 import frLocale from '@fullcalendar/react/locales/fr';
 import timeGridPlugin from '@fullcalendar/react/timegrid';
 import formaTheme from '@fullcalendar/react/themes/forma';
+import { enGB, fr } from 'date-fns/locale';
 import {
   useCallback,
   useEffect,
@@ -56,6 +57,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -67,6 +69,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -74,8 +81,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { agendaDateRange, defaultAgendaEndValue } from '@/lib/agenda-dates';
 import { readAgendaCache, writeAgendaCache } from '@/lib/offline-storage';
-import { localeTag, useLocale } from '@/lib/i18n';
+import { localeTag, t, useLocale } from '@/lib/i18n';
 
 const FamilyCalendar = FullCalendar as unknown as ComponentType<
   Record<string, unknown>
@@ -474,6 +482,21 @@ function EventComposer({
   const entry = state.entry;
   const [submitting, setSubmitting] = useState(false);
   const [allDay, setAllDay] = useState(entry?.allDay ?? state.initialAllDay);
+  const initialStartValue = entry
+    ? inputDate(entry.seriesStartAt, entry.allDay)
+    : state.initialStart
+      ? inputDate(state.initialStart, state.initialAllDay)
+      : inputDate(new Date().toISOString(), state.initialAllDay);
+  const initialEndValue = entry
+    ? inputDate(
+        entry.seriesEndAt ?? entry.seriesStartAt,
+        entry.allDay,
+        entry.allDay,
+      )
+    : defaultAgendaEndValue(initialStartValue, state.initialAllDay);
+  const [startValue, setStartValue] = useState(initialStartValue);
+  const [endValue, setEndValue] = useState(initialEndValue);
+  const [formError, setFormError] = useState('');
   const [eventType, setEventType] = useState<AgendaEventType>(
     entry?.eventType !== 'TASK' ? (entry?.eventType ?? 'EVENT') : 'EVENT',
   );
@@ -522,9 +545,30 @@ function EventComposer({
     });
   }
 
+  function changeAllDay(checked: boolean) {
+    setAllDay(checked);
+    setFormError('');
+    const startDate = startValue.slice(0, 10);
+    if (checked) {
+      setStartValue(startDate);
+      setEndValue(endValue.slice(0, 10) || startDate);
+      return;
+    }
+    const timedStart = `${startDate}T09:00`;
+    setStartValue(timedStart);
+    setEndValue(defaultAgendaEndValue(timedStart, false));
+  }
+
+  function changeStart(value: string) {
+    setStartValue(value);
+    setEndValue(defaultAgendaEndValue(value, allDay));
+    setFormError('');
+  }
+
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
+    setFormError('');
     onError('');
     const data = new FormData(event.currentTarget);
     try {
@@ -569,22 +613,13 @@ function EventComposer({
       onOpenChange(false);
       onSaved();
     } catch (reason) {
-      onError(
+      setFormError(
         reason instanceof Error ? reason.message : 'Enregistrement impossible.',
       );
     } finally {
       setSubmitting(false);
     }
   }
-
-  const startValue = entry
-    ? inputDate(entry.seriesStartAt, allDay)
-    : state.initialStart
-      ? inputDate(state.initialStart, allDay)
-      : inputDate(new Date().toISOString(), allDay);
-  const endValue = entry
-    ? inputDate(entry.seriesEndAt ?? entry.seriesStartAt, allDay, allDay)
-    : defaultEndValue(startValue, allDay);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -600,6 +635,14 @@ function EventComposer({
           </DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={submit}>
+          {formError ? (
+            <p
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            >
+              {t(formError)}
+            </p>
+          ) : null}
           <FormField
             label="Titre"
             name="title"
@@ -635,24 +678,27 @@ function EventComposer({
             <Checkbox
               id="agenda-all-day"
               checked={allDay}
-              onCheckedChange={setAllDay}
+              onCheckedChange={changeAllDay}
             />
             Toute la journée
           </Label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormField
+            <AgendaDateTimeField
               label="Début"
               name="startAt"
-              type={allDay ? 'date' : 'datetime-local'}
-              defaultValue={startValue}
-              required
+              value={startValue}
+              allDay={allDay}
+              onChange={changeStart}
             />
-            <FormField
+            <AgendaDateTimeField
               label={allDay ? 'Fin (incluse)' : 'Fin'}
               name="endAt"
-              type={allDay ? 'date' : 'datetime-local'}
-              defaultValue={endValue}
-              required
+              value={endValue}
+              allDay={allDay}
+              onChange={(value) => {
+                setEndValue(value);
+                setFormError('');
+              }}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -910,6 +956,89 @@ function SelectField({
   );
 }
 
+function AgendaDateTimeField({
+  label,
+  name,
+  value,
+  allDay,
+  onChange,
+}: {
+  label: string;
+  name: string;
+  value: string;
+  allDay: boolean;
+  onChange: (value: string) => void;
+}) {
+  const locale = useLocale();
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const selectedDate = dateFromAgendaValue(value);
+  const translatedLabel = t(label).toLocaleLowerCase(localeTag());
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <input type="hidden" name={name} value={value} />
+      <div className={allDay ? undefined : 'grid grid-cols-[1fr_7rem] gap-2'}>
+        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full justify-start rounded-xl px-3 font-normal"
+                aria-label={t('Choisir la date de {0}', {
+                  0: translatedLabel,
+                })}
+              />
+            }
+          >
+            <CalendarDays aria-hidden="true" />
+            <span className="truncate">
+              {selectedDate
+                ? new Intl.DateTimeFormat(localeTag(), {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  }).format(selectedDate)
+                : 'Choisir une date'}
+            </span>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={selectedDate ?? undefined}
+              defaultMonth={selectedDate ?? undefined}
+              onSelect={(date) => {
+                if (!date) return;
+                onChange(replaceAgendaDate(value, date, allDay));
+                setCalendarOpen(false);
+              }}
+              captionLayout="dropdown"
+              startMonth={new Date(currentYear - 100, 0)}
+              endMonth={new Date(currentYear + 20, 11)}
+              locale={locale === 'en' ? enGB : fr}
+            />
+          </PopoverContent>
+        </Popover>
+        {!allDay ? (
+          <Input
+            type="time"
+            value={value.slice(11, 16)}
+            onChange={(event) =>
+              onChange(replaceAgendaTime(value, event.target.value))
+            }
+            aria-label={t('Heure de {0}', { 0: translatedLabel })}
+            className="h-11 rounded-xl"
+            required
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function FormField({
   label,
   required = true,
@@ -927,6 +1056,30 @@ function FormField({
       />
     </div>
   );
+}
+
+function dateFromAgendaValue(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+  const date = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+  );
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function replaceAgendaDate(value: string, date: Date, allDay: boolean): string {
+  const dateValue = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+  return allDay ? dateValue : `${dateValue}T${value.slice(11, 16) || '09:00'}`;
+}
+
+function replaceAgendaTime(value: string, time: string): string {
+  return `${value.slice(0, 10)}T${time}`;
 }
 
 function toCalendarEvent(entry: AgendaEntry): EventInput {
@@ -954,28 +1107,12 @@ function toCalendarEvent(entry: AgendaEntry): EventInput {
 function formDates(data: FormData, allDay: boolean) {
   const start = textEntry(data, 'startAt');
   const end = textEntry(data, 'endAt');
-  if (!start || !end) throw new Error('Indiquez le début et la fin.');
-  if (allDay) {
-    return {
-      startAt: new Date(`${start}T00:00:00`).toISOString(),
-      endAt: nextDayIso(end),
-    };
-  }
-  return {
-    startAt: new Date(start).toISOString(),
-    endAt: new Date(end).toISOString(),
-  };
+  return agendaDateRange(start, end, allDay);
 }
 
 function textEntry(data: FormData, name: string) {
   const value = data.get(name);
   return typeof value === 'string' ? value : '';
-}
-
-function nextDayIso(value: string) {
-  const date = new Date(`${value}T00:00:00`);
-  date.setDate(date.getDate() + 1);
-  return date.toISOString();
 }
 
 function endOfDayIso(value: string) {
@@ -989,14 +1126,6 @@ function inputDate(value: string, allDay: boolean, exclusiveEnd = false) {
   if (exclusiveEnd) date.setDate(date.getDate() - 1);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, allDay ? 10 : 16);
-}
-
-function defaultEndValue(startValue: string, allDay: boolean) {
-  if (allDay) return startValue.slice(0, 10);
-  const date = new Date(startValue);
-  date.setHours(date.getHours() + 1);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
 }
 
 function formatEntryDate(entry: AgendaEntry) {

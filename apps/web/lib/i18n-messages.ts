@@ -719,6 +719,33 @@ export const englishMessages: Record<string, string> = {
   'Votre espace': 'Your space',
   'Gérez votre profil et la configuration du foyer.':
     'Manage your profile and household settings.',
+  'Accès rapide': 'Quick access',
+  'Choisissez directement le réglage que vous recherchez.':
+    'Go directly to the setting you need.',
+  'Compte et préférences': 'Account and preferences',
+  'Les réglages qui concernent uniquement votre compte et cet appareil.':
+    'Settings that apply only to your account and this device.',
+  'Vos données': 'Your data',
+  'Récupérez vos informations ou importez vos bookmarks personnels.':
+    'Download your information or import your personal bookmarks.',
+  'Administration du foyer': 'Household administration',
+  'Ces réglages modifient l’expérience de tous les membres.':
+    'These settings change the experience for every member.',
+  'Identité, photo, langue et confidentialité':
+    'Identity, photo, language and privacy',
+  'Thème, navigation et bouton d’ajout':
+    'Theme, navigation and add button',
+  'Alertes, silence et notifications push':
+    'Alerts, quiet hours and push notifications',
+  'Connexion et partage des goûts musicaux':
+    'Connection and music taste sharing',
+  'Export personnel et import de bookmarks':
+    'Personal export and bookmark import',
+  'Repas, stockage et limites techniques':
+    'Meals, storage and technical limits',
+  'Dernières actions sensibles': 'Latest sensitive actions',
+  'Fonctionnalités disponibles pour le foyer':
+    'Features available to the household',
   'Exporter les données': 'Export data',
   'Archive ZIP lisible contenant JSON, CSV, calendrier ICS, bookmarks HTML, pages Markdown et fichiers originaux.':
     'Readable ZIP archive containing JSON, CSV, an ICS calendar, HTML bookmarks, Markdown pages and original files.',
@@ -742,6 +769,9 @@ export const englishMessages: Record<string, string> = {
   Thème: 'Theme',
   Clair: 'Light',
   Sombre: 'Dark',
+  'Bouton d’ajout rapide sur mobile': 'Quick add button on mobile',
+  'Affiche le bouton « Ajouter » au-dessus de la navigation.':
+    'Shows the “Add” button above the navigation.',
   'Modules masqués dans ma navigation': 'Modules hidden from my navigation',
   'Choisissez le niveau d’alerte et les modules que vous souhaitez rendre silencieux.':
     'Choose the alert level and modules you want to mute.',
@@ -897,6 +927,8 @@ export const englishMessages: Record<string, string> = {
 };
 
 export const englishTemplateMessages: Record<string, string> = {
+  'Choisir la date de {0}': 'Choose the date for {0}',
+  'Heure de {0}': 'Time for {0}',
   'Lecture lancée sur « {0} ».': 'Playback started on “{0}”.',
   'À découvrir chez {0}': 'Discover from {0}',
   'Proposé par {0}': 'Shared by {0}',
@@ -1422,6 +1454,9 @@ Object.assign(englishMessages, {
   'Votre réponse n’a pas pu être enregistrée.':
     'Your response could not be saved.',
   'Indiquez le début et la fin.': 'Enter a start and end.',
+  'Vérifiez les dates saisies.': 'Check the dates entered.',
+  'La fin doit suivre le début.': 'The end must be after the start.',
+  'Choisir une date': 'Choose a date',
   'Ce foyer est déjà configuré.': 'This household is already configured.',
   'Le jeton d’installation est incorrect.': 'The setup token is incorrect.',
   'Vérifiez les informations saisies.': 'Check the information entered.',

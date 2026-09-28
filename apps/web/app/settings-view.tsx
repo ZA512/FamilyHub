@@ -1,6 +1,7 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
 import { formatBinarySize, localeTag, t } from '@/lib/i18n';
 import {
+  ArrowRight,
   Bookmark,
   BellRing,
   CalendarDays,
@@ -19,6 +20,7 @@ import {
   ShieldCheck,
   ShoppingBasket,
   Upload,
+  UserRound,
   Utensils,
   Vote,
 } from 'lucide-react';
@@ -162,6 +164,8 @@ export function SettingsView({
 }: SettingsViewProps) {
   const [busyKey, setBusyKey] = useState<ModuleKey | null>(null);
   const [error, setError] = useState('');
+  const musicEnabled =
+    modules?.find((module) => module.key === 'music')?.enabled ?? true;
 
   async function toggle(key: ModuleKey, enabled: boolean) {
     setBusyKey(key);
@@ -191,23 +195,45 @@ export function SettingsView({
         </p>
       </div>
 
-      <ProfileSettings
-        csrfToken={csrfToken}
-        onFirstNameChange={onFirstNameChange}
-        onAvatarUrlChange={onAvatarUrlChange}
-        onLogout={onLogout}
+      <SettingsDirectory role={role} musicEnabled={musicEnabled} />
+
+      <SettingsGroupHeading
+        title="Compte et préférences"
+        description="Les réglages qui concernent uniquement votre compte et cet appareil."
       />
 
-      <PersonalDisplaySettings
-        preferences={personalPreferences}
-        onChange={onPersonalPreferencesChange}
+      <div id="settings-profile" className="scroll-mt-24">
+        <ProfileSettings
+          csrfToken={csrfToken}
+          onFirstNameChange={onFirstNameChange}
+          onAvatarUrlChange={onAvatarUrlChange}
+          onLogout={onLogout}
+        />
+      </div>
+
+      <div id="settings-display" className="scroll-mt-24">
+        <PersonalDisplaySettings
+          preferences={personalPreferences}
+          onChange={onPersonalPreferencesChange}
+        />
+      </div>
+
+      <div id="settings-notifications" className="scroll-mt-24">
+        <NotificationSettings csrfToken={csrfToken} />
+      </div>
+
+      {musicEnabled ? (
+        <div id="settings-spotify" className="scroll-mt-24">
+          <SpotifySettings csrfToken={csrfToken} />
+        </div>
+      ) : null}
+
+      <SettingsGroupHeading
+        title="Vos données"
+        description="Récupérez vos informations ou importez vos bookmarks personnels."
       />
 
-      <NotificationSettings csrfToken={csrfToken} />
-
-      <SpotifySettings csrfToken={csrfToken} />
-
-      <Card className="mb-8">
+      <Card id="settings-data" className="mb-8 scroll-mt-24">
         <CardHeader className="flex-row items-start gap-4">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff0dc] text-[#b86210]">
             <Download className="size-5" aria-hidden="true" />
@@ -246,108 +272,235 @@ export function SettingsView({
         </CardContent>
       </Card>
 
-      <HouseholdSettings role={role} csrfToken={csrfToken} />
+      {role === 'ADMIN' ? (
+        <>
+          <SettingsGroupHeading
+            title="Administration du foyer"
+            description="Ces réglages modifient l’expérience de tous les membres."
+          />
 
-      {role === 'ADMIN' ? <AuditLogSettings /> : null}
+          <div id="settings-household" className="scroll-mt-24">
+            <HouseholdSettings role={role} csrfToken={csrfToken} />
+          </div>
 
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold tracking-tight">Modules</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Les données d’un module désactivé restent conservées.
-        </p>
-      </div>
+          <div id="settings-audit" className="scroll-mt-24">
+            <AuditLogSettings />
+          </div>
 
-      {role !== 'ADMIN' ? (
-        <p className="mb-4 rounded-xl border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">
-          Seul un administrateur peut modifier les modules du foyer.
-        </p>
-      ) : null}
+          <div id="settings-modules" className="scroll-mt-24">
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold tracking-tight">Modules</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Les données d’un module désactivé restent conservées.
+              </p>
+            </div>
 
-      {loadError || error ? (
-        <p
-          role="alert"
-          className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-        >
-          {t(error || loadError)}
-        </p>
-      ) : null}
-
-      <Card className="mb-6 gap-3 bg-primary text-primary-foreground">
-        <CardHeader>
-          <CardTitle className="text-base">Toujours disponibles</CardTitle>
-          <CardDescription className="text-white/60">
-            Accueil, membres, notifications, recherche et paramètres sont
-            indispensables.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {[
-            'Accueil',
-            'Membres',
-            'Notifications',
-            'Recherche',
-            'Paramètres',
-          ].map((label) => (
-            <Badge
-              key={label}
-              className="border-white/10 bg-white/10 text-white"
-            >
-              {label}
-            </Badge>
-          ))}
-        </CardContent>
-      </Card>
-
-      {!modules ? (
-        <Card>
-          <CardContent className="flex items-center gap-3 py-8 text-muted-foreground">
-            <LoaderCircle className="animate-spin" aria-hidden="true" />
-            Chargement des modules…
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="gap-0 overflow-hidden py-0">
-          {functionalModules.map((module, index) => {
-            const enabled =
-              modules.find((entry) => entry.key === module.key)?.enabled ??
-              false;
-            const busy = busyKey === module.key;
-            return (
-              <div
-                key={module.key}
-                className={`flex items-center gap-4 px-4 py-4 sm:px-5 ${index ? 'border-t' : ''}`}
+            {loadError || error ? (
+              <p
+                role="alert"
+                className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
               >
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
-                  <module.icon className="size-4" aria-hidden="true" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{module.label}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {module.description}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {busy ? (
-                    <LoaderCircle
-                      className="size-4 animate-spin text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                  <Switch
-                    checked={enabled}
-                    disabled={role !== 'ADMIN' || busyKey !== null}
-                    onCheckedChange={(checked) =>
-                      void toggle(module.key, checked)
-                    }
-                    aria-label={`${enabled ? 'Désactiver' : 'Activer'} le module ${module.label}`}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </Card>
-      )}
+                {t(error || loadError)}
+              </p>
+            ) : null}
+
+            <Card className="mb-6 gap-3 bg-primary text-primary-foreground">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Toujours disponibles
+                </CardTitle>
+                <CardDescription className="text-white/60">
+                  Accueil, membres, notifications, recherche et paramètres sont
+                  indispensables.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {[
+                  'Accueil',
+                  'Membres',
+                  'Notifications',
+                  'Recherche',
+                  'Paramètres',
+                ].map((label) => (
+                  <Badge
+                    key={label}
+                    className="border-white/10 bg-white/10 text-white"
+                  >
+                    {label}
+                  </Badge>
+                ))}
+              </CardContent>
+            </Card>
+
+            {!modules ? (
+              <Card>
+                <CardContent className="flex items-center gap-3 py-8 text-muted-foreground">
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                  Chargement des modules…
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="gap-0 overflow-hidden py-0">
+                {functionalModules.map((module, index) => {
+                  const enabled =
+                    modules.find((entry) => entry.key === module.key)
+                      ?.enabled ?? false;
+                  const busy = busyKey === module.key;
+                  return (
+                    <div
+                      key={module.key}
+                      className={`flex items-center gap-4 px-4 py-4 sm:px-5 ${index ? 'border-t' : ''}`}
+                    >
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground">
+                        <module.icon className="size-4" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium">{module.label}</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          {module.description}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {busy ? (
+                          <LoaderCircle
+                            className="size-4 animate-spin text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        <Switch
+                          checked={enabled}
+                          disabled={busyKey !== null}
+                          onCheckedChange={(checked) =>
+                            void toggle(module.key, checked)
+                          }
+                          aria-label={`${enabled ? 'Désactiver' : 'Activer'} le module ${module.label}`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </Card>
+            )}
+          </div>
+        </>
+      ) : null}
     </section>
+  );
+}
+
+function SettingsDirectory({
+  role,
+  musicEnabled,
+}: {
+  role: 'ADMIN' | 'MEMBER';
+  musicEnabled: boolean;
+}) {
+  const items = [
+    {
+      href: '#settings-profile',
+      label: 'Mon profil',
+      description: 'Identité, photo, langue et confidentialité',
+      icon: UserRound,
+    },
+    {
+      href: '#settings-display',
+      label: 'Affichage personnel',
+      description: 'Thème, navigation et bouton d’ajout',
+      icon: Palette,
+    },
+    {
+      href: '#settings-notifications',
+      label: 'Notifications',
+      description: 'Alertes, silence et notifications push',
+      icon: BellRing,
+    },
+    ...(musicEnabled
+      ? [
+          {
+            href: '#settings-spotify',
+            label: 'Spotify',
+            description: 'Connexion et partage des goûts musicaux',
+            icon: Music2,
+          },
+        ]
+      : []),
+    {
+      href: '#settings-data',
+      label: 'Vos données',
+      description: 'Export personnel et import de bookmarks',
+      icon: Download,
+    },
+    ...(role === 'ADMIN'
+      ? [
+          {
+            href: '#settings-household',
+            label: 'Configuration du foyer',
+            description: 'Repas, stockage et limites techniques',
+            icon: CalendarDays,
+          },
+          {
+            href: '#settings-audit',
+            label: 'Journal administratif',
+            description: 'Dernières actions sensibles',
+            icon: ShieldCheck,
+          },
+          {
+            href: '#settings-modules',
+            label: 'Modules',
+            description: 'Fonctionnalités disponibles pour le foyer',
+            icon: ListChecks,
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <Card className="mb-10 gap-4 border-primary/20 bg-primary/[0.03]">
+      <CardHeader>
+        <CardTitle className="text-lg">Accès rapide</CardTitle>
+        <CardDescription>
+          Choisissez directement le réglage que vous recherchez.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2 sm:grid-cols-2">
+        {items.map((item) => (
+          <a
+            key={item.href}
+            href={item.href}
+            className="group flex items-center gap-3 rounded-xl border bg-background p-3 transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
+              <item.icon className="size-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium">{t(item.label)}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                {t(item.description)}
+              </span>
+            </span>
+            <ArrowRight
+              className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
+          </a>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SettingsGroupHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="mb-4 mt-10 border-b pb-3 first:mt-0">
+      <h2 className="text-xl font-semibold tracking-tight">{t(title)}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t(description)}</p>
+    </div>
   );
 }
 
@@ -478,23 +631,48 @@ function PersonalDisplaySettings({
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="max-w-xs space-y-2">
-          <Label htmlFor="theme-preference">Thème</Label>
-          <NativeSelect
-            id="theme-preference"
-            className="w-full"
-            value={preferences.theme}
-            onChange={(event) =>
-              onChange({
-                ...preferences,
-                theme: event.target.value as PersonalPreferences['theme'],
-              })
-            }
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="theme-preference">Thème</Label>
+            <NativeSelect
+              id="theme-preference"
+              className="w-full"
+              value={preferences.theme}
+              onChange={(event) =>
+                onChange({
+                  ...preferences,
+                  theme: event.target.value as PersonalPreferences['theme'],
+                })
+              }
+            >
+              <NativeSelectOption value="system">Système</NativeSelectOption>
+              <NativeSelectOption value="light">Clair</NativeSelectOption>
+              <NativeSelectOption value="dark">Sombre</NativeSelectOption>
+            </NativeSelect>
+          </div>
+          <label
+            htmlFor="mobile-quick-add"
+            className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border bg-muted/15 px-4 py-3"
           >
-            <NativeSelectOption value="system">Système</NativeSelectOption>
-            <NativeSelectOption value="light">Clair</NativeSelectOption>
-            <NativeSelectOption value="dark">Sombre</NativeSelectOption>
-          </NativeSelect>
+            <span>
+              <span className="block text-sm font-medium">
+                Bouton d’ajout rapide sur mobile
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                Affiche le bouton « Ajouter » au-dessus de la navigation.
+              </span>
+            </span>
+            <Switch
+              id="mobile-quick-add"
+              checked={preferences.showMobileQuickAdd}
+              onCheckedChange={(checked) =>
+                onChange({
+                  ...preferences,
+                  showMobileQuickAdd: checked,
+                })
+              }
+            />
+          </label>
         </div>
 
         <div>

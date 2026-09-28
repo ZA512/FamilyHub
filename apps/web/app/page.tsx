@@ -926,14 +926,14 @@ export default function DashboardPage({
             )}
           </div>
 
-          {canCreate ? (
+          {canCreate && personalPreferences.showMobileQuickAdd ? (
             <Button
-              size="icon-lg"
               aria-label="Ajouter"
               onClick={() => setQuickAddOpen(true)}
-              className="fixed bottom-20 right-4 z-30 size-12 rounded-2xl bg-primary shadow-lg hover:bg-primary/80 sm:hidden"
+              className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] left-1/2 z-30 h-11 -translate-x-1/2 rounded-full bg-primary px-4 shadow-lg hover:bg-primary/80 sm:hidden"
             >
               <Plus className="size-5" aria-hidden="true" />
+              Ajouter
             </Button>
           ) : null}
 

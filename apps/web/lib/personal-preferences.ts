@@ -5,11 +5,13 @@ export type ThemePreference = 'light' | 'dark' | 'system';
 export type PersonalPreferences = {
   theme: ThemePreference;
   hiddenModules: ModuleKey[];
+  showMobileQuickAdd: boolean;
 };
 
 export const defaultPersonalPreferences: PersonalPreferences = {
   theme: 'system',
   hiddenModules: [],
+  showMobileQuickAdd: true,
 };
 
 const moduleKeys = new Set<ModuleKey>([
@@ -53,7 +55,11 @@ export function parsePersonalPreferences(
           ),
         ]
       : [];
-    return { theme, hiddenModules };
+    const showMobileQuickAdd =
+      typeof parsed.showMobileQuickAdd === 'boolean'
+        ? parsed.showMobileQuickAdd
+        : true;
+    return { theme, hiddenModules, showMobileQuickAdd };
   } catch {
     return defaultPersonalPreferences;
   }
