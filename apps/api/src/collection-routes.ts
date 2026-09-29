@@ -3,11 +3,14 @@ import {
   collectionCreateSchema,
   collectionItemCreateSchema,
   collectionItemImportSchema,
+  collectionItemRecommendationUpdateSchema,
   collectionItemUpdateSchema,
   collectionPreferenceSchema,
   collectionsQuerySchema,
   collectionUpdateSchema,
   type CollectionItemComment,
+  type CollectionRecommendationMember,
+  type CollectionRecommendationRecipient,
   type CollectionType,
   type CollectionVisibility,
   type FamilyCollection,
@@ -42,6 +45,8 @@ type CollectionRow = {
 
 type CommentJson = Omit<CollectionItemComment, 'editable'>;
 
+type RecommendationMemberJson = CollectionRecommendationMember;
+
 type ItemRow = {
   id: string;
   collectionId: string;
@@ -58,6 +63,8 @@ type ItemRow = {
   negativeCount: number;
   neutralCount: number;
   positiveCount: number;
+  recommendedTo: RecommendationMemberJson[];
+  recommendedBy: RecommendationMemberJson[];
   comments: CommentJson[];
   version: number;
   createdAt: Date;
@@ -122,6 +129,30 @@ const selectItem = `
           WHERE cip.item_id = item.id AND cip.value = 0) AS "neutralCount",
          (SELECT count(*)::int FROM collection_item_preference cip
           WHERE cip.item_id = item.id AND cip.value = 1) AS "positiveCount",
+         COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+             'memberId', recipient_member.id,
+             'memberName', recipient_user.first_name
+           ) ORDER BY lower(recipient_user.first_name), recipient_member.id)
+           FROM collection_item_recommendation recommendation
+           JOIN instance_member recipient_member
+             ON recipient_member.id = recommendation.recipient_member_id
+           JOIN app_user recipient_user ON recipient_user.id = recipient_member.user_id
+           WHERE recommendation.item_id = item.id
+             AND recommendation.sender_member_id = $1
+         ), '[]'::jsonb) AS "recommendedTo",
+         COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+             'memberId', sender_member.id,
+             'memberName', sender_user.first_name
+           ) ORDER BY lower(sender_user.first_name), sender_member.id)
+           FROM collection_item_recommendation recommendation
+           JOIN instance_member sender_member
+             ON sender_member.id = recommendation.sender_member_id
+           JOIN app_user sender_user ON sender_user.id = sender_member.user_id
+           WHERE recommendation.item_id = item.id
+             AND recommendation.recipient_member_id = $1
+         ), '[]'::jsonb) AS "recommendedBy",
          COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
              'id', comment.id,
@@ -204,6 +235,10 @@ function serializeItem(
       neutral: row.neutralCount,
       positive: row.positiveCount,
     },
+    recommendations: {
+      sentTo: row.recommendedTo,
+      receivedFrom: row.recommendedBy,
+    },
     comments: row.comments.map((comment) => ({
       ...comment,
       editable: comment.authorId === memberId || collectionOwnerId === memberId,
@@ -251,6 +286,70 @@ async function validAudience(
     return result.rows[0]?.count === unique.length;
   }
   return true;
+}
+
+async function loadRecommendationRecipients(
+  client: Pool | PoolClient,
+  collectionId: string,
+  instanceId: string,
+  senderId: string,
+): Promise<CollectionRecommendationRecipient[]> {
+  const result = await client.query<CollectionRecommendationRecipient>(
+    `SELECT member.id, member_user.first_name AS "firstName"
+     FROM instance_member member
+     JOIN app_user member_user ON member_user.id = member.user_id
+     JOIN resource r ON r.id = $3
+     WHERE member.instance_id = $1
+       AND member.status = 'ACTIVE'
+       AND member.id <> $2
+       AND r.instance_id = $1
+       AND r.deleted_at IS NULL
+       AND (
+         r.visibility = 'ALL_MEMBERS'
+         OR r.created_by = member.id
+         OR EXISTS (
+           SELECT 1 FROM resource_acl_user rau
+           WHERE rau.resource_id = r.id AND rau.member_id = member.id
+         )
+         OR EXISTS (
+           SELECT 1 FROM resource_acl_group rag
+           JOIN group_membership gm ON gm.group_id = rag.group_id
+           WHERE rag.resource_id = r.id AND gm.member_id = member.id
+         )
+       )
+     ORDER BY lower(member_user.first_name), member.id`,
+    [instanceId, senderId, collectionId],
+  );
+  return result.rows;
+}
+
+async function removeInaccessibleRecommendations(
+  client: PoolClient,
+  collectionId: string,
+): Promise<void> {
+  await client.query(
+    `DELETE FROM collection_item_recommendation recommendation
+     USING collection_item item, resource r
+     WHERE recommendation.item_id = item.id
+       AND item.collection_id = $1
+       AND r.id = item.collection_id
+       AND NOT (
+         r.visibility = 'ALL_MEMBERS'
+         OR r.created_by = recommendation.recipient_member_id
+         OR EXISTS (
+           SELECT 1 FROM resource_acl_user rau
+           WHERE rau.resource_id = r.id
+             AND rau.member_id = recommendation.recipient_member_id
+         )
+         OR EXISTS (
+           SELECT 1 FROM resource_acl_group rag
+           JOIN group_membership gm ON gm.group_id = rag.group_id
+           WHERE rag.resource_id = r.id
+             AND gm.member_id = recommendation.recipient_member_id
+         )
+       )`,
+    [collectionId],
+  );
 }
 
 async function replaceAudience(
@@ -469,9 +568,16 @@ export async function registerCollectionRoutes(app: FastifyInstance, pool: Pool)
          ORDER BY item.updated_at DESC, item.id DESC`,
       [session.id, collection.id],
     );
+    const recommendationRecipients = await loadRecommendationRecipients(
+      pool,
+      collection.id,
+      session.instanceId,
+      session.id,
+    );
     return {
       collection,
       items: items.rows.map((row) => serializeItem(row, session.id, collection.createdBy)),
+      recommendationRecipients,
     };
   });
 
@@ -627,6 +733,7 @@ export async function registerCollectionRoutes(app: FastifyInstance, pool: Pool)
           parsed.data.groupIds,
           parsed.data.memberIds,
         );
+        await removeInaccessibleRecommendations(client, id.data);
         await replaceCollectionTags(
           client,
           id.data,
@@ -677,6 +784,12 @@ export async function registerCollectionRoutes(app: FastifyInstance, pool: Pool)
         }
         await client.query(
           `DELETE FROM notification WHERE resource_type = 'collection' AND resource_id = $1`,
+          [id.data],
+        );
+        await client.query(
+          `DELETE FROM collection_item_recommendation recommendation
+           USING collection_item item
+           WHERE recommendation.item_id = item.id AND item.collection_id = $1`,
           [id.data],
         );
         await client.query('COMMIT');
@@ -837,8 +950,12 @@ export async function registerCollectionRoutes(app: FastifyInstance, pool: Pool)
           if (!firstTitle) firstTitle = item.title;
         }
         if (addedCount) {
-          await client.query('UPDATE collection SET updated_at = now() WHERE id = $1', [collection.id]);
-          await client.query('UPDATE resource SET updated_at = now() WHERE id = $1', [collection.id]);
+          await client.query('UPDATE collection SET updated_at = now() WHERE id = $1', [
+            collection.id,
+          ]);
+          await client.query('UPDATE resource SET updated_at = now() WHERE id = $1', [
+            collection.id,
+          ]);
           await notifyCollectionAudience(
             client,
             collection.id,
@@ -964,12 +1081,114 @@ export async function registerCollectionRoutes(app: FastifyInstance, pool: Pool)
           await client.query('ROLLBACK');
           return reply.code(404).send({ error: 'COLLECTION_ITEM_NOT_FOUND' });
         }
+        await client.query('DELETE FROM collection_item_recommendation WHERE item_id = $1', [
+          item.id,
+        ]);
         await client.query('UPDATE collection SET updated_at = now() WHERE id = $1', [
           collection.id,
         ]);
         await client.query('UPDATE resource SET updated_at = now() WHERE id = $1', [collection.id]);
         await client.query('COMMIT');
         return reply.code(204).send();
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
+
+  app.put(
+    '/api/v1/collections/:collectionId/items/:itemId/recommendations',
+    {
+      preHandler: [requireSession, requireCsrf],
+      config: { rateLimit: { max: 60, timeWindow: '1 hour' } },
+    },
+    async (request, reply) => {
+      if (!(await requireCollectionsModule(request, reply, pool))) return;
+      const params = request.params as { collectionId?: string; itemId?: string };
+      const collectionId = idSchema.safeParse(params.collectionId);
+      const itemId = idSchema.safeParse(params.itemId);
+      const parsed = collectionItemRecommendationUpdateSchema.safeParse(request.body);
+      if (!collectionId.success || !itemId.success || !parsed.success) {
+        return reply.code(400).send({ error: 'INVALID_REQUEST' });
+      }
+      const session = request.session!;
+      const collection = await loadCollection(
+        pool,
+        collectionId.data,
+        session.instanceId,
+        session.id,
+      );
+      if (!collection) return reply.code(404).send({ error: 'COLLECTION_NOT_FOUND' });
+      if (!(await loadItem(pool, itemId.data, collection, session.id))) {
+        return reply.code(404).send({ error: 'COLLECTION_ITEM_NOT_FOUND' });
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const lockedItem = await client.query(
+          `SELECT item.id
+           FROM collection_item item
+           JOIN resource r ON r.id = item.collection_id
+           WHERE item.id = $1 AND item.collection_id = $2
+             AND item.deleted_at IS NULL AND r.deleted_at IS NULL
+           FOR SHARE OF item, r`,
+          [itemId.data, collection.id],
+        );
+        if (!lockedItem.rowCount) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'COLLECTION_ITEM_NOT_FOUND' });
+        }
+        const eligibleRecipients = await loadRecommendationRecipients(
+          client,
+          collection.id,
+          session.instanceId,
+          session.id,
+        );
+        const eligibleIds = new Set(eligibleRecipients.map((recipient) => recipient.id));
+        if (parsed.data.recipientIds.some((recipientId) => !eligibleIds.has(recipientId))) {
+          await client.query('ROLLBACK');
+          return reply.code(400).send({ error: 'INVALID_RECIPIENT' });
+        }
+        await client.query(
+          `DELETE FROM collection_item_recommendation
+           WHERE item_id = $1 AND sender_member_id = $2
+             AND NOT (recipient_member_id = ANY($3::uuid[]))`,
+          [itemId.data, session.id, parsed.data.recipientIds],
+        );
+        const inserted = await client.query<{ id: string }>(
+          `INSERT INTO collection_item_recommendation
+             (instance_id, item_id, sender_member_id, recipient_member_id)
+           SELECT $1, $2, $3, recipient.id
+           FROM instance_member recipient
+           WHERE recipient.id = ANY($4::uuid[])
+           ON CONFLICT (item_id, sender_member_id, recipient_member_id) DO NOTHING
+           RETURNING id`,
+          [session.instanceId, itemId.data, session.id, parsed.data.recipientIds],
+        );
+        const recommendationIds = inserted.rows.map((row) => row.id);
+        if (recommendationIds.length) {
+          await client.query(
+            `INSERT INTO notification
+               (instance_id, recipient_member_id, actor_member_id, type, module_key,
+                title, body, resource_type, resource_id)
+             SELECT recommendation.instance_id, recommendation.recipient_member_id,
+                    recommendation.sender_member_id, 'COLLECTION_ITEM_RECOMMENDED', 'collections',
+                    'Nouvelle recommandation',
+                    concat($2::text, ' vous recommande « ', item.title,
+                           ' » depuis « ', collection.name, ' »'),
+                    'collection_item_recommendation', recommendation.id
+             FROM collection_item_recommendation recommendation
+             JOIN collection_item item ON item.id = recommendation.item_id
+             JOIN collection ON collection.id = item.collection_id
+             WHERE recommendation.id = ANY($1::uuid[])`,
+            [recommendationIds, session.firstName],
+          );
+        }
+        await client.query('COMMIT');
+        return { item: await loadItem(pool, itemId.data, collection, session.id) };
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;

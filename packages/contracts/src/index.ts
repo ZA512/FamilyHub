@@ -334,6 +334,7 @@ export type HomeActivity = {
     | 'bookmark.shared'
     | 'page.updated'
     | 'collection.item.added'
+    | 'collection.item.recommended'
     | 'poll.created'
     | 'idea.created'
     | 'contact.created'
@@ -1374,6 +1375,15 @@ export const collectionPreferenceSchema = z.object({
   value: z.number().int().min(-1).max(1),
 });
 
+export const collectionItemRecommendationUpdateSchema = z.object({
+  recipientIds: z
+    .array(z.string().uuid())
+    .max(100)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: 'Chaque destinataire doit être unique.',
+    }),
+});
+
 export const collectionCommentCreateSchema = z.object({
   body: z.string().trim().min(1).max(1000),
   clientMutationId: z.string().uuid(),
@@ -1419,6 +1429,16 @@ export type CollectionPreferenceSummary = {
   positive: number;
 };
 
+export type CollectionRecommendationMember = {
+  memberId: string;
+  memberName: string;
+};
+
+export type CollectionRecommendationRecipient = {
+  id: string;
+  firstName: string;
+};
+
 export type FamilyCollectionItem = {
   id: string;
   collectionId: string;
@@ -1434,6 +1454,10 @@ export type FamilyCollectionItem = {
   editable: boolean;
   preference: -1 | 0 | 1 | null;
   preferences: CollectionPreferenceSummary;
+  recommendations: {
+    sentTo: CollectionRecommendationMember[];
+    receivedFrom: CollectionRecommendationMember[];
+  };
   comments: CollectionItemComment[];
   version: number;
   createdAt: string;

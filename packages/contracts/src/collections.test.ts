@@ -5,6 +5,7 @@ import {
   collectionCreateSchema,
   collectionItemCreateSchema,
   collectionItemImportSchema,
+  collectionItemRecommendationUpdateSchema,
   collectionPreferenceSchema,
   collectionsQuerySchema,
 } from './index.js';
@@ -45,16 +46,28 @@ describe('collection contracts', () => {
   });
 
   it('valide le lot complet et limite les lignes importées', () => {
-    expect(collectionItemImportSchema.safeParse({ items: [{ title: 'Un livre', clientMutationId: mutationId }] }).success).toBe(true);
-    expect(collectionItemImportSchema.safeParse({ items: [
-      { title: 'Un livre', clientMutationId: mutationId },
-      { title: 'Un autre', clientMutationId: mutationId },
-    ] }).success).toBe(false);
+    expect(
+      collectionItemImportSchema.safeParse({
+        items: [{ title: 'Un livre', clientMutationId: mutationId }],
+      }).success,
+    ).toBe(true);
+    expect(
+      collectionItemImportSchema.safeParse({
+        items: [
+          { title: 'Un livre', clientMutationId: mutationId },
+          { title: 'Un autre', clientMutationId: mutationId },
+        ],
+      }).success,
+    ).toBe(false);
     expect(collectionItemImportSchema.safeParse({ items: [] }).success).toBe(false);
-    expect(collectionItemImportSchema.safeParse({ items: Array.from({ length: 201 }, (_, index) => ({
-      title: `Élément ${index}`,
-      clientMutationId: mutationId,
-    })) }).success).toBe(false);
+    expect(
+      collectionItemImportSchema.safeParse({
+        items: Array.from({ length: 201 }, (_, index) => ({
+          title: `Élément ${index}`,
+          clientMutationId: mutationId,
+        })),
+      }).success,
+    ).toBe(false);
   });
 
   it('requires recipients for targeted sharing', () => {
@@ -76,6 +89,23 @@ describe('collection contracts', () => {
       collectionCommentCreateSchema.safeParse({ body: 'Bonne idée', clientMutationId: mutationId })
         .success,
     ).toBe(true);
+  });
+
+  it('accepte une sélection unique de destinataires, y compris vide', () => {
+    const first = '22222222-2222-4222-8222-222222222222';
+    expect(
+      collectionItemRecommendationUpdateSchema.safeParse({
+        recipientIds: [first],
+      }).success,
+    ).toBe(true);
+    expect(collectionItemRecommendationUpdateSchema.safeParse({ recipientIds: [] }).success).toBe(
+      true,
+    );
+    expect(
+      collectionItemRecommendationUpdateSchema.safeParse({
+        recipientIds: [first, first],
+      }).success,
+    ).toBe(false);
   });
 
   it('requires complete pagination cursors', () => {

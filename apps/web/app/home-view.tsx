@@ -257,17 +257,19 @@ function ActivitySection({
                                 ? 'a mis à jour une page'
                                 : item.type === 'collection.item.added'
                                   ? 'a enrichi une collection'
-                                  : item.type === 'poll.created'
-                                    ? 'a lancé un sondage'
-                                    : item.type === 'idea.created'
-                                      ? 'a proposé une idée'
-                                      : item.type === 'contact.created'
-                                        ? 'a partagé un contact'
-                                        : item.type === 'document.created'
-                                          ? 'a partagé un document'
-                                          : item.type === 'music.recommended'
-                                            ? 'a recommandé'
-                                          : 'a ajouté un plat'}
+                                  : item.type === 'collection.item.recommended'
+                                    ? 'a recommandé'
+                                    : item.type === 'poll.created'
+                                      ? 'a lancé un sondage'
+                                      : item.type === 'idea.created'
+                                        ? 'a proposé une idée'
+                                        : item.type === 'contact.created'
+                                          ? 'a partagé un contact'
+                                          : item.type === 'document.created'
+                                            ? 'a partagé un document'
+                                            : item.type === 'music.recommended'
+                                              ? 'a recommandé'
+                                              : 'a ajouté un plat'}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                   {item.subject} · {formatRelativeDate(item.occurredAt)}

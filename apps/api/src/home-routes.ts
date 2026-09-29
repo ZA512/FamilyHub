@@ -15,17 +15,23 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
   app.get('/api/v1/home', { preHandler: requireSession }, async (request) => {
     await reopenAvailableTasks(pool, request.session!.instanceId);
-    const [unreadResult, chatResult, shoppingResult, taskResult, mealResult, musicResult,
-      activityResult] =
-      await Promise.all([
-        pool.query<{ count: number }>(
-          `SELECT count(*)::int AS count
+    const [
+      unreadResult,
+      chatResult,
+      shoppingResult,
+      taskResult,
+      mealResult,
+      musicResult,
+      activityResult,
+    ] = await Promise.all([
+      pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count
          FROM notification
          WHERE instance_id = $1 AND recipient_member_id = $2 AND read_at IS NULL`,
-          [request.session?.instanceId, request.session?.id],
-        ),
-        pool.query<{ count: number }>(
-          `SELECT count(DISTINCT cm.conversation_id)::int AS count
+        [request.session?.instanceId, request.session?.id],
+      ),
+      pool.query<{ count: number }>(
+        `SELECT count(DISTINCT cm.conversation_id)::int AS count
          FROM conversation_member cm
          JOIN conversation c ON c.id = cm.conversation_id
          WHERE cm.member_id = $2 AND c.instance_id = $1 AND c.deleted_at IS NULL
@@ -40,10 +46,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              WHERE mc.instance_id = c.instance_id
                AND mc.module_key = 'chat' AND mc.enabled = true
            )`,
-          [request.session?.instanceId, request.session?.id],
-        ),
-        pool.query<{ count: number }>(
-          `SELECT count(*)::int AS count
+        [request.session?.instanceId, request.session?.id],
+      ),
+      pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count
          FROM shopping_item i
          WHERE i.instance_id = $1 AND i.deleted_at IS NULL AND i.purchased_at IS NULL
            AND EXISTS (
@@ -51,10 +57,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              WHERE mc.instance_id = i.instance_id
                AND mc.module_key = 'shopping' AND mc.enabled = true
            )`,
-          [request.session?.instanceId],
-        ),
-        pool.query<{ count: number }>(
-          `SELECT count(*)::int AS count
+        [request.session?.instanceId],
+      ),
+      pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count
          FROM family_task t
          JOIN resource r ON r.id = t.id
          WHERE r.instance_id = $1 AND r.deleted_at IS NULL
@@ -98,10 +104,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              WHERE mc.instance_id = r.instance_id
                AND mc.module_key = 'tasks' AND mc.enabled = true
            )`,
-          [request.session?.instanceId, request.session?.id],
-        ),
-        pool.query<{ count: number }>(
-          `SELECT count(*)::int AS count
+        [request.session?.instanceId, request.session?.id],
+      ),
+      pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count
          FROM meal_plan_entry pe
          JOIN meal m ON m.id = pe.meal_id
          JOIN resource r ON r.id = m.id
@@ -115,10 +121,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              WHERE mc.instance_id = pe.instance_id
                AND mc.module_key = 'meals' AND mc.enabled = true
            )`,
-          [request.session?.instanceId, request.session?.id],
-        ),
-        pool.query<{ count: number }>(
-          `SELECT count(*)::int AS count
+        [request.session?.instanceId, request.session?.id],
+      ),
+      pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count
            FROM music_recommendation recommendation
            WHERE recommendation.instance_id = $1
              AND recommendation.recipient_member_id = $2
@@ -128,10 +134,10 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
                WHERE mc.instance_id = recommendation.instance_id
                  AND mc.module_key = 'music' AND mc.enabled = true
              )`,
-          [request.session?.instanceId, request.session?.id],
-        ),
-        pool.query<ActivityRow>(
-          `SELECT events.id, events.type, events."actorName", events.subject,
+        [request.session?.instanceId, request.session?.id],
+      ),
+      pool.query<ActivityRow>(
+        `SELECT events.id, events.type, events."actorName", events.subject,
                   events."occurredAt", events.view,
                   CASE
                     WHEN events."actorId" = $2 OR $3 = 'ADMIN'
@@ -477,6 +483,48 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
 
            UNION ALL
 
+           SELECT concat('collection.item.recommended:', recommendation.id) AS id,
+                  'collection.item.recommended'::text AS type,
+                  sender.first_name AS "actorName",
+                  recommendation.sender_member_id AS "actorId",
+                  concat('« ', item.title,
+                    CASE WHEN $4 = 'en' THEN ' » to ' ELSE ' » à ' END,
+                    recipient.first_name) AS subject,
+                  recommendation.created_at AS "occurredAt", 'collections'::text AS view
+           FROM collection_item_recommendation recommendation
+           JOIN collection_item item ON item.id = recommendation.item_id
+           JOIN collection c ON c.id = item.collection_id
+           JOIN resource r ON r.id = c.id
+           JOIN instance_member sender_member
+             ON sender_member.id = recommendation.sender_member_id
+           JOIN app_user sender ON sender.id = sender_member.user_id
+           JOIN instance_member recipient_member
+             ON recipient_member.id = recommendation.recipient_member_id
+           JOIN app_user recipient ON recipient.id = recipient_member.user_id
+           WHERE recommendation.instance_id = $1
+             AND item.deleted_at IS NULL AND r.deleted_at IS NULL
+             AND ($2 = recommendation.sender_member_id
+               OR $2 = recommendation.recipient_member_id)
+             AND EXISTS (
+               SELECT 1 FROM module_config mc
+               WHERE mc.instance_id = recommendation.instance_id
+                 AND mc.module_key = 'collections' AND mc.enabled = true
+             )
+             AND (
+               r.visibility = 'ALL_MEMBERS' OR r.created_by = $2
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_user rau
+                 WHERE rau.resource_id = r.id AND rau.member_id = $2
+               )
+               OR EXISTS (
+                 SELECT 1 FROM resource_acl_group rag
+                 JOIN group_membership gm ON gm.group_id = rag.group_id
+                 WHERE rag.resource_id = r.id AND gm.member_id = $2
+               )
+             )
+
+           UNION ALL
+
            SELECT concat('music.recommended:', recommendation.id) AS id,
                   'music.recommended'::text AS type, sender.first_name AS "actorName",
                   recommendation.sender_member_id AS "actorId",
@@ -501,9 +549,14 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
            ON actor_profile.member_id = events."actorId"
          ORDER BY "occurredAt" DESC
          LIMIT 12`,
-          [request.session?.instanceId, request.session?.id, request.session?.role],
-        ),
-      ]);
+        [
+          request.session?.instanceId,
+          request.session?.id,
+          request.session?.role,
+          request.session?.locale,
+        ],
+      ),
+    ]);
 
     const unreadNotificationCount = unreadResult.rows[0]?.count ?? 0;
     const unreadConversationCount = chatResult.rows[0]?.count ?? 0;

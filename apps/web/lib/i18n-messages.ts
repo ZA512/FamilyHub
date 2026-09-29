@@ -137,6 +137,7 @@ export const englishMessages: Record<string, string> = {
   'a proposé une idée': 'suggested an idea',
   'a partagé un contact': 'shared a contact',
   'a partagé un document': 'shared a document',
+  'a recommandé': 'recommended',
   'a ajouté un plat': 'added a dish',
 
   // Agenda
@@ -494,6 +495,19 @@ export const englishMessages: Record<string, string> = {
   'Rechercher dans la collection': 'Search this collection',
   'Filtrer les éléments par étiquette': 'Filter items by label',
   'Toutes les étiquettes': 'All labels',
+  Pour: 'For',
+  De: 'From',
+  Recommandations: 'Recommendations',
+  Recommander: 'Recommend',
+  'Recommandé à': 'Recommended to',
+  'Recommandé par': 'Recommended by',
+  'Conseillez cet élément à une personne du foyer.':
+    'Recommend this item to someone in the household.',
+  'Les personnes choisies verront la recommandation sur leur accueil et recevront une notification.':
+    'Selected people will see the recommendation on their home page and receive a notification.',
+  Destinataires: 'Recipients',
+  'Aucune autre personne n’a accès à cette collection. Enregistrer retirera ses anciennes recommandations éventuelles.':
+    'No one else has access to this collection. Saving will remove any previous recommendations.',
   'Aucun élément trouvé': 'No items found',
   'Modifiez la recherche ou l’étiquette sélectionnée.':
     'Change the search or selected label.',
@@ -733,8 +747,7 @@ export const englishMessages: Record<string, string> = {
     'These settings change the experience for every member.',
   'Identité, photo, langue et confidentialité':
     'Identity, photo, language and privacy',
-  'Thème, navigation et bouton d’ajout':
-    'Theme, navigation and add button',
+  'Thème, navigation et bouton d’ajout': 'Theme, navigation and add button',
   'Alertes, silence et notifications push':
     'Alerts, quiet hours and push notifications',
   'Connexion et partage des goûts musicaux':
@@ -833,8 +846,10 @@ export const englishMessages: Record<string, string> = {
     'Offline · shopping and tasks remain editable; calendar and meals remain available',
   Musique: 'Music',
   'Chargement de la musique…': 'Loading music…',
-  'La connexion à Spotify ne peut pas démarrer.': 'Could not start Spotify connection.',
-  'Découvertes à partir des favoris Spotify partagés.': 'Discoveries from shared Spotify favourites.',
+  'La connexion à Spotify ne peut pas démarrer.':
+    'Could not start Spotify connection.',
+  'Découvertes à partir des favoris Spotify partagés.':
+    'Discoveries from shared Spotify favourites.',
   'Explorer ses goûts musicaux': 'Explore their music tastes',
   'Découvrez ce qui plaît à la famille.': 'Discover what your family enjoys.',
   'Vue d’ensemble': 'Overview',
@@ -846,7 +861,8 @@ export const englishMessages: Record<string, string> = {
   'En commun': 'In common',
   'Nouveaux dans la famille': 'New to the family',
   'Nouveaux chez les membres': 'New for family members',
-  'Premiers titres enregistrés ces 14 derniers jours.': 'First tracks saved in the past 14 days.',
+  'Premiers titres enregistrés ces 14 derniers jours.':
+    'First tracks saved in the past 14 days.',
   'Playlist de la semaine': 'This week’s playlist',
   'Deux titres par membre participant, selon les favoris disponibles.':
     'Two tracks per participating member, when enough favourites are available.',
@@ -859,7 +875,8 @@ export const englishMessages: Record<string, string> = {
   'A → Z': 'A → Z',
   'Aucun artiste pour ce filtre.': 'No artists match this filter.',
   'Dans la famille': 'In the family',
-  'Quelques titres enregistrés par les autres membres.': 'A few tracks saved by other members.',
+  'Quelques titres enregistrés par les autres membres.':
+    'A few tracks saved by other members.',
   'Aucun titre à découvrir pour l’instant.': 'No tracks to discover yet.',
   'Vous avez aussi en commun': 'You also have in common',
   'Aucune nouvelle découverte pour l’instant.': 'No new discoveries yet.',
@@ -867,7 +884,8 @@ export const englishMessages: Record<string, string> = {
   'Lire la sélection sur Spotify': 'Play the selection on Spotify',
   'La sélection apparaîtra lorsque des membres partageront leurs favoris.':
     'The selection will appear when members share their favourites.',
-  'Découvrez les goûts musicaux de la famille': 'Discover your family’s music tastes',
+  'Découvrez les goûts musicaux de la famille':
+    'Discover your family’s music tastes',
   'Connectez Spotify pour retrouver vos artistes favoris et découvrir ceux des autres. Le partage reste désactivé jusqu’à votre choix.':
     'Connect Spotify to find your favourite artists and discover what others like. Sharing stays off until you choose it.',
   'Connecter Spotify': 'Connect Spotify',
@@ -898,7 +916,8 @@ export const englishMessages: Record<string, string> = {
   'Limite Spotify atteinte. Les données précédentes restent disponibles.':
     'Spotify limit reached. Previous data is still available.',
   'Reconnecter Spotify': 'Reconnect Spotify',
-  'Partager mes goûts musicaux avec la famille': 'Share my music tastes with the family',
+  'Partager mes goûts musicaux avec la famille':
+    'Share my music tastes with the family',
   'Synchroniser maintenant': 'Sync now',
   'Déconnecter Spotify': 'Disconnect Spotify',
   'Préférence de partage enregistrée.': 'Sharing preference saved.',
@@ -907,23 +926,29 @@ export const englishMessages: Record<string, string> = {
   'État Spotify indisponible.': 'Spotify status is unavailable.',
   'Une synchronisation est déjà en cours ou a été lancée récemment.':
     'A sync is already running or was started recently.',
-  'Limite Spotify atteinte. Réessayez plus tard.': 'Spotify limit reached. Try again later.',
-  'Cette action Spotify a échoué. Réessayez plus tard.': 'This Spotify action failed. Try again later.',
-  'La connexion Spotify ne peut pas démarrer.': 'Could not start Spotify connection.',
-  'Les données musicales ne sont pas disponibles.': 'Music data is unavailable.',
+  'Limite Spotify atteinte. Réessayez plus tard.':
+    'Spotify limit reached. Try again later.',
+  'Cette action Spotify a échoué. Réessayez plus tard.':
+    'This Spotify action failed. Try again later.',
+  'La connexion Spotify ne peut pas démarrer.':
+    'Could not start Spotify connection.',
+  'Les données musicales ne sont pas disponibles.':
+    'Music data is unavailable.',
   'Aucun appareil Spotify actif. Ouvrez Spotify sur votre téléphone, ordinateur ou enceinte puis réessayez.':
     'No active Spotify device. Open Spotify on your phone, computer or speaker, then try again.',
   'La lecture à distance nécessite Spotify Premium et les autorisations de lecture.':
     'Remote playback requires Spotify Premium and playback permission.',
   'La lecture n’a pas pu démarrer. Réessayez dans Spotify.':
     'Playback could not start. Try again in Spotify.',
-  'Spotify est momentanément indisponible.': 'Spotify is temporarily unavailable.',
+  'Spotify est momentanément indisponible.':
+    'Spotify is temporarily unavailable.',
   'Spotify est connecté. La première synchronisation démarre.':
     'Spotify is connected. The first sync is starting.',
   'Connexion Spotify annulée.': 'Spotify connection cancelled.',
   'Ce compte Spotify est déjà associé à un autre membre.':
     'This Spotify account is already linked to another member.',
-  'La connexion Spotify a échoué. Réessayez.': 'Spotify connection failed. Try again.',
+  'La connexion Spotify a échoué. Réessayez.':
+    'Spotify connection failed. Try again.',
 };
 
 export const englishTemplateMessages: Record<string, string> = {
@@ -934,7 +959,8 @@ export const englishTemplateMessages: Record<string, string> = {
   'Proposé par {0}': 'Shared by {0}',
   'Connecté en tant que {0}': 'Connected as {0}',
   'Données Spotify synchronisées le {0}.': 'Spotify data synced on {0}.',
-  '{0} a enregistré ses premiers titres de {1}.': '{0} saved their first tracks by {1}.',
+  '{0} a enregistré ses premiers titres de {1}.':
+    '{0} saved their first tracks by {1}.',
   'Dernière synchronisation réussie : {0}': 'Last successful sync: {0}',
   'Semaine du {0}': 'Week of {0}',
   'Une conversation avec ces participants existe déjà : « {0} ». Vous pouvez l’ouvrir ou en créer une autre.':
@@ -986,6 +1012,7 @@ export const englishTemplateMessages: Record<string, string> = {
   'Retirer l’ingrédient {0}': 'Remove ingredient {0}',
   'Planifié par {0}.': 'Scheduled by {0}.',
   'Avis sur {0}': 'Opinion on {0}',
+  'Recommander « {0} »': 'Recommend “{0}”',
   'Aperçu de {0}': 'Preview of {0}',
   '{0} résultats sur {1}': '{0} of {1} results',
   '{0} adore': '{0} loves it',
@@ -1413,6 +1440,9 @@ Object.assign(englishMessages, {
     'This collection was changed elsewhere. Reload it.',
   'La collection n’a pas pu être enregistrée.':
     'The collection could not be saved.',
+  'La recommandation n’a pas pu être enregistrée.':
+    'The recommendation could not be saved.',
+  'Recommandation indisponible.': 'Recommendation unavailable.',
   'Cet élément a été modifié ailleurs. Rechargez la collection.':
     'This item was changed elsewhere. Reload the collection.',
   'L’élément n’a pas pu être enregistré.': 'The item could not be saved.',

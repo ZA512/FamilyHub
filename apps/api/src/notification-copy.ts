@@ -4,6 +4,7 @@ const englishTitles: Record<string, string> = {
   AGENDA_INVITATION: 'New event',
   BOOKMARK_SHARED: 'New shared bookmark',
   COLLECTION_ITEM_ADDED: 'New item in a collection',
+  COLLECTION_ITEM_RECOMMENDED: 'New recommendation',
   COLLECTION_SHARED: 'New shared collection',
   CONTACT_SHARED: 'New shared contact',
   DOCUMENT_SHARED: 'New shared document',
@@ -19,16 +20,21 @@ const englishBodies: Partial<Record<string, (body: string) => string>> = {
   BOOKMARK_SHARED: (body) => replace(body, /^(.+) recommande : (.*)$/s, '$1 recommends: $2'),
   COLLECTION_ITEM_ADDED: (body) =>
     replace(body, /^(.+) ajoute « (.*) » dans « (.*) »$/s, '$1 added “$2” to “$3”'),
+  COLLECTION_ITEM_RECOMMENDED: (body) =>
+    replace(
+      body,
+      /^(.+) vous recommande « (.*) » depuis « (.*) »$/s,
+      '$1 recommends “$2” from “$3”',
+    ),
   COLLECTION_SHARED: (body) => replace(body, /^(.+) partage « (.*) »$/s, '$1 shared “$2”'),
   CONTACT_SHARED: (body) =>
     replace(body, /^(.+) partage le contact « (.*) »$/s, '$1 shared the contact “$2”'),
   DOCUMENT_SHARED: (body) => replace(body, /^(.+) partage « (.*) »$/s, '$1 shared “$2”'),
   IDEA_SHARED: (body) => replace(body, /^(.+) propose : « (.*) »$/s, '$1 suggests: “$2”'),
-  MUSIC_RECOMMENDATION: (body) => replace(body,
-    /^(.+) vous recommande (?:l’artiste|le titre) « (.*) »$/s, '$1 recommends “$2”'),
+  MUSIC_RECOMMENDATION: (body) =>
+    replace(body, /^(.+) vous recommande (?:l’artiste|le titre) « (.*) »$/s, '$1 recommends “$2”'),
   PAGE_SHARED: (body) => replace(body, /^(.+) a partagé : (.*)$/s, '$1 shared: $2'),
-  POLL_SHARED: (body) =>
-    replace(body, /^(.+) vous propose : « (.*) »$/s, '$1 asks you: “$2”'),
+  POLL_SHARED: (body) => replace(body, /^(.+) vous propose : « (.*) »$/s, '$1 asks you: “$2”'),
 };
 
 function replace(body: string, pattern: RegExp, replacement: string) {
@@ -37,10 +43,7 @@ function replace(body: string, pattern: RegExp, replacement: string) {
 
 export function localizeNotification<
   T extends { type: string; title: string; body: string | null },
->(
-  locale: SupportedLocale | undefined,
-  notification: T,
-): T {
+>(locale: SupportedLocale | undefined, notification: T): T {
   if (locale !== 'en') return notification;
   const translateBody = englishBodies[notification.type];
   return {

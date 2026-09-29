@@ -19,12 +19,19 @@ export function collectionItemTags(items: FamilyCollectionItem[]): string[] {
 
 export function filterCollectionItems(
   items: FamilyCollectionItem[],
-  filters: { query: string; tag: string },
+  filters: { query: string; tag: string; recommendedOnly?: boolean },
 ): FamilyCollectionItem[] {
   const query = normalizeSearch(filters.query);
 
   return items.filter((item) => {
     if (filters.tag && !item.tags.includes(filters.tag)) return false;
+    if (
+      filters.recommendedOnly &&
+      !item.recommendations.sentTo.length &&
+      !item.recommendations.receivedFrom.length
+    ) {
+      return false;
+    }
     if (!query) return true;
 
     return normalizeSearch(

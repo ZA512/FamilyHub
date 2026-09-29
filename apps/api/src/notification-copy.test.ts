@@ -54,4 +54,18 @@ describe('notification copy', () => {
       body: 'Jade recommends “Le dîner”',
     });
   });
+
+  it('translates a collection recommendation while preserving names', () => {
+    expect(
+      localizeNotification('en', {
+        type: 'COLLECTION_ITEM_RECOMMENDED',
+        title: 'Nouvelle recommandation',
+        body: 'Jade vous recommande « Dune » depuis « Livres lus »',
+      }),
+    ).toEqual({
+      type: 'COLLECTION_ITEM_RECOMMENDED',
+      title: 'New recommendation',
+      body: 'Jade recommends “Dune” from “Livres lus”',
+    });
+  });
 });

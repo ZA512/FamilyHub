@@ -23,6 +23,7 @@ function item(
     editable: true,
     preference: null,
     preferences: { negative: 0, neutral: 0, positive: 0 },
+    recommendations: { sentTo: [], receivedFrom: [] },
     comments: [],
     version: 1,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -36,6 +37,10 @@ const items = [
     title: 'Les Nébuleuses',
     tags: ['science-fiction', 'favori'],
     metadata: { Auteur: 'Franck Herbert', ISBN: '9780000000001' },
+    recommendations: {
+      sentTo: [{ memberId: 'member-2', memberName: 'Alice' }],
+      receivedFrom: [],
+    },
   }),
   item('fondation', {
     title: 'Le Cycle de Fondation',
@@ -72,6 +77,22 @@ describe('filtres des éléments de collection', () => {
         tag: 'classique',
       }).map((entry) => entry.id),
     ).toEqual(['fondation']);
+  });
+
+  it('peut ne garder que les recommandations envoyées ou reçues', () => {
+    const received = item('received', {
+      recommendations: {
+        sentTo: [],
+        receivedFrom: [{ memberId: 'member-3', memberName: 'Lina' }],
+      },
+    });
+    expect(
+      filterCollectionItems([...items, received], {
+        query: '',
+        tag: '',
+        recommendedOnly: true,
+      }).map((entry) => entry.id),
+    ).toEqual(['nebuleuses', 'received']);
   });
 
   it('retourne les étiquettes uniques triées', () => {

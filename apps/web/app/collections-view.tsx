@@ -18,7 +18,9 @@ import {
   Pencil,
   Plus,
   Search,
+  Send,
   Shapes,
+  Sparkles,
   Tags,
   ThumbsDown,
   ThumbsUp,
@@ -34,6 +36,7 @@ import {
 
 import type {
   CollectionType,
+  CollectionRecommendationRecipient,
   CollectionVisibility,
   FamilyCollection,
   FamilyCollectionItem,
@@ -264,6 +267,11 @@ export function CollectionsView({
     null,
   );
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const [recommendationRecipients, setRecommendationRecipients] = useState<
+    CollectionRecommendationRecipient[]
+  >([]);
+  const [recommendationTarget, setRecommendationTarget] =
+    useState<FamilyCollectionItem | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
 
@@ -365,11 +373,13 @@ export function CollectionsView({
         return (await response.json()) as {
           collection: FamilyCollection;
           items: FamilyCollectionItem[];
+          recommendationRecipients: CollectionRecommendationRecipient[];
         };
       })
       .then((payload) => {
         setSelected(payload.collection);
         setItems(payload.items);
+        setRecommendationRecipients(payload.recommendationRecipients);
         setError('');
       })
       .catch((reason: unknown) => {
@@ -555,6 +565,43 @@ export function CollectionsView({
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Avis indisponible.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function saveRecommendations(recipientIds: string[]) {
+    if (!recommendationTarget) return;
+    setBusyId(recommendationTarget.id);
+    setError('');
+    try {
+      const response = await fetch(
+        `/api/v1/collections/${recommendationTarget.collectionId}/items/${recommendationTarget.id}/recommendations`,
+        {
+          method: 'PUT',
+          headers: {
+            'content-type': 'application/json',
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify({ recipientIds }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error('La recommandation n’a pas pu être enregistrée.');
+      }
+      const payload = (await response.json()) as { item: FamilyCollectionItem };
+      setItems((current) =>
+        current.map((candidate) =>
+          candidate.id === payload.item.id ? payload.item : candidate,
+        ),
+      );
+      setRecommendationTarget(null);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'Recommandation indisponible.',
+      );
     } finally {
       setBusyId(null);
     }
@@ -750,6 +797,22 @@ export function CollectionsView({
         />
       ) : null}
 
+      {recommendationTarget ? (
+        <RecommendationDialog
+          key={recommendationTarget.id}
+          item={recommendationTarget}
+          recipients={recommendationRecipients}
+          submitting={busyId === recommendationTarget.id}
+          error={error}
+          onClose={() => {
+            if (busyId !== recommendationTarget.id) {
+              setRecommendationTarget(null);
+            }
+          }}
+          onSave={(recipientIds) => void saveRecommendations(recipientIds)}
+        />
+      ) : null}
+
       {focusedItem && selected ? (
         <ItemDetailDialog
           item={focusedItem}
@@ -758,6 +821,15 @@ export function CollectionsView({
           onClose={() => setFocusedItemId(null)}
           onEdit={() => openItemComposer(focusedItem)}
           onDelete={() => setDeleteTarget({ kind: 'item', item: focusedItem })}
+          canRecommend={Boolean(
+            recommendationRecipients.length ||
+            focusedItem.recommendations.sentTo.length,
+          )}
+          onRecommend={() => {
+            setError('');
+            setRecommendationTarget(focusedItem);
+            setFocusedItemId(null);
+          }}
           onPreference={(value) => void updatePreference(focusedItem, value)}
           onComment={(event) => void addComment(event, focusedItem)}
           onDeleteComment={(commentId) =>
@@ -1040,17 +1112,26 @@ function CollectionReader({
   const Icon = config.icon;
   const [itemQuery, setItemQuery] = useState('');
   const [itemTag, setItemTag] = useState('');
+  const [recommendationsOnly, setRecommendationsOnly] = useState(false);
   const availableItemTags = useMemo(() => collectionItemTags(items), [items]);
   const activeItemTag = availableItemTags.includes(itemTag) ? itemTag : '';
+  const recommendedItemCount = items.filter(
+    (item) =>
+      item.recommendations.sentTo.length ||
+      item.recommendations.receivedFrom.length,
+  ).length;
   const filteredItems = useMemo(
     () =>
       filterCollectionItems(items, {
         query: itemQuery,
         tag: activeItemTag,
+        recommendedOnly: recommendationsOnly,
       }),
-    [activeItemTag, itemQuery, items],
+    [activeItemTag, itemQuery, items, recommendationsOnly],
   );
-  const filtersActive = Boolean(itemQuery.trim() || activeItemTag);
+  const filtersActive = Boolean(
+    itemQuery.trim() || activeItemTag || recommendationsOnly,
+  );
 
   return (
     <div>
@@ -1155,7 +1236,7 @@ function CollectionReader({
         </div>
         {items.length ? (
           <div className="mt-4">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem]">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem_auto]">
               <div className="relative">
                 <Search
                   className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -1198,6 +1279,15 @@ function CollectionReader({
                   ))}
                 </SelectContent>
               </Select>
+              <Button
+                type="button"
+                variant={recommendationsOnly ? 'secondary' : 'outline'}
+                aria-pressed={recommendationsOnly}
+                onClick={() => setRecommendationsOnly((current) => !current)}
+              >
+                <Sparkles aria-hidden="true" /> Recommandés
+                {recommendedItemCount ? ` (${recommendedItemCount})` : ''}
+              </Button>
             </div>
             {filtersActive ? (
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -1214,6 +1304,7 @@ function CollectionReader({
                   onClick={() => {
                     setItemQuery('');
                     setItemTag('');
+                    setRecommendationsOnly(false);
                   }}
                 >
                   <X aria-hidden="true" /> Réinitialiser les filtres
@@ -1252,6 +1343,27 @@ function CollectionReader({
                     </div>
                   )}
                   <CardContent className="p-4 pb-3">
+                    {item.recommendations.sentTo.length ||
+                    item.recommendations.receivedFrom.length ? (
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        {item.recommendations.sentTo.length ? (
+                          <Badge variant="secondary">
+                            <Sparkles aria-hidden="true" /> Pour{' '}
+                            {item.recommendations.sentTo
+                              .map((member) => member.memberName)
+                              .join(', ')}
+                          </Badge>
+                        ) : null}
+                        {item.recommendations.receivedFrom.length ? (
+                          <Badge variant="outline">
+                            <Sparkles aria-hidden="true" /> De{' '}
+                            {item.recommendations.receivedFrom
+                              .map((member) => member.memberName)
+                              .join(', ')}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <h3 className="line-clamp-2 font-semibold">{item.title}</h3>
                     {item.subtitle ? (
                       <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
@@ -1329,6 +1441,7 @@ function CollectionReader({
                 onClick={() => {
                   setItemQuery('');
                   setItemTag('');
+                  setRecommendationsOnly(false);
                 }}
               >
                 Réinitialiser les filtres
@@ -1961,6 +2074,100 @@ function ItemEditorDialog({
   );
 }
 
+function RecommendationDialog({
+  item,
+  recipients,
+  submitting,
+  error,
+  onClose,
+  onSave,
+}: {
+  item: FamilyCollectionItem;
+  recipients: CollectionRecommendationRecipient[];
+  submitting: boolean;
+  error: string;
+  onClose: () => void;
+  onSave: (recipientIds: string[]) => void;
+}) {
+  const eligibleIds = new Set(recipients.map((recipient) => recipient.id));
+  const [selectedIds, setSelectedIds] = useState(
+    item.recommendations.sentTo
+      .map((member) => member.memberId)
+      .filter((memberId) => eligibleIds.has(memberId)),
+  );
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {t('Recommander « {0} »', { 0: item.title })}
+          </DialogTitle>
+          <DialogDescription>
+            Les personnes choisies verront la recommandation sur leur accueil et
+            recevront une notification.
+          </DialogDescription>
+        </DialogHeader>
+        {recipients.length ? (
+          <div className="grid gap-2" aria-label="Destinataires">
+            {recipients.map((recipient) => (
+              <label
+                key={recipient.id}
+                htmlFor={`recommend-${recipient.id}`}
+                className="flex cursor-pointer items-center gap-3 rounded-xl border p-3 hover:bg-muted/40"
+              >
+                <Checkbox
+                  id={`recommend-${recipient.id}`}
+                  checked={selectedIds.includes(recipient.id)}
+                  onCheckedChange={() =>
+                    setSelectedIds((current) =>
+                      toggleValue(current, recipient.id),
+                    )
+                  }
+                />
+                <span className="font-medium">{recipient.firstName}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-xl bg-muted/35 p-3 text-sm text-muted-foreground">
+            Aucune autre personne n’a accès à cette collection. Enregistrer
+            retirera ses anciennes recommandations éventuelles.
+          </p>
+        )}
+        {error ? (
+          <p role="alert" className="text-sm text-red-700">
+            {error}
+          </p>
+        ) : null}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={submitting}
+            onClick={onClose}
+          >
+            Annuler
+          </Button>
+          <Button
+            type="button"
+            disabled={submitting}
+            onClick={() => onSave(selectedIds)}
+            className="bg-primary hover:bg-primary/80"
+          >
+            {submitting ? (
+              <LoaderCircle className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Send aria-hidden="true" />
+            )}
+            Enregistrer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ItemDetailDialog({
   item,
   collection,
@@ -1969,6 +2176,8 @@ function ItemDetailDialog({
   onClose,
   onEdit,
   onDelete,
+  canRecommend,
+  onRecommend,
   onPreference,
   onComment,
   onDeleteComment,
@@ -1980,6 +2189,8 @@ function ItemDetailDialog({
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  canRecommend: boolean;
+  onRecommend: () => void;
   onPreference: (value: -1 | 0 | 1) => void;
   onComment: (event: SyntheticEvent<HTMLFormElement>) => void;
   onDeleteComment: (commentId: string) => void;
@@ -2066,6 +2277,47 @@ function ItemDetailDialog({
               </a>
             ) : null}
           </div>
+          {canRecommend ||
+          item.recommendations.sentTo.length ||
+          item.recommendations.receivedFrom.length ? (
+            <div className="mt-4 rounded-2xl border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium">Recommandations</p>
+                  {item.recommendations.sentTo.length ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Recommandé à{' '}
+                      {item.recommendations.sentTo
+                        .map((member) => member.memberName)
+                        .join(', ')}
+                    </p>
+                  ) : null}
+                  {item.recommendations.receivedFrom.length ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Recommandé par{' '}
+                      {item.recommendations.receivedFrom
+                        .map((member) => member.memberName)
+                        .join(', ')}
+                    </p>
+                  ) : null}
+                  {!item.recommendations.sentTo.length &&
+                  !item.recommendations.receivedFrom.length ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Conseillez cet élément à une personne du foyer.
+                    </p>
+                  ) : null}
+                </div>
+                {canRecommend ? (
+                  <Button type="button" variant="outline" onClick={onRecommend}>
+                    <Send aria-hidden="true" />
+                    {item.recommendations.sentTo.length
+                      ? 'Modifier'
+                      : 'Recommander'}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <div className="mt-5 grid grid-cols-3 gap-2 rounded-2xl border p-2">
             <PreferenceButton
               label="Pas pour moi"
