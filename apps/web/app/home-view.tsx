@@ -17,10 +17,12 @@ import type {
   HomeActivity,
   HomeAttention,
   HomeSummary,
+  HomeTodayMeal,
 } from '@familyhub/contracts';
 
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 type HomeViewProps = {
@@ -113,12 +115,82 @@ export function HomeView({
           </CardContent>
         </Card>
       ) : summary ? (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,.85fr)]">
-          <AttentionSection items={summary.attention} onNavigate={onNavigate} />
-          <ActivitySection items={summary.activity} onNavigate={onNavigate} />
+        <div className="space-y-6">
+          {summary.todayMeals.length ? (
+            <TodayMealsSection
+              items={summary.todayMeals}
+              onNavigate={onNavigate}
+            />
+          ) : null}
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,.85fr)]">
+            <AttentionSection items={summary.attention} onNavigate={onNavigate} />
+            <ActivitySection items={summary.activity} onNavigate={onNavigate} />
+          </div>
         </div>
       ) : null}
     </>
+  );
+}
+
+const mealSlotLabels: Record<HomeTodayMeal['slot'], string> = {
+  LUNCH: 'Déjeuner',
+  DINNER: 'Dîner',
+  OTHER: 'Autre',
+};
+
+function TodayMealsSection({
+  items,
+  onNavigate,
+}: {
+  items: HomeTodayMeal[];
+  onNavigate: HomeViewProps['onNavigate'];
+}) {
+  return (
+    <section aria-labelledby="today-meals-title">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2
+          id="today-meals-title"
+          className="text-lg font-semibold tracking-tight"
+        >
+          Repas du jour
+        </h2>
+        <Button variant="ghost" size="sm" onClick={() => onNavigate('meals')}>
+          Voir le planning <ChevronRight aria-hidden="true" />
+        </Button>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onNavigate('meals')}
+            className="flex min-w-0 items-start gap-3 rounded-2xl border bg-card p-4 text-left shadow-sm transition-colors hover:bg-muted/35"
+          >
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff3df] text-[#a55e10]">
+              <ChefHat className="size-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-medium text-primary">
+                {item.slot === 'OTHER'
+                  ? item.slotLabel
+                  : mealSlotLabels[item.slot]}
+              </span>
+              <span className="mt-0.5 block truncate font-semibold">
+                {item.mealName}
+              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {item.portions} portion{item.portions > 1 ? 's' : ''}
+                {item.note ? ` · ${item.note}` : ''}
+              </span>
+            </span>
+            <ChevronRight
+              className="mt-3 size-4 shrink-0 text-muted-foreground/60"
+              aria-hidden="true"
+            />
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

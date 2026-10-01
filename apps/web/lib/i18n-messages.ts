@@ -116,6 +116,8 @@ export const englishMessages: Record<string, string> = {
   // Home
   Bonjour: 'Hello',
   'Voici ce qui compte aujourd’hui.': 'Here is what matters today.',
+  'Repas du jour': "Today's meals",
+  'Voir le planning': 'View meal plan',
   'Chargement de l’accueil…': 'Loading home…',
   'À voir': 'Needs attention',
   sujet: 'item',

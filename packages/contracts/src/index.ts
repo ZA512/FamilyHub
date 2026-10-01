@@ -358,9 +358,20 @@ export type HomeActivity = {
     | 'music';
 };
 
+export type HomeTodayMeal = {
+  id: string;
+  mealId: string;
+  mealName: string;
+  slot: MealSlot;
+  slotLabel: string | null;
+  portions: number;
+  note: string | null;
+};
+
 export type HomeSummary = {
   attention: HomeAttention[];
   activity: HomeActivity[];
+  todayMeals: HomeTodayMeal[];
   unreadNotificationCount: number;
 };
 

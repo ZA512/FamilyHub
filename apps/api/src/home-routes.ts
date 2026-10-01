@@ -1,4 +1,9 @@
-import type { HomeActivity, HomeAttention, HomeSummary } from '@familyhub/contracts';
+import type {
+  HomeActivity,
+  HomeAttention,
+  HomeSummary,
+  HomeTodayMeal,
+} from '@familyhub/contracts';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 
@@ -20,7 +25,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
       chatResult,
       shoppingResult,
       taskResult,
-      mealResult,
+      todayMealsResult,
       musicResult,
       activityResult,
     ] = await Promise.all([
@@ -106,8 +111,9 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
            )`,
         [request.session?.instanceId, request.session?.id],
       ),
-      pool.query<{ count: number }>(
-        `SELECT count(*)::int AS count
+      pool.query<HomeTodayMeal>(
+        `SELECT pe.id, pe.meal_id AS "mealId", m.name AS "mealName",
+                pe.slot, pe.slot_label AS "slotLabel", pe.portions, pe.note
          FROM meal_plan_entry pe
          JOIN meal m ON m.id = pe.meal_id
          JOIN resource r ON r.id = m.id
@@ -120,7 +126,9 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
              SELECT 1 FROM module_config mc
              WHERE mc.instance_id = pe.instance_id
                AND mc.module_key = 'meals' AND mc.enabled = true
-           )`,
+           )
+         ORDER BY CASE pe.slot WHEN 'LUNCH' THEN 1 WHEN 'DINNER' THEN 2 ELSE 3 END,
+                  pe.created_at`,
         [request.session?.instanceId, request.session?.id],
       ),
       pool.query<{ count: number }>(
@@ -562,7 +570,6 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
     const unreadConversationCount = chatResult.rows[0]?.count ?? 0;
     const pendingShoppingCount = shoppingResult.rows[0]?.count ?? 0;
     const activeTaskCount = taskResult.rows[0]?.count ?? 0;
-    const todayMealCount = mealResult.rows[0]?.count ?? 0;
     const musicRecommendationCount = musicResult.rows[0]?.count ?? 0;
     const attention: HomeAttention[] = [];
     const english = request.session?.locale === 'en';
@@ -623,18 +630,6 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
         view: 'tasks',
       });
     }
-    if (todayMealCount) {
-      attention.push({
-        id: 'meals',
-        count: todayMealCount,
-        title: english ? "Today's meals" : 'Repas du jour',
-        detail: english
-          ? `${todayMealCount} meal${todayMealCount > 1 ? 's' : ''} planned today`
-          : `${todayMealCount} repas${todayMealCount > 1 ? ' planifiés' : ' planifié'} aujourd’hui`,
-        view: 'meals',
-      });
-    }
-
     return {
       attention,
       activity: activityResult.rows.map(
@@ -646,6 +641,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
           occurredAt: row.occurredAt.toISOString(),
         }),
       ),
+      todayMeals: todayMealsResult.rows,
       unreadNotificationCount,
     } satisfies HomeSummary;
   });
