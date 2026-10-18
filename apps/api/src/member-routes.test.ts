@@ -1,4 +1,5 @@
 import cookie from '@fastify/cookie';
+import { loadConfig } from '@familyhub/config';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -42,6 +43,14 @@ async function setup(role: 'ADMIN' | 'MEMBER' = 'ADMIN') {
   const pool = { query: sessionQuery, connect } as unknown as Pool;
   const app = Fastify();
   apps.push(app);
+  app.decorate(
+    'config',
+    loadConfig({
+      DATABASE_URL: 'postgresql://familyhub:test-password@localhost/familyhub',
+      SESSION_SECRET: 'a'.repeat(32),
+      SETUP_TOKEN: 'b'.repeat(32),
+    }),
+  );
   app.decorateRequest('session', undefined);
   await app.register(cookie);
   await registerMemberRoutes(app, pool);

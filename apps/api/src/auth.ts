@@ -91,20 +91,22 @@ export function createSessionGuard(pool: Pool) {
       locale: 'fr' | 'en';
       avatar_attachment_id: string | null;
     }>(
-      `SELECT s.id AS session_id, s.csrf_hash, m.id AS member_id, m.user_id,
-              m.instance_id, i.name AS instance_name, u.first_name, u.email, m.role,
-              COALESCE(p.locale, i.locale, 'fr') AS locale, p.avatar_attachment_id
-       FROM session s
-       JOIN instance_member m ON m.id = s.member_id
+      `UPDATE session s
+       SET expires_at = now() + ($2::double precision * interval '1 hour'),
+           last_seen_at = now()
+       FROM instance_member m
        JOIN instance i ON i.id = m.instance_id
        JOIN app_user u ON u.id = m.user_id
        LEFT JOIN member_profile_preference p ON p.member_id = m.id
        WHERE s.token_hash = $1
+         AND s.member_id = m.id
          AND s.revoked_at IS NULL
          AND s.expires_at > now()
          AND m.status = 'ACTIVE'
-       LIMIT 1`,
-      [digest(token)],
+       RETURNING s.id AS session_id, s.csrf_hash, m.id AS member_id, m.user_id,
+                 m.instance_id, i.name AS instance_name, u.first_name, u.email, m.role,
+                 COALESCE(p.locale, i.locale, 'fr') AS locale, p.avatar_attachment_id`,
+      [digest(token), request.server.config.SESSION_TTL_HOURS],
     );
 
     const row = result.rows[0];
@@ -113,6 +115,7 @@ export function createSessionGuard(pool: Pool) {
       return reply.code(401).send({ error: 'AUTHENTICATION_REQUIRED' });
     }
 
+    setSessionCookie(reply, token, request.server.config);
     request.session = {
       sessionId: row.session_id,
       csrfHash: row.csrf_hash,

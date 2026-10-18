@@ -42,7 +42,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-familyhub}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-familyhub}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET doit être défini dans .env}
       SETUP_TOKEN: ${SETUP_TOKEN:?SETUP_TOKEN doit être défini dans .env}
-      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-720}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-8760}
       TRUST_PROXY: ${TRUST_PROXY:-false}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-26214400}
       ATTACHMENTS_DIR: /data/attachments

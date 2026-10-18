@@ -13,6 +13,11 @@ describe('loadConfig', () => {
     const config = loadConfig(baseEnvironment);
     expect(config.PORT).toBe(3001);
     expect(config.TRUST_PROXY).toBe(false);
+    expect(config.SESSION_TTL_HOURS).toBe(8_760);
+  });
+
+  it('permet de configurer la durée d’inactivité des sessions', () => {
+    expect(loadConfig({ ...baseEnvironment, SESSION_TTL_HOURS: '24' }).SESSION_TTL_HOURS).toBe(24);
   });
 
   it('refuse les secrets identiques', () => {

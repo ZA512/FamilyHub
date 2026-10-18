@@ -83,6 +83,14 @@ Un administrateur peut l'ajuster entre 300 et 10 000 dans **Paramètres → Limi
 l’instance**. Les ressources statiques et les contrôles de santé ne consomment pas ce quota. Les
 connexions, invitations et uploads gardent toujours leurs limites de sécurité plus strictes.
 
+Les sessions durent **un an glissant** (365 jours) par défaut. Chaque requête authentifiée
+renouvelle leur expiration en base et celle du cookie du navigateur : une utilisation
+régulière permet donc de rester connecté. `SESSION_TTL_HOURS=8760` règle ce délai
+d’inactivité ; si votre ancien `.env` indique encore `720`, remplacez-le par `8760`.
+Les sessions encore valides bénéficient du renouvellement dès la prochaine requête,
+sans reconnexion. La déconnexion, la désactivation du membre et le changement de mot de
+passe continuent à invalider les sessions ; les sessions déjà expirées restent refusées.
+
 Le stockage des pièces jointes est limité à **10 Gio par foyer** par défaut. Un
 administrateur voit l’espace utilisé et peut régler ce quota entre 100 Mio et 10 Tio dans
 **Paramètres → Limites de l’instance**. Les envois commencés réservent leur taille pendant
