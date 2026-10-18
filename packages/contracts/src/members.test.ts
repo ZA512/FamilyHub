@@ -4,9 +4,19 @@ import {
   groupCreateSchema,
   groupUpdateSchema,
   memberAdministrationUpdateSchema,
+  memberPasswordUpdateSchema,
 } from './index.js';
 
 describe('member group contracts', () => {
+  it('valide les limites du mot de passe attribué sans modifier sa valeur', () => {
+    const password = '  mot de passe familial  ';
+    expect(memberPasswordUpdateSchema.parse({ password })).toEqual({ password });
+    expect(memberPasswordUpdateSchema.safeParse({ password: 'a'.repeat(12) }).success).toBe(true);
+    expect(memberPasswordUpdateSchema.safeParse({ password: 'a'.repeat(200) }).success).toBe(true);
+    expect(memberPasswordUpdateSchema.safeParse({ password: 'a'.repeat(11) }).success).toBe(false);
+    expect(memberPasswordUpdateSchema.safeParse({ password: 'a'.repeat(201) }).success).toBe(false);
+    expect(memberPasswordUpdateSchema.safeParse({}).success).toBe(false);
+  });
   it('normalise le nom et une description vide', () => {
     expect(groupCreateSchema.parse({ name: '  Parents  ', description: ' ' })).toEqual({
       name: 'Parents',

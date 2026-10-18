@@ -1,6 +1,7 @@
 import { useEffect, useState, type SyntheticEvent } from 'react';
 import { localeTag, t } from '@/lib/i18n';
 import {
+  KeyRound,
   LoaderCircle,
   LockKeyhole,
   Pencil,
@@ -37,6 +38,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { InvitationDialog } from './invitation-dialog';
+import { MemberPasswordDialog } from './member-password-dialog';
 
 type MembersViewProps = {
   role: 'ADMIN' | 'MEMBER';
@@ -56,6 +58,10 @@ export function MembersView({
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [passwordMember, setPasswordMember] = useState<FamilyMember | null>(
+    null,
+  );
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [editedGroup, setEditedGroup] = useState<FamilyGroup | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -349,6 +355,24 @@ export function MembersView({
 
   return (
     <>
+      {role === 'ADMIN' && passwordMember ? (
+        <MemberPasswordDialog
+          key={passwordMember.id}
+          member={passwordMember}
+          csrfToken={csrfToken}
+          onClose={() => setPasswordMember(null)}
+          onSaved={() => {
+            setNotice(
+              t('Le mot de passe de {0} a été modifié.', {
+                0: [passwordMember.firstName, passwordMember.lastName]
+                  .filter(Boolean)
+                  .join(' '),
+              }),
+            );
+            setPasswordMember(null);
+          }}
+        />
+      ) : null}
       <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -445,6 +469,14 @@ export function MembersView({
           </p>
         ) : null}
 
+        {notice ? (
+          <output
+            className="mb-4 block rounded-xl border bg-muted/35 px-4 py-3 text-sm"
+          >
+            {notice}
+          </output>
+        ) : null}
+
         {error && !groupDialogOpen ? (
           <p
             role="alert"
@@ -535,6 +567,11 @@ export function MembersView({
                     busy={busyMemberId === member.id}
                     musicEnabled={musicEnabled}
                     onUpdate={updateMember}
+                    onPasswordChange={(target) => {
+                      setError('');
+                      setNotice('');
+                      setPasswordMember(target);
+                    }}
                   />
                 ))}
               </div>
@@ -661,6 +698,7 @@ function MemberCard({
   busy,
   musicEnabled,
   onUpdate,
+  onPasswordChange,
 }: {
   member: FamilyMember;
   groups: FamilyGroup[];
@@ -671,6 +709,7 @@ function MemberCard({
     member: FamilyMember,
     update: Partial<Pick<FamilyMember, 'role' | 'status'>>,
   ) => Promise<void>;
+  onPasswordChange: (member: FamilyMember) => void;
 }) {
   const displayName = [member.firstName, member.lastName]
     .filter(Boolean)
@@ -719,13 +758,28 @@ function MemberCard({
               </Badge>
             ))}
           </div>
-          {musicEnabled && member.status === 'ACTIVE' && member.musicShareEnabled ? (
-            <a href={`/music/members/${member.id}`} className="mt-3 inline-block text-sm font-medium text-primary hover:underline">
+          {musicEnabled &&
+          member.status === 'ACTIVE' &&
+          member.musicShareEnabled ? (
+            <a
+              href={`/music/members/${member.id}`}
+              className="mt-3 inline-block text-sm font-medium text-primary hover:underline"
+            >
               Explorer ses goûts musicaux
             </a>
           ) : null}
           {canAdminister ? (
             <div className="mt-4 flex flex-wrap gap-2 border-t pt-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => onPasswordChange(member)}
+              >
+                <KeyRound aria-hidden="true" />
+                Modifier le mot de passe
+              </Button>
               <Button
                 type="button"
                 size="sm"

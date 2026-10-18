@@ -112,6 +112,10 @@ export const groupUpdateSchema = groupFields
 export type GroupCreate = z.infer<typeof groupCreateSchema>;
 export type GroupUpdate = z.infer<typeof groupUpdateSchema>;
 
+export const memberPasswordUpdateSchema = z.object({
+  password: z.string().min(12).max(200),
+});
+
 export const memberAdministrationUpdateSchema = z
   .object({
     role: z.enum(['ADMIN', 'MEMBER']).optional(),

@@ -37,6 +37,10 @@ langue et la confidentialité du profil. La date de naissance maintient automati
 régler le quota global du foyer, ainsi que l’espace libre réel du volume. Elle permet aussi
 de gérer le rôle et l’activation des membres, avec protection du dernier administrateur,
 révocation des sessions concernées et annulation des invitations encore en attente.
+Dans « Membres et groupes », un administrateur peut aussi attribuer directement un nouveau
+mot de passe à un autre membre, sans envoi d’e-mail. Le mot de passe doit contenir entre
+12 et 200 caractères ; les sessions du compte sont fermées et l’opération est inscrite au
+journal d’administration, sans y enregistrer le mot de passe.
 
 Chaque conversation peut être rendue silencieuse sans quitter le chat. L’import de favoris
 accepte désormais les exports HTML Netscape et les arborescences JSON des navigateurs, en

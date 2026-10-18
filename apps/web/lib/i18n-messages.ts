@@ -1,4 +1,10 @@
 export const englishMessages: Record<string, string> = {
+  'Modifier le mot de passe': 'Change password',
+  'Nouveau mot de passe': 'New password',
+  'Le mot de passe doit contenir entre 12 et 200 caractères.':
+    'The password must contain between 12 and 200 characters.',
+  'Le mot de passe n’a pas pu être modifié.':
+    'The password could not be changed.',
   // Shell and authentication
   Accueil: 'Home',
   Agenda: 'Calendar',
@@ -954,6 +960,10 @@ export const englishMessages: Record<string, string> = {
 };
 
 export const englishTemplateMessages: Record<string, string> = {
+  'Attribuez un nouveau mot de passe à {0}. Ses sessions seront fermées. Communiquez-lui le nouveau mot de passe directement.':
+    'Assign a new password to {0}. Their sessions will be closed. Share the new password with them directly.',
+  'Le mot de passe de {0} a été modifié.':
+    'The password for {0} has been changed.',
   'Choisir la date de {0}': 'Choose the date for {0}',
   'Heure de {0}': 'Time for {0}',
   'Lecture lancée sur « {0} ».': 'Playback started on “{0}”.',

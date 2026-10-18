@@ -2,6 +2,7 @@ import {
   groupCreateSchema,
   groupUpdateSchema,
   memberAdministrationUpdateSchema,
+  memberPasswordUpdateSchema,
   type FamilyGroup,
   type FamilyMember,
 } from '@familyhub/contracts';
@@ -10,6 +11,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 
 import { createSessionGuard, requireCsrf } from './auth.js';
+import { hashPassword } from './password.js';
 
 const idParamsSchema = z.object({ id: z.string().uuid() });
 const membershipParamsSchema = z.object({
@@ -172,6 +174,59 @@ export async function registerMemberRoutes(app: FastifyInstance, pool: Pool) {
         await client.query('COMMIT');
 
         return { member: { id: params.data.id, role: nextRole, status: nextStatus } };
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  );
+
+  app.put<{ Params: { id: string } }>(
+    '/api/v1/members/:id/password',
+    { preHandler: [requireSession, requireCsrf] },
+    async (request, reply) => {
+      const denied = requireAdmin(request.session?.role, reply);
+      if (denied) return denied;
+
+      const params = idParamsSchema.safeParse(request.params);
+      const parsed = memberPasswordUpdateSchema.safeParse(request.body);
+      if (!params.success || !parsed.success) {
+        return reply.code(400).send({ error: 'INVALID_REQUEST' });
+      }
+
+      const passwordHash = await hashPassword(parsed.data.password);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const target = await client.query<{ id: string }>(
+          `UPDATE app_user u
+           SET password_hash = $1, updated_at = now()
+           FROM instance_member m
+           WHERE m.user_id = u.id AND m.id = $2 AND m.instance_id = $3
+           RETURNING u.id`,
+          [passwordHash, params.data.id, request.session!.instanceId],
+        );
+        const user = target.rows[0];
+        if (!user) {
+          await client.query('ROLLBACK');
+          return reply.code(404).send({ error: 'MEMBER_NOT_FOUND' });
+        }
+
+        await client.query(
+          `DELETE FROM session
+           WHERE member_id IN (SELECT id FROM instance_member WHERE user_id = $1)`,
+          [user.id],
+        );
+        await client.query(
+          `INSERT INTO admin_audit_log
+             (instance_id, actor_member_id, action, target_type, target_id, details)
+           VALUES ($1, $2, 'member.password_updated', 'member', $3, '{}'::jsonb)`,
+          [request.session!.instanceId, request.session!.id, params.data.id],
+        );
+        await client.query('COMMIT');
+        return reply.code(204).send();
       } catch (error) {
         await client.query('ROLLBACK');
         throw error;
