@@ -372,10 +372,18 @@ export type HomeTodayMeal = {
   note: string | null;
 };
 
+export type HomeDailyJoke = {
+  text: string;
+  category: string;
+  date: string;
+  refreshAt: string;
+};
+
 export type HomeSummary = {
   attention: HomeAttention[];
   activity: HomeActivity[];
   todayMeals: HomeTodayMeal[];
+  dailyJoke: HomeDailyJoke;
   unreadNotificationCount: number;
 };
 

@@ -1,6 +1,7 @@
 # FamilyHub
 
 Configuration Spotify : [guide de mise en service](docs/SPOTIFY_SETUP.md).
+Blague du jour : [catalogue et ajout de sources](docs/JOKES.md).
 
 [![CI](https://github.com/ZA512/FamilyHub/actions/workflows/ci.yml/badge.svg)](https://github.com/ZA512/FamilyHub/actions/workflows/ci.yml)
 

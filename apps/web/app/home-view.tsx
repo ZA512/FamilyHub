@@ -10,12 +10,14 @@ import {
   MessageCircle,
   Music2,
   ShoppingBasket,
+  Smile,
   Sparkles,
 } from 'lucide-react';
 
 import type {
   HomeActivity,
   HomeAttention,
+  HomeDailyJoke,
   HomeSummary,
   HomeTodayMeal,
 } from '@familyhub/contracts';
@@ -62,26 +64,48 @@ export function HomeView({
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/v1/home', { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Impossible de charger l’accueil.');
-        return (await response.json()) as HomeSummary;
-      })
-      .then((payload) => {
-        setSummary(payload);
-        onUnreadCountChange(payload.unreadNotificationCount);
-        setError('');
-      })
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(
-          reason instanceof Error ? reason.message : 'Accueil indisponible.',
-        );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
+    let timer: ReturnType<typeof setTimeout>;
+    let refreshAt = Infinity;
+    let inFlight = false;
+    const load = () => {
+      if (inFlight || controller.signal.aborted) return;
+      inFlight = true;
+      clearTimeout(timer);
+      fetch('/api/v1/home', { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) throw new Error('Impossible de charger l’accueil.');
+          return (await response.json()) as HomeSummary;
+        })
+        .then((payload) => {
+          setSummary(payload);
+          onUnreadCountChange(payload.unreadNotificationCount);
+          setError('');
+          refreshAt = Date.parse(payload.dailyJoke.refreshAt);
+          timer = setTimeout(load, Math.max(1_000, refreshAt - Date.now()));
+        })
+        .catch((reason: unknown) => {
+          if (controller.signal.aborted) return;
+          setError(
+            reason instanceof Error ? reason.message : 'Accueil indisponible.',
+          );
+          timer = setTimeout(load, 60_000);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+          inFlight = false;
+        });
+    };
+    const refreshIfDue = () => {
+      if (document.visibilityState === 'visible' && Date.now() >= refreshAt)
+        load();
+    };
+    load();
+    document.addEventListener('visibilitychange', refreshIfDue);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', refreshIfDue);
+    };
   }, [onUnreadCountChange]);
 
   return (
@@ -116,6 +140,10 @@ export function HomeView({
         </Card>
       ) : summary ? (
         <div className="space-y-6">
+          <DailyJokeCard
+            key={summary.dailyJoke.date}
+            joke={summary.dailyJoke}
+          />
           {summary.todayMeals.length ? (
             <TodayMealsSection
               items={summary.todayMeals}
@@ -123,12 +151,65 @@ export function HomeView({
             />
           ) : null}
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,.85fr)]">
-            <AttentionSection items={summary.attention} onNavigate={onNavigate} />
+            <AttentionSection
+              items={summary.attention}
+              onNavigate={onNavigate}
+            />
             <ActivitySection items={summary.activity} onNavigate={onNavigate} />
           </div>
         </div>
       ) : null}
     </>
+  );
+}
+
+function DailyJokeCard({ joke }: { joke: HomeDailyJoke }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = joke.text.length > 600;
+
+  return (
+    <section aria-labelledby="daily-joke-title">
+      <Card className="gap-0 border-primary/15 bg-primary/5 py-0">
+        <CardContent className="p-5 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Smile className="size-5" aria-hidden="true" />
+            </span>
+            <h2
+              id="daily-joke-title"
+              className="text-lg font-semibold tracking-tight"
+            >
+              La blague du jour
+            </h2>
+            <Badge variant="secondary" lang="fr">
+              {joke.category}
+            </Badge>
+          </div>
+          <p
+            id="daily-joke-text"
+            lang="fr"
+            className={`whitespace-pre-wrap break-words text-sm leading-relaxed sm:text-base ${long && !expanded ? 'line-clamp-5' : ''}`}
+          >
+            {joke.text}
+          </p>
+          {long ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3"
+              aria-controls="daily-joke-text"
+              aria-expanded={expanded}
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? 'Réduire' : 'Lire la suite'}
+            </Button>
+          ) : null}
+          <p className="mt-4 text-xs text-muted-foreground">
+            Un sourire à partager, une nouvelle blague chaque jour.
+          </p>
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 

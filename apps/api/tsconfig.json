@@ -3,12 +3,13 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "tsBuildInfoFile": "dist/api.tsbuildinfo"
+    "tsBuildInfoFile": "dist/api.tsbuildinfo",
+    "resolveJsonModule": true
   },
   "references": [
     { "path": "../../packages/config" },
     { "path": "../../packages/contracts" },
     { "path": "../../packages/database" }
   ],
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.json"]
 }

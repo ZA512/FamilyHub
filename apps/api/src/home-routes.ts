@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 
 import { createSessionGuard } from './auth.js';
+import { dailyJoke } from './daily-joke.js';
 import { reopenAvailableTasks } from './task-routes.js';
 
 type ActivityRow = Omit<HomeActivity, 'occurredAt' | 'actorAvatarUrl'> & {
@@ -28,6 +29,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
       todayMealsResult,
       musicResult,
       activityResult,
+      jokeDateResult,
     ] = await Promise.all([
       pool.query<{ count: number }>(
         `SELECT count(*)::int AS count
@@ -564,6 +566,13 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
           request.session?.locale,
         ],
       ),
+      pool.query<{ date: string; refreshAt: Date }>(
+        `SELECT to_char(now() AT TIME ZONE timezone, 'YYYY-MM-DD') AS date,
+                (((now() AT TIME ZONE timezone)::date + 1)::timestamp
+                  AT TIME ZONE timezone) AS "refreshAt"
+         FROM instance WHERE id = $1`,
+        [request.session!.instanceId],
+      ),
     ]);
 
     const unreadNotificationCount = unreadResult.rows[0]?.count ?? 0;
@@ -642,6 +651,7 @@ export async function registerHomeRoutes(app: FastifyInstance, pool: Pool) {
         }),
       ),
       todayMeals: todayMealsResult.rows,
+      dailyJoke: dailyJoke(jokeDateResult.rows[0]!.date, jokeDateResult.rows[0]!.refreshAt),
       unreadNotificationCount,
     } satisfies HomeSummary;
   });

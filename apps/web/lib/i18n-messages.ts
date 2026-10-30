@@ -1,4 +1,9 @@
 export const englishMessages: Record<string, string> = {
+  'La blague du jour': 'Joke of the day',
+  'Un sourire à partager, une nouvelle blague chaque jour.':
+    'A smile to share, a new joke every day.',
+  'Lire la suite': 'Read more',
+  Réduire: 'Show less',
   'Modifier le mot de passe': 'Change password',
   'Nouveau mot de passe': 'New password',
   'Le mot de passe doit contenir entre 12 et 200 caractères.':
