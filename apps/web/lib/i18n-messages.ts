@@ -1,4 +1,27 @@
 export const englishMessages: Record<string, string> = {
+  'Gestion des blagues': 'Manage jokes',
+  'Catalogue des blagues': 'Joke catalog',
+  'Choisissez les blagues qui peuvent être affichées aux membres du foyer. Les blagues désactivées peuvent être réactivées à tout moment.':
+    'Choose which jokes household members can see. Disabled jokes can be enabled again at any time.',
+  'Désactiver la blague du jour la remplace automatiquement par une autre blague active.':
+    'Disabling today’s joke automatically replaces it with another active joke.',
+  'Aucune blague active. Réactivez une blague pour rétablir la blague du jour.':
+    'No active jokes. Enable a joke to restore the joke of the day.',
+  'Rechercher une blague': 'Search jokes',
+  'Un mot dans la blague…': 'A word in the joke…',
+  'Toutes les blagues': 'All jokes',
+  'Aucune blague ne correspond à ces filtres.': 'No jokes match these filters.',
+  'Chargement des blagues…': 'Loading jokes…',
+  'Impossible de charger les blagues.': 'Unable to load jokes.',
+  'Impossible de modifier cette blague.': 'Unable to update this joke.',
+  'Blague désactivée pour tout le foyer.':
+    'Joke disabled for the whole household.',
+  'Blague réactivée pour le foyer.': 'Joke enabled for the household.',
+  'Pagination des blagues': 'Joke pagination',
+  Actives: 'Active',
+  Désactivées: 'Disabled',
+  Active: 'Active',
+  Désactivée: 'Disabled',
   'La blague du jour': 'Joke of the day',
   'Un sourire à partager, une nouvelle blague chaque jour.':
     'A smile to share, a new joke every day.',

@@ -169,6 +169,13 @@
       "when": 1790647200000,
       "tag": "0023_collection_item_recommendations",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793318400000,
+      "tag": "0024_disabled_jokes",
+      "breakpoints": true
     }
   ]
 }

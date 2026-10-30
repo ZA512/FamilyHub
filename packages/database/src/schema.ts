@@ -732,6 +732,13 @@ export const memberProfilePreferences = pgTable('member_profile_preference', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const disabledJokes = pgTable('disabled_joke', {
+  instanceId: uuid('instance_id').notNull().references(() => instances.id, { onDelete: 'cascade' }),
+  jokeId: text('joke_id').notNull(),
+  disabledBy: uuid('disabled_by').references(() => instanceMembers.id, { onDelete: 'set null' }),
+  disabledAt: timestamp('disabled_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.instanceId, table.jokeId] })]);
+
 export const spotifyConnections = pgTable('spotify_connection', {
   memberId: uuid('member_id').primaryKey().references(() => instanceMembers.id, { onDelete: 'cascade' }),
   instanceId: uuid('instance_id').notNull().references(() => instances.id, { onDelete: 'cascade' }),

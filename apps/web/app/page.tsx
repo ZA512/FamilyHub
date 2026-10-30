@@ -24,6 +24,7 @@ import {
   Search,
   Settings,
   ShoppingBasket,
+  Smile,
   Sparkles,
   Users,
   Utensils,
@@ -117,6 +118,9 @@ const DocumentsView = lazy(() =>
 const MusicView = lazy(() =>
   import('./music-view').then((module) => ({ default: module.MusicView })),
 );
+const JokesView = lazy(() =>
+  import('./jokes-view').then((module) => ({ default: module.JokesView })),
+);
 
 type ViewId =
   | 'home'
@@ -134,6 +138,7 @@ type ViewId =
   | 'documents'
   | 'music'
   | 'members'
+  | 'jokes'
   | 'settings'
   | 'notifications'
   | 'search';
@@ -278,10 +283,12 @@ export default function DashboardPage({
     moduleVisible(option.view),
   );
   const activeViewInMoreNavigation =
+    activeView === 'jokes' ||
     activeView === 'settings' ||
     secondaryNavigation.some((item) => item.id === activeView);
 
   function navigate(view: ViewId) {
+    if (view === 'jokes' && role !== 'ADMIN') return;
     if (view === 'music') {
       window.history.pushState({}, '', '/music');
     } else if (window.location.pathname.startsWith('/music')) {
@@ -486,6 +493,17 @@ export default function DashboardPage({
               <Settings className="size-5 text-primary" aria-hidden="true" />
               <span>Paramètres</span>
             </button>
+            {role === 'ADMIN' ? (
+              <button
+                type="button"
+                onClick={() => navigate('jokes')}
+                aria-current={activeView === 'jokes' ? 'page' : undefined}
+                className={`flex min-h-20 flex-col items-start justify-between rounded-xl border p-3 text-left font-medium transition-colors hover:bg-muted ${activeView === 'jokes' ? 'border-primary bg-accent text-accent-foreground' : 'bg-background'}`}
+              >
+                <Smile className="size-5 text-primary" aria-hidden="true" />
+                <span>Gestion des blagues</span>
+              </button>
+            ) : null}
           </nav>
         </SheetContent>
       </Sheet>
@@ -591,6 +609,19 @@ export default function DashboardPage({
 
           <SidebarFooter className="px-3 pb-4">
             <SidebarMenu>
+              {role === 'ADMIN' ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={activeView === 'jokes'}
+                    tooltip="Gestion des blagues"
+                    className="h-10 rounded-xl px-3"
+                    onClick={() => navigate('jokes')}
+                  >
+                    <Smile aria-hidden="true" />
+                    <span>Gestion des blagues</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={activeView === 'settings'}
@@ -698,7 +729,18 @@ export default function DashboardPage({
           ) : null}
 
           <div className="mx-auto w-full max-w-[1180px] flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-10 md:pt-8">
-            {activeView === 'settings' ? (
+            {activeView === 'jokes' && role === 'ADMIN' ? (
+              <Suspense
+                fallback={
+                  <LoaderCircle
+                    className="animate-spin"
+                    aria-label="Chargement"
+                  />
+                }
+              >
+                <JokesView csrfToken={csrfToken} />
+              </Suspense>
+            ) : activeView === 'settings' ? (
               <SettingsView
                 role={role}
                 modules={modules}

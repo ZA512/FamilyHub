@@ -2,12 +2,31 @@
 
 L’accueil affiche une blague commune aux membres du foyer. Elle change à minuit
 dans le fuseau horaire configuré pour le foyer, y compris si l’accueil reste ouvert.
-Le catalogue est parcouru sans répétition avant la fin d’un cycle. Les catégories
+Sans désactivation, le catalogue est parcouru sans répétition avant la fin d’un cycle. Les catégories
 sont mélangées à l’import. Les textes des sources restent en français.
 
 Le catalogue embarqué `apps/api/src/content/jokes.json` contient 858 blagues uniques,
-avec seulement `text` et `category`. Il fonctionne sans service externe ni migration
-de base de données.
+avec seulement `text` et `category`. Il fonctionne sans service externe. La migration
+`0024_disabled_jokes` ajoute la table qui conserve les désactivations par foyer.
+
+## Modération par les administrateurs
+
+L’entrée **Gestion des blagues** est visible uniquement pour les administrateurs,
+dans la barre latérale et dans **Plus** sur téléphone. Elle affiche la blague du
+jour, le catalogue complet, une recherche, les catégories et un filtre par état.
+Chaque blague peut être désactivée puis réactivée. Les membres n’ont accès ni au
+catalogue d’administration ni à ses opérations de modification, même par l’API.
+
+Les choix sont enregistrés en base pour le foyer. Un identifiant dérivé du texte
+normalisé conserve la décision si le catalogue est réordonné ou si de nouvelles
+blagues sont importées. Modifier le texte d’une blague crée un nouvel identifiant.
+
+Désactiver la blague du jour sélectionne immédiatement la prochaine blague active.
+Désactiver une autre blague ne modifie pas le choix du jour. Les accueils visibles
+vérifient les changements toutes les 15 secondes et au retour dans l’onglet. Si
+toutes les blagues sont désactivées, la carte disparaît de l’accueil jusqu’à une
+réactivation. Des remplacements peuvent entraîner une répétition sur deux jours
+consécutifs, puisque le calendrier initial conserve son ordre.
 
 ## Sources initiales
 

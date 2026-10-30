@@ -80,7 +80,9 @@ export function HomeView({
           setSummary(payload);
           onUnreadCountChange(payload.unreadNotificationCount);
           setError('');
-          refreshAt = Date.parse(payload.dailyJoke.refreshAt);
+          refreshAt = payload.dailyJoke
+            ? Date.parse(payload.dailyJoke.refreshAt)
+            : Date.now() + 60_000;
           timer = setTimeout(load, Math.max(1_000, refreshAt - Date.now()));
         })
         .catch((reason: unknown) => {
@@ -95,15 +97,42 @@ export function HomeView({
           inFlight = false;
         });
     };
+    let jokeInFlight = false;
+    const refreshJoke = async () => {
+      if (document.visibilityState !== 'visible' || inFlight || jokeInFlight)
+        return;
+      jokeInFlight = true;
+      try {
+        const response = await fetch('/api/v1/jokes/daily', {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as {
+          dailyJoke: HomeDailyJoke | null;
+        };
+        if (!controller.signal.aborted)
+          setSummary((current) =>
+            current ? { ...current, dailyJoke: payload.dailyJoke } : current,
+          );
+      } catch {
+        // Keep the last loaded card when the connection is unavailable.
+      } finally {
+        jokeInFlight = false;
+      }
+    };
     const refreshIfDue = () => {
-      if (document.visibilityState === 'visible' && Date.now() >= refreshAt)
-        load();
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() >= refreshAt) load();
+      else void refreshJoke();
     };
     load();
+    const moderationTimer = setInterval(refreshIfDue, 15_000);
     document.addEventListener('visibilitychange', refreshIfDue);
     return () => {
       controller.abort();
       clearTimeout(timer);
+      clearInterval(moderationTimer);
       document.removeEventListener('visibilitychange', refreshIfDue);
     };
   }, [onUnreadCountChange]);
@@ -140,10 +169,12 @@ export function HomeView({
         </Card>
       ) : summary ? (
         <div className="space-y-6">
-          <DailyJokeCard
-            key={summary.dailyJoke.date}
-            joke={summary.dailyJoke}
-          />
+          {summary.dailyJoke ? (
+            <DailyJokeCard
+              key={`${summary.dailyJoke.date}:${summary.dailyJoke.id}`}
+              joke={summary.dailyJoke}
+            />
+          ) : null}
           {summary.todayMeals.length ? (
             <TodayMealsSection
               items={summary.todayMeals}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import jokes from './content/jokes.json' with { type: 'json' };
-import { dailyJoke } from './daily-joke.js';
+import { dailyJoke, jokeCatalog } from './daily-joke.js';
 
 const refreshAt = new Date('2026-10-30T23:00:00Z');
 
@@ -10,19 +10,19 @@ describe('blague du jour', () => {
     const joke = dailyJoke('2026-10-30', refreshAt);
     expect(dailyJoke('2026-10-30', refreshAt)).toEqual(joke);
     expect(joke).toMatchObject({ date: '2026-10-30', refreshAt: refreshAt.toISOString() });
-    expect(joke.text.length).toBeGreaterThan(0);
-    expect(joke.category.length).toBeGreaterThan(0);
+    expect(joke!.text.length).toBeGreaterThan(0);
+    expect(joke!.category.length).toBeGreaterThan(0);
   });
 
   it('parcourt tout le catalogue avant de répéter une blague', () => {
     const texts = new Set();
     for (let day = 0; day < jokes.length; day++) {
       const date = new Date(Date.UTC(2026, 9, 30 + day)).toISOString().slice(0, 10);
-      texts.add(dailyJoke(date, refreshAt).text);
+      texts.add(dailyJoke(date, refreshAt)!.text);
     }
     expect(texts.size).toBe(jokes.length);
     const nextCycle = new Date(Date.UTC(2026, 9, 30 + jokes.length)).toISOString().slice(0, 10);
-    expect(dailyJoke(nextCycle, refreshAt).text).toBe(dailyJoke('2026-10-30', refreshAt).text);
+    expect(dailyJoke(nextCycle, refreshAt)!.text).toBe(dailyJoke('2026-10-30', refreshAt)!.text);
   });
 
   it.each([
@@ -32,7 +32,32 @@ describe('blague du jour', () => {
     ['2026-10-25', '2026-10-26'],
     ['2026-12-31', '2027-01-01'],
   ])('change entre %s et %s, y compris les jours de changement d’heure', (before, after) => {
-    expect(dailyJoke(before, refreshAt).text).not.toBe(dailyJoke(after, refreshAt).text);
+    expect(dailyJoke(before, refreshAt)!.text).not.toBe(dailyJoke(after, refreshAt)!.text);
+  });
+
+  it('remplace la blague du jour et ses remplaçantes désactivées', () => {
+    const first = dailyJoke('2026-10-30', refreshAt)!;
+    const disabled = new Set([first.id]);
+    const second = dailyJoke('2026-10-30', refreshAt, disabled)!;
+    expect(second.id).not.toBe(first.id);
+    disabled.add(second.id);
+    const third = dailyJoke('2026-10-30', refreshAt, disabled)!;
+    expect(disabled.has(third.id)).toBe(false);
+    expect(dailyJoke('2026-10-30', refreshAt, disabled)).toEqual(third);
+  });
+
+  it('conserve le choix du jour si une autre blague est désactivée', () => {
+    const today = dailyJoke('2026-10-30', refreshAt)!;
+    const other = jokeCatalog.find((joke) => joke.id !== today.id)!;
+    expect(dailyJoke('2026-10-30', refreshAt, new Set([other.id]))).toEqual(today);
+  });
+
+  it('gère un catalogue entièrement désactivé puis une réactivation', () => {
+    const disabled = new Set(jokeCatalog.map((joke) => joke.id));
+    expect(dailyJoke('2026-10-30', refreshAt, disabled)).toBeNull();
+    disabled.delete(jokeCatalog[0]!.id);
+    expect(dailyJoke('2026-10-30', refreshAt, disabled)!.id).toBe(jokeCatalog[0]!.id);
+    expect(new Set(jokeCatalog.map((joke) => joke.id)).size).toBe(jokeCatalog.length);
   });
 
   it('embarque un catalogue unique limité au texte et à la catégorie', () => {

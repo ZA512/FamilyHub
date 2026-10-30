@@ -373,17 +373,32 @@ export type HomeTodayMeal = {
 };
 
 export type HomeDailyJoke = {
+  id: string;
   text: string;
   category: string;
   date: string;
   refreshAt: string;
 };
 
+export type AdminJoke = Pick<HomeDailyJoke, 'id' | 'text' | 'category'> & {
+  enabled: boolean;
+};
+
+export type AdminJokesResponse = {
+  jokes: AdminJoke[];
+  dailyJoke: HomeDailyJoke | null;
+};
+
+export type JokeModerationResponse = {
+  joke: AdminJoke;
+  dailyJoke: HomeDailyJoke | null;
+};
+
 export type HomeSummary = {
   attention: HomeAttention[];
   activity: HomeActivity[];
   todayMeals: HomeTodayMeal[];
-  dailyJoke: HomeDailyJoke;
+  dailyJoke: HomeDailyJoke | null;
   unreadNotificationCount: number;
 };
 

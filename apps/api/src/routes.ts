@@ -28,6 +28,7 @@ import { registerMemberRoutes } from './member-routes.js';
 import { registerInvitationRoutes } from './invitation-routes.js';
 import { registerMealRoutes } from './meal-routes.js';
 import { registerHomeRoutes } from './home-routes.js';
+import { registerJokeRoutes } from './joke-routes.js';
 import { registerAgendaRoutes } from './agenda-routes.js';
 import { registerAdminRoutes } from './admin-routes.js';
 import { registerNotificationRoutes } from './notification-routes.js';
@@ -494,6 +495,7 @@ export async function registerRoutes(
   await registerAgendaRoutes(app, pool);
   await registerAdminRoutes(app, pool);
   await registerHomeRoutes(app, pool);
+  await registerJokeRoutes(app, pool);
   await registerInvitationRoutes(app, pool, config);
   await registerMealRoutes(app, pool);
   await registerMemberRoutes(app, pool);
