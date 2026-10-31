@@ -23,7 +23,19 @@ describe('blague dans l’accueil authentifié', () => {
             },
           ],
         };
-      if (sql.includes('to_char(now()')) return { rows: [{ date, refreshAt }] };
+      if (sql.includes('to_char(now()'))
+        return {
+          rows: [
+            {
+              date,
+              refreshAt,
+              disabledIds: [],
+              selectionDate: date,
+              selectedJokeId: dailyJoke(date, refreshAt)!.id,
+              previousJokeId: null,
+            },
+          ],
+        };
       return { rows: [] };
     });
     const app = Fastify();
@@ -57,7 +69,7 @@ describe('blague dans l’accueil authentifié', () => {
         unreadNotificationCount: 0,
       });
       expect(query).toHaveBeenCalledWith(
-        expect.stringContaining('to_char(now() AT TIME ZONE timezone'),
+        expect.stringContaining('to_char(now() AT TIME ZONE i.timezone'),
         ['household'],
       );
     } finally {

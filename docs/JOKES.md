@@ -2,12 +2,14 @@
 
 L’accueil affiche une blague commune aux membres du foyer. Elle change à minuit
 dans le fuseau horaire configuré pour le foyer, y compris si l’accueil reste ouvert.
-Sans désactivation, le catalogue est parcouru sans répétition avant la fin d’un cycle. Les catégories
-sont mélangées à l’import. Les textes des sources restent en français.
+La rotation reprend après la dernière blague réellement choisie pour le foyer,
+y compris lorsqu’elle avait remplacé une blague désactivée. Les catégories sont
+mélangées à l’import. Les textes des sources restent en français.
 
 Le catalogue embarqué `apps/api/src/content/jokes.json` contient 858 blagues uniques,
 avec seulement `text` et `category`. Il fonctionne sans service externe. La migration
-`0024_disabled_jokes` ajoute la table qui conserve les désactivations par foyer.
+`0024_disabled_jokes` conserve les désactivations par foyer et
+`0025_daily_joke_selection` mémorise le choix du jour et le précédent.
 
 ## Modération par les administrateurs
 
@@ -25,8 +27,15 @@ Désactiver la blague du jour sélectionne immédiatement la prochaine blague ac
 Désactiver une autre blague ne modifie pas le choix du jour. Les accueils visibles
 vérifient les changements toutes les 15 secondes et au retour dans l’onglet. Si
 toutes les blagues sont désactivées, la carte disparaît de l’accueil jusqu’à une
-réactivation. Des remplacements peuvent entraîner une répétition sur deux jours
-consécutifs, puisque le calendrier initial conserve son ordre.
+réactivation. Le choix enregistré reste stable lors des rechargements et des
+redémarrages. À minuit dans le fuseau du foyer, une autre blague active remplace la
+dernière affichée, même après plusieurs désactivations la veille. La vue
+d’administration se renouvelle elle aussi à minuit et au retour dans l’onglet.
+Si une seule blague est active, elle reste la seule possibilité et peut se répéter.
+
+Le bouton **Actualiser** recharge le catalogue et les décisions de modération ;
+il ne déclenche pas un nouveau tirage. Réactiver une ancienne blague ne change pas
+le choix déjà enregistré pour la journée.
 
 ## Sources initiales
 

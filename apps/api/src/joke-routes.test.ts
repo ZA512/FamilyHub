@@ -12,6 +12,8 @@ const apps: FastifyInstance[] = [];
 const date = '2026-10-30';
 const refreshAt = new Date('2026-10-30T23:00:00Z');
 const today = dailyJoke(date, refreshAt)!;
+type Selection = { date: string; jokeId: string; previousJokeId: string | null };
+type HouseholdState = { disabled: Set<string>; selection: Selection | null };
 
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
@@ -20,10 +22,12 @@ afterEach(async () => {
 async function setup(
   role = 'ADMIN',
   instanceId = 'household',
-  store = new Map<string, Set<string>>(),
+  store = new Map<string, HouseholdState>(),
 ) {
-  const disabled = store.get(instanceId) ?? new Set<string>();
-  store.set(instanceId, disabled);
+  const state = store.get(instanceId) ?? { disabled: new Set<string>(), selection: null };
+  const { disabled } = state;
+  store.set(instanceId, state);
+  const clock = { date, refreshAt };
   const query = vi.fn(async (sql: string, values: unknown[] = []): Promise<{ rows: object[] }> => {
     if (sql.includes('UPDATE session'))
       return {
@@ -38,8 +42,36 @@ async function setup(
           },
         ],
       };
-    if (sql.includes('to_char(now()'))
-      return { rows: [{ date, refreshAt, disabledIds: [...disabled] }] };
+    if (sql.includes('to_char(now()')) {
+      const previousDate = new Date(Date.parse(`${clock.date}T00:00:00Z`) - 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      return {
+        rows: [
+          {
+            ...clock,
+            previousDate,
+            disabledIds: [...disabled],
+            selectionDate: state.selection?.date ?? null,
+            selectedJokeId: state.selection?.jokeId ?? null,
+            previousJokeId: state.selection?.previousJokeId ?? null,
+          },
+        ],
+      };
+    }
+    if (sql.includes('INSERT INTO daily_joke_selection')) {
+      if (
+        state.selection &&
+        (state.selection.date !== values[4] || state.selection.jokeId !== values[5])
+      )
+        return { rows: [] };
+      state.selection = {
+        date: values[1] as string,
+        jokeId: values[2] as string,
+        previousJokeId: values[3] as string | null,
+      };
+      return { rows: [{ joke_id: state.selection.jokeId }] };
+    }
     if (sql.includes('INSERT INTO disabled_joke')) disabled.add(values[1] as string);
     if (sql.includes('DELETE FROM disabled_joke')) disabled.delete(values[1] as string);
     return { rows: [] };
@@ -67,7 +99,7 @@ async function setup(
       headers: { 'x-csrf-token': csrf },
       payload: { enabled },
     });
-  return { app, query, disabled, get, change };
+  return { app, query, disabled, get, change, clock, state };
 }
 
 describe('modération des blagues', () => {
@@ -80,7 +112,9 @@ describe('modération des blagues', () => {
     expect((await get()).statusCode).toBe(403);
     expect((await change()).statusCode).toBe(403);
     expect((await get('/api/v1/jokes/daily')).json()).toEqual({ dailyJoke: today });
-    expect(query.mock.calls.some(([sql]) => /INSERT|DELETE/.test(sql))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => /INSERT INTO disabled_joke|DELETE/.test(sql))).toBe(
+      false,
+    );
   });
 
   it('exige le jeton CSRF et refuse les identifiants et états invalides', async () => {
@@ -108,7 +142,7 @@ describe('modération des blagues', () => {
       today.id,
       'admin',
     ]);
-    expect((await change(today.id, true)).json().dailyJoke).toEqual(today);
+    expect((await change(today.id, true)).json().dailyJoke).toEqual(replacement);
     expect(query).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM disabled_joke'), [
       'household',
       today.id,
@@ -116,7 +150,7 @@ describe('modération des blagues', () => {
   });
 
   it('isole les décisions entre foyers et garde un choix stable pour les autres désactivations', async () => {
-    const store = new Map<string, Set<string>>();
+    const store = new Map<string, HouseholdState>();
     const first = await setup('ADMIN', 'first-household', store);
     const second = await setup('ADMIN', 'second-household', store);
     const other = jokeCatalog.find((joke) => joke.id !== today.id)!;
@@ -135,5 +169,78 @@ describe('modération des blagues', () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.json()).toEqual({ dailyJoke: null });
+  });
+
+  it('change à minuit après une ou plusieurs remplacements la veille', async () => {
+    const { get, change, clock } = await setup();
+    let last = (await get('/api/v1/jokes/daily')).json().dailyJoke;
+    for (let index = 0; index < 3; index++) {
+      last = (await change(last.id)).json().dailyJoke;
+    }
+    clock.date = '2026-10-31';
+    clock.refreshAt = new Date('2026-10-31T23:00:00Z');
+    const next = (await get('/api/v1/jokes/daily')).json().dailyJoke;
+    expect(next.id).not.toBe(last.id);
+    expect(next.date).toBe('2026-10-31');
+    expect((await get()).json().dailyJoke).toEqual(next);
+    expect((await get('/api/v1/jokes/daily')).json().dailyJoke).toEqual(next);
+  });
+
+  it('évite aussi la répétition lors de la première lecture après la mise à jour', async () => {
+    const { get, disabled, clock, state } = await setup();
+    disabled.add(today.id);
+    const yesterdayReplacement = dailyJoke(date, refreshAt, disabled)!;
+    clock.date = '2026-10-31';
+    expect(state.selection).toBeNull();
+    const next = (await get('/api/v1/jokes/daily')).json().dailyJoke;
+    expect(next.id).not.toBe(yesterdayReplacement.id);
+  });
+
+  it('ne réaffiche pas celle d’hier si l’administrateur désactive celle d’aujourd’hui', async () => {
+    const { get, change, clock, state, disabled } = await setup();
+    const previous = (await get('/api/v1/jokes/daily')).json().dailyJoke;
+    clock.date = '2026-10-31';
+    const next = (await get('/api/v1/jokes/daily')).json().dailyJoke;
+    for (const joke of jokeCatalog) {
+      if (![previous.id, next.id].includes(joke.id)) disabled.add(joke.id);
+    }
+    const third = jokeCatalog.find((joke) => ![previous.id, next.id].includes(joke.id))!;
+    disabled.delete(third.id);
+    const replacement = (await change(next.id)).json().dailyJoke;
+    expect(replacement.id).toBe(third.id);
+    expect(state.selection?.previousJokeId).toBe(previous.id);
+  });
+
+  it('garde un choix commun lors de chargements simultanés à minuit et après redémarrage', async () => {
+    const store = new Map<string, HouseholdState>();
+    const first = await setup('ADMIN', 'household', store);
+    const previous = (await first.get('/api/v1/jokes/daily')).json().dailyJoke;
+    first.clock.date = '2026-10-31';
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, () => first.get('/api/v1/jokes/daily')),
+    );
+    const ids = responses.map((response) => response.json().dailyJoke.id);
+    expect(new Set(ids).size).toBe(1);
+    expect(ids[0]).not.toBe(previous.id);
+    const restarted = await setup('ADMIN', 'household', store);
+    restarted.clock.date = '2026-10-31';
+    expect((await restarted.get('/api/v1/jokes/daily')).json().dailyJoke.id).toBe(ids[0]);
+  });
+
+  it('alterne quand il ne reste que deux blagues actives et retrouve le catalogue après réactivation', async () => {
+    const { get, clock, disabled } = await setup();
+    const active = jokeCatalog.slice(0, 2);
+    for (const joke of jokeCatalog.slice(2)) disabled.add(joke.id);
+    const ids: string[] = [];
+    for (let day = 0; day < 6; day++) {
+      clock.date = new Date(Date.UTC(2026, 9, 30 + day)).toISOString().slice(0, 10);
+      ids.push((await get('/api/v1/jokes/daily')).json().dailyJoke.id);
+      if (day) expect(ids[day]).not.toBe(ids[day - 1]);
+    }
+    expect(new Set(ids)).toEqual(new Set(active.map((joke) => joke.id)));
+    for (const joke of active) disabled.add(joke.id);
+    expect((await get('/api/v1/jokes/daily')).json().dailyJoke).toBeNull();
+    disabled.delete(active[0]!.id);
+    expect((await get('/api/v1/jokes/daily')).json().dailyJoke.id).toBe(active[0]!.id);
   });
 });

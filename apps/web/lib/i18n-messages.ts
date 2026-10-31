@@ -1,4 +1,6 @@
 export const englishMessages: Record<string, string> = {
+  'Recharger le catalogue et les décisions de modération':
+    'Reload the catalog and moderation decisions',
   'Gestion des blagues': 'Manage jokes',
   'Catalogue des blagues': 'Joke catalog',
   'Choisissez les blagues qui peuvent être affichées aux membres du foyer. Les blagues désactivées peuvent être réactivées à tout moment.':

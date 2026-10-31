@@ -72,6 +72,52 @@ export function JokesView({ csrfToken }: { csrfToken: string }) {
     return () => controller.abort();
   }, [reload]);
 
+  const dailyRefreshAt = data?.dailyJoke?.refreshAt;
+  useEffect(() => {
+    if (!dailyRefreshAt) return;
+    const controller = new AbortController();
+    const deadline = Date.parse(dailyRefreshAt);
+    let timer: ReturnType<typeof setTimeout>;
+    let inFlight = false;
+    const refresh = async () => {
+      if (controller.signal.aborted || inFlight) return;
+      inFlight = true;
+      clearTimeout(timer);
+      try {
+        const response = await fetch('/api/v1/jokes/daily', {
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error('Daily joke unavailable');
+        const payload = (await response.json()) as Pick<
+          AdminJokesResponse,
+          'dailyJoke'
+        >;
+        if (!controller.signal.aborted) {
+          setData((current) =>
+            current ? { ...current, dailyJoke: payload.dailyJoke } : current,
+          );
+        }
+      } catch {
+        // Retry after a connection failure, including when the tab wakes from sleep.
+      } finally {
+        inFlight = false;
+        if (!controller.signal.aborted) timer = setTimeout(refresh, 60_000);
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() >= deadline)
+        void refresh();
+    };
+    timer = setTimeout(refresh, Math.max(1_000, deadline - Date.now()));
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [dailyRefreshAt]);
+
   async function toggle(joke: AdminJoke) {
     setPendingId(joke.id);
     setError('');
@@ -170,6 +216,7 @@ export function JokesView({ csrfToken }: { csrfToken: string }) {
         </div>
         <Button
           variant="outline"
+          title="Recharger le catalogue et les décisions de modération"
           disabled={loading || pendingId !== null}
           onClick={() => {
             setLoading(true);

@@ -739,6 +739,13 @@ export const disabledJokes = pgTable('disabled_joke', {
   disabledAt: timestamp('disabled_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [primaryKey({ columns: [table.instanceId, table.jokeId] })]);
 
+export const dailyJokeSelections = pgTable('daily_joke_selection', {
+  instanceId: uuid('instance_id').primaryKey().references(() => instances.id, { onDelete: 'cascade' }),
+  selectedDate: date('selected_date').notNull(),
+  jokeId: text('joke_id').notNull(),
+  previousJokeId: text('previous_joke_id'),
+});
+
 export const spotifyConnections = pgTable('spotify_connection', {
   memberId: uuid('member_id').primaryKey().references(() => instanceMembers.id, { onDelete: 'cascade' }),
   instanceId: uuid('instance_id').notNull().references(() => instances.id, { onDelete: 'cascade' }),
