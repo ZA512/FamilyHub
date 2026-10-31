@@ -14,6 +14,7 @@ import {
   Minus,
   Pencil,
   Plus,
+  Printer,
   Search,
   ShoppingBasket,
   ThumbsDown,
@@ -86,6 +87,7 @@ import {
   writeMealsCache,
 } from '@/lib/offline-storage';
 import { normalizeWeekStartsOn, startOfMealWeek } from '@/lib/meal-week';
+import { printMealPlan } from '@/lib/meal-plan-print';
 import {
   filterMeals,
   mealPreferenceFor,
@@ -895,6 +897,21 @@ function Planner({
   onEdit: (entry: MealPlanEntry) => void;
   onShopping: (entry: MealPlanEntry) => void;
 }) {
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState('');
+
+  async function handlePrint() {
+    setPrinting(true);
+    setPrintError('');
+    try {
+      await printMealPlan(days, entries);
+    } catch {
+      setPrintError('Impossible d’ouvrir l’impression. Réessayez.');
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -906,7 +923,14 @@ function Planner({
             Déjeuners, dîners et autres moments du foyer
           </p>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
+          <Button
+            variant="outline"
+            disabled={loading || printing}
+            onClick={handlePrint}
+          >
+            <Printer aria-hidden="true" /> Imprimer en A5
+          </Button>
           <Button
             variant="outline"
             size="icon"
@@ -928,6 +952,15 @@ function Planner({
           </Button>
         </div>
       </div>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Impression sur une moitié de feuille A4 : paysage, taille réelle (100
+        %), puis pliez en deux pour obtenir un A5.
+      </p>
+      {printError ? (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {printError}
+        </p>
+      ) : null}
       {loading ? (
         <Card>
           <CardContent className="flex items-center gap-3 py-8 text-muted-foreground">

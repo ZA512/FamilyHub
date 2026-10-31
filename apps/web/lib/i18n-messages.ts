@@ -1411,6 +1411,17 @@ Object.assign(englishMessages, {
   'Impossible de charger le planning des repas.':
     'Unable to load the meal plan.',
   'Planning indisponible.': 'Meal plan unavailable.',
+  'Imprimer en A5': 'Print as A5',
+  'Imprimer le planning repas': 'Print the meal plan',
+  'Planning repas': 'Meal plan',
+  'Impression indisponible.': 'Printing unavailable.',
+  'Impossible d’ouvrir l’impression. Réessayez.':
+    'Unable to open printing. Try again.',
+  'Impression sur une moitié de feuille A4 : paysage, taille réelle (100 %), puis pliez en deux pour obtenir un A5.':
+    'Print on half an A4 sheet: landscape, actual size (100%), then fold in half to make A5.',
+  Midi: 'Lunch',
+  Soir: 'Dinner',
+  Jour: 'Day',
   'Plat mis à jour.': 'Dish updated.',
   'Plat ajouté à la bibliothèque.': 'Dish added to the library.',
   'La préférence n’a pas pu être enregistrée.':
